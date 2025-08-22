@@ -1,6 +1,8 @@
 #include "rt/Parser.h"
 #include "rt/Sphere.h"
 #include "rt/Plane.h"
+#include "rt/Cylinder.h"
+#include "rt/Cone.h"
 
 #include <fstream>
 #include <sstream>
@@ -113,7 +115,7 @@ bool Parser::parse_rt_file(const std::string& path,
             }
         } else if (id == "pl") {
             std::string s_p, s_n, s_rgb;
-            iss >> s_p >> adws_n >> s_rgb;
+            iss >> s_p >> s_n >> s_rgb;
             Vec3 p, n, rgb;
             if (parse_triple(s_p, p) && parse_triple(s_n, n) && parse_triple(s_rgb, rgb)) {
                 auto pl = std::make_shared<Plane>(p, n, oid++, mid);
@@ -122,8 +124,34 @@ bool Parser::parse_rt_file(const std::string& path,
                 outScene.objects.push_back(pl);
                 ++mid;
             }
+        } else if (id == "cy") {
+            std::string s_pos, s_dir, s_d, s_h, s_rgb;
+            iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
+            Vec3 c, dir, rgb; double d = 1.0, h = 1.0;
+            if (parse_triple(s_pos, c) && parse_triple(s_dir, dir)
+                && to_double(s_d, d) && to_double(s_h, h)
+                && parse_triple(s_rgb, rgb)) {
+                auto cy = std::make_shared<Cylinder>(c, dir, d/2.0, h, oid++, mid);
+                materials.emplace_back();
+                materials.back().color = rgb_to_unit(rgb);
+                outScene.objects.push_back(cy);
+                ++mid;
+            }
+        } else if (id == "co") {
+            std::string s_pos, s_dir, s_d, s_h, s_rgb;
+            iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
+            Vec3 c, dir, rgb; double d = 1.0, h = 1.0;
+            if (parse_triple(s_pos, c) && parse_triple(s_dir, dir)
+                && to_double(s_d, d) && to_double(s_h, h)
+                && parse_triple(s_rgb, rgb)) {
+                auto co = std::make_shared<Cone>(c, dir, d/2.0, h, oid++, mid);
+                materials.emplace_back();
+                materials.back().color = rgb_to_unit(rgb);
+                outScene.objects.push_back(co);
+                ++mid;
+            }
         }
-        // TODO: cy, co, textures...
+        // TODO: textures...
     }
 
     outCamera = Camera(cam_pos, cam_pos + cam_dir, fov, double(width)/double(height));
