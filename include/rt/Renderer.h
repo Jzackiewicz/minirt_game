@@ -15,7 +15,7 @@ struct RenderSettings {
 
 class Renderer {
 public:
-    Renderer(const Scene& s, const Camera& c);
+    Renderer(const Scene& s, Camera& c);
     void render_ppm(const std::string& path,
                     const std::vector<Material>& mats,
                     const RenderSettings& rset);
@@ -23,7 +23,7 @@ public:
                        const RenderSettings& rset);
 private:
     const Scene& scene;
-    const Camera& cam;
+    Camera& cam;
 };
 
 } // namespace rt
