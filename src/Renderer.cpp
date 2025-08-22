@@ -144,6 +144,7 @@ void Renderer::render_window(const std::vector<Material>& mats,
 
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) running = false;
+            else if (e.type == SDL_KEYDOWN && e.key.keysym.scancode == SDL_SCANCODE_ESCAPE) running = false;
             else if (e.type == SDL_MOUSEMOTION) {
                 double sens = 0.002;
                 cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
@@ -151,7 +152,8 @@ void Renderer::render_window(const std::vector<Material>& mats,
         }
 
         const Uint8* state = SDL_GetKeyboardState(nullptr);
-        double speed = 5.0 * dt;
+        if (state[SDL_SCANCODE_ESCAPE]) running = false;
+        double speed = 15.0 * dt;
         if (state[SDL_SCANCODE_W]) cam.move(cam.forward * speed);
         if (state[SDL_SCANCODE_S]) cam.move(cam.forward * -speed);
         if (state[SDL_SCANCODE_A]) cam.move(cam.right * -speed);
