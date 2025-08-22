@@ -113,7 +113,7 @@ bool Parser::parse_rt_file(const std::string& path,
             }
         } else if (id == "pl") {
             std::string s_p, s_n, s_rgb;
-            iss >> s_p >> s_n >> s_rgb;
+            iss >> s_p >> adws_n >> s_rgb;
             Vec3 p, n, rgb;
             if (parse_triple(s_p, p) && parse_triple(s_n, n) && parse_triple(s_rgb, rgb)) {
                 auto pl = std::make_shared<Plane>(p, n, oid++, mid);
