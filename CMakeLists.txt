@@ -18,5 +18,6 @@ add_executable(minirt
 )
 
 find_package(Threads REQUIRED)
+find_package(SDL2 REQUIRED CONFIG)
 target_include_directories(minirt PRIVATE include)
-target_link_libraries(minirt PRIVATE Threads::Threads)
+target_link_libraries(minirt PRIVATE Threads::Threads SDL2::SDL2)
