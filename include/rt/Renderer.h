@@ -19,6 +19,8 @@ public:
     void render_ppm(const std::string& path,
                     const std::vector<Material>& mats,
                     const RenderSettings& rset);
+    void render_window(const std::vector<Material>& mats,
+                       const RenderSettings& rset);
 private:
     const Scene& scene;
     const Camera& cam;

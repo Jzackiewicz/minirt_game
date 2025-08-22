@@ -7,15 +7,14 @@
 #include <thread>
 
 int main(int argc, char** argv) {
-    if (argc < 3) {
-        std::cerr << "Usage: minirt <scene.rt> <output.ppm> [width height threads]\n";
+    if (argc < 2) {
+        std::cerr << "Usage: minirt <scene.rt> [width height threads]\n";
         return 1;
     }
     std::string scene_path = argv[1];
-    std::string out_path = argv[2];
-    int width = (argc > 3) ? std::atoi(argv[3]) : 800;
-    int height = (argc > 4) ? std::atoi(argv[4]) : 600;
-    int threads = (argc > 5) ? std::atoi(argv[5]) : std::thread::hardware_concurrency();
+    int width = (argc > 2) ? std::atoi(argv[2]) : 800;
+    int height = (argc > 3) ? std::atoi(argv[3]) : 600;
+    int threads = (argc > 4) ? std::atoi(argv[4]) : std::thread::hardware_concurrency();
 
     rt::Scene scene;
     rt::Camera cam({0,0,-10}, {0,0,0}, 60.0, double(width)/double(height));
@@ -32,8 +31,7 @@ int main(int argc, char** argv) {
     rset.threads = threads > 0 ? threads : 8;
 
     rt::Renderer renderer(scene, cam);
-    renderer.render_ppm(out_path, mats, rset);
+    renderer.render_window(mats, rset);
 
-    std::cerr << "Wrote " << out_path << "\n";
     return 0;
 }
