@@ -21,6 +21,23 @@ struct Camera {
         up = Vec3::cross(right, forward).normalized();
     }
 
+    void move(const Vec3& delta) {
+        origin += delta;
+    }
+
+    void rotate(double yaw, double pitch) {
+        Vec3 world_up(0,1,0);
+        auto rotate_vec = [](const Vec3& v, const Vec3& axis, double angle){
+            double c = std::cos(angle);
+            double s = std::sin(angle);
+            return v*c + Vec3::cross(axis, v)*s + axis*Vec3::dot(axis, v)*(1-c);
+        };
+        forward = rotate_vec(forward, world_up, yaw);
+        right = Vec3::cross(forward, world_up).normalized();
+        forward = rotate_vec(forward, right, pitch);
+        up = Vec3::cross(right, forward).normalized();
+    }
+
     Ray ray_through(double u, double v) const {
         double fov_rad = fov_deg * M_PI / 180.0;
         double half_h = std::tan(fov_rad * 0.5);
