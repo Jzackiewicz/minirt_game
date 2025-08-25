@@ -10,6 +10,7 @@ struct Material {
     double specular_exp = 50.0;
     double specular_k = 0.5;
     bool mirror = false;
+    bool random_alpha = false;
 };
 
 inline Vec3 phong(const Material& m, const Ambient& ambient,

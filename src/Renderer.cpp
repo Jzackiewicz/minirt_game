@@ -4,6 +4,7 @@
 #include <fstream>
 #include <cmath>
 #include <algorithm>
+#include <random>
 #include <SDL2/SDL.h>
 #include <iostream>
 
@@ -36,6 +37,8 @@ void Renderer::render_ppm(const std::string& path,
     std::atomic<int> next_row{0};
 
     auto worker = [&]() {
+        std::mt19937 rng(std::random_device{}());
+        std::uniform_real_distribution<double> dist(0.0, 1.0);
         HitRecord rec;
         for (;;) {
             int y = next_row.fetch_add(1);
@@ -62,6 +65,7 @@ void Renderer::render_ppm(const std::string& path,
                                     base.y*L.color.y*L.intensity*diff + L.color.y*spec,
                                     base.z*L.color.z*L.intensity*diff + L.color.z*spec);
                     }
+                    if (m.random_alpha) sum *= dist(rng);
                     col = sum;
                 } else {
                     col = Vec3(0.0, 0.0, 0.0);
@@ -161,6 +165,8 @@ void Renderer::render_window(const std::vector<Material>& mats,
 
         std::atomic<int> next_row{0};
         auto worker = [&]() {
+            std::mt19937 rng(std::random_device{}());
+            std::uniform_real_distribution<double> dist(0.0, 1.0);
             HitRecord rec;
             for (;;) {
                 int y = next_row.fetch_add(1);
@@ -187,6 +193,7 @@ void Renderer::render_window(const std::vector<Material>& mats,
                                         base.y*L.color.y*L.intensity*diff + L.color.y*spec,
                                         base.z*L.color.z*L.intensity*diff + L.color.z*spec);
                         }
+                        if (m.random_alpha) sum *= dist(rng);
                         col = sum;
                     } else {
                         col = Vec3(0.0, 0.0, 0.0);

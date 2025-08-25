@@ -151,15 +151,9 @@ bool Parser::parse_rt_file(const std::string& path,
                 materials.emplace_back();
                 Vec3 unit = rgb_to_unit(rgb);
                 materials.back().color = unit;
+                materials.back().random_alpha = true;
                 outScene.objects.push_back(bm);
-                Vec3 dirN = dir.normalized();
-                int nlights = std::max(1, static_cast<int>(std::ceil(L)));
-                double inten = 0.1 / nlights;
-                for (int i = 0; i < nlights; ++i) {
-                    double t = (i + 0.5) / nlights;
-                    Vec3 lp = o + dirN * (L * t);
-                    outScene.lights.emplace_back(lp, unit, inten);
-                }
+
                 ++mid;
             }
         } else if (id == "co") {
