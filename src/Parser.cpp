@@ -9,6 +9,8 @@
 #include <sstream>
 #include <charconv>
 #include <string_view>
+#include <cmath>
+#include <algorithm>
 
 namespace {
 
@@ -147,10 +149,17 @@ bool Parser::parse_rt_file(const std::string& path,
                 && to_double(s_L, L)) {
                 auto bm = std::make_shared<Beam>(o, dir, g, L, oid++, mid);
                 materials.emplace_back();
-                materials.back().color = rgb_to_unit(rgb);
+                Vec3 unit = rgb_to_unit(rgb);
+                materials.back().color = unit;
                 outScene.objects.push_back(bm);
-                Vec3 center = o + dir.normalized() * (L * 0.5);
-                outScene.lights.emplace_back(center, rgb_to_unit(rgb), 0.1);
+                Vec3 dirN = dir.normalized();
+                int nlights = std::max(1, static_cast<int>(std::ceil(L)));
+                double inten = 0.1 / nlights;
+                for (int i = 0; i < nlights; ++i) {
+                    double t = (i + 0.5) / nlights;
+                    Vec3 lp = o + dirN * (L * t);
+                    outScene.lights.emplace_back(lp, unit, inten);
+                }
                 ++mid;
             }
         } else if (id == "co") {
