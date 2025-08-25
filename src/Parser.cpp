@@ -172,6 +172,26 @@ bool Parser::parse_rt_file(const std::string& path,
         // TODO: textures...
     }
 
+    // Trim beams so they stop at the first blocking object
+    for (auto& obj : outScene.objects) {
+        if (!obj->is_beam()) continue;
+        Beam* bm = static_cast<Beam*>(obj.get());
+        Vec3 start = bm->center - bm->axis * (bm->height * 0.5);
+        Ray forward(start, bm->axis);
+        HitRecord tmp;
+        double closest = bm->height;
+        for (auto& other : outScene.objects) {
+            if (other.get() == bm) continue;
+            if (other->hit(forward, 1e-4, closest, tmp)) {
+                closest = tmp.t;
+            }
+        }
+        if (closest < bm->height) {
+            bm->height = closest;
+            bm->center = start + bm->axis * (closest * 0.5);
+        }
+    }
+
     outCamera = Camera(cam_pos, cam_pos + cam_dir, fov, double(width)/double(height));
     return true;
 }

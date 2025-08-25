@@ -27,6 +27,7 @@ struct Hittable {
     virtual ~Hittable() = default;
     virtual bool hit(const Ray& r, double tmin, double tmax, HitRecord& rec) const = 0;
     virtual bool bounding_box(AABB& out) const = 0;
+    virtual bool is_beam() const { return false; }
 };
 
 using HittablePtr = std::shared_ptr<Hittable>;
