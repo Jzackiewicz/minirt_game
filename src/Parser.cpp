@@ -3,11 +3,14 @@
 #include "rt/Plane.h"
 #include "rt/Cylinder.h"
 #include "rt/Cone.h"
+#include "rt/Beam.h"
 
 #include <fstream>
 #include <sstream>
 #include <charconv>
 #include <string_view>
+#include <cmath>
+#include <algorithm>
 
 namespace {
 
@@ -137,6 +140,21 @@ bool Parser::parse_rt_file(const std::string& path,
                 outScene.objects.push_back(cy);
                 ++mid;
             }
+        } else if (id == "bm") {
+            std::string s_pos, s_dir, s_rgb, s_g, s_L;
+            iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
+            Vec3 o, dir, rgb; double g = 0.1, L = 1.0;
+            if (parse_triple(s_pos, o) && parse_triple(s_dir, dir)
+                && parse_triple(s_rgb, rgb) && to_double(s_g, g)
+                && to_double(s_L, L)) {
+                auto bm = std::make_shared<Beam>(o, dir, g, L, oid++, mid);
+                materials.emplace_back();
+                Vec3 unit = rgb_to_unit(rgb);
+                materials.back().color = unit;
+                materials.back().random_alpha = true;
+                outScene.objects.push_back(bm);
+                ++mid;
+            }
         } else if (id == "co") {
             std::string s_pos, s_dir, s_d, s_h, s_rgb;
             iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
@@ -152,6 +170,26 @@ bool Parser::parse_rt_file(const std::string& path,
             }
         }
         // TODO: textures...
+    }
+
+    // Trim beams so they stop at the first blocking object
+    for (auto& obj : outScene.objects) {
+        if (!obj->is_beam()) continue;
+        Beam* bm = static_cast<Beam*>(obj.get());
+        Vec3 start = bm->center - bm->axis * (bm->height * 0.5);
+        Ray forward(start, bm->axis);
+        HitRecord tmp;
+        double closest = bm->height;
+        for (auto& other : outScene.objects) {
+            if (other.get() == bm) continue;
+            if (other->hit(forward, 1e-4, closest, tmp)) {
+                closest = tmp.t;
+            }
+        }
+        if (closest < bm->height) {
+            bm->height = closest;
+            bm->center = start + bm->axis * (closest * 0.5);
+        }
     }
 
     outCamera = Camera(cam_pos, cam_pos + cam_dir, fov, double(width)/double(height));
