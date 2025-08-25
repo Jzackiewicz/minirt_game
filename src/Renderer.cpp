@@ -67,15 +67,7 @@ void Renderer::render_ppm(const std::string& path,
                     }
                     if (m.random_alpha) {
                         double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-                        double alpha;
-                        if (tpos <= 0.03) {
-                            alpha = 1.0;
-                        } else if (tpos >= 0.97) {
-                            alpha = 0.0;
-                        } else {
-                            double norm = (tpos - 0.03) / 0.94;
-                            alpha = std::pow(dist(rng), 1.0 + 3.0 * norm);
-                        }
+                        double alpha = (1.0 - tpos) * std::pow(dist(rng), tpos);
                         sum *= alpha;
                     }
                     col = sum;
@@ -207,15 +199,7 @@ void Renderer::render_window(const std::vector<Material>& mats,
                         }
                         if (m.random_alpha) {
                             double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-                            double alpha;
-                            if (tpos <= 0.03) {
-                                alpha = 1.0;
-                            } else if (tpos >= 0.97) {
-                                alpha = 0.0;
-                            } else {
-                                double norm = (tpos - 0.03) / 0.94;
-                                alpha = std::pow(dist(rng), 1.0 + 3.0 * norm);
-                            }
+                            double alpha = (1.0 - tpos) * std::pow(dist(rng), tpos);
                             sum *= alpha;
                         }
                         col = sum;
