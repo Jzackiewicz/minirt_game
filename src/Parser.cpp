@@ -3,11 +3,14 @@
 #include "rt/Plane.h"
 #include "rt/Cylinder.h"
 #include "rt/Cone.h"
+#include "rt/Beam.h"
 
 #include <fstream>
 #include <sstream>
 #include <charconv>
 #include <string_view>
+#include <cmath>
+#include <algorithm>
 
 namespace {
 
@@ -135,6 +138,21 @@ bool Parser::parse_rt_file(const std::string& path,
                 materials.emplace_back();
                 materials.back().color = rgb_to_unit(rgb);
                 outScene.objects.push_back(cy);
+                ++mid;
+            }
+        } else if (id == "bm") {
+            std::string s_pos, s_dir, s_rgb, s_g, s_L;
+            iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
+            Vec3 o, dir, rgb; double g = 0.1, L = 1.0;
+            if (parse_triple(s_pos, o) && parse_triple(s_dir, dir)
+                && parse_triple(s_rgb, rgb) && to_double(s_g, g)
+                && to_double(s_L, L)) {
+                auto bm = std::make_shared<Beam>(o, dir, g, L, oid++, mid);
+                materials.emplace_back();
+                Vec3 unit = rgb_to_unit(rgb);
+                materials.back().color = unit;
+                materials.back().random_alpha = true;
+                outScene.objects.push_back(bm);
                 ++mid;
             }
         } else if (id == "co") {
