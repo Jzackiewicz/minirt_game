@@ -12,7 +12,6 @@ struct Beam : public Cylinder {
          int mid)
         : Cylinder(origin + dir.normalized() * (length * 0.5),
                    dir, radius, length, oid, mid) {}
-
     bool is_beam() const override { return true; }
 };
 
