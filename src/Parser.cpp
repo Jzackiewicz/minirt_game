@@ -153,6 +153,7 @@ bool Parser::parse_rt_file(const std::string& path,
                 materials.back().color = unit;
                 materials.back().random_alpha = true;
                 outScene.objects.push_back(bm);
+
                 ++mid;
             }
         } else if (id == "co") {
