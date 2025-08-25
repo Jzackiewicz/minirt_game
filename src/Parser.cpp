@@ -172,7 +172,7 @@ bool Parser::parse_rt_file(const std::string& path,
         // TODO: textures...
     }
 
-    // Trim beams so they stop at the first blocking object
+    // Trim beams so they stop at the first blocking object and add faint lights
     for (auto& obj : outScene.objects) {
         if (!obj->is_beam()) continue;
         Beam* bm = static_cast<Beam*>(obj.get());
@@ -189,6 +189,17 @@ bool Parser::parse_rt_file(const std::string& path,
         if (closest < bm->height) {
             bm->height = closest;
             bm->center = start + bm->axis * (closest * 0.5);
+        }
+
+        // recompute start of the (possibly truncated) beam
+        start = bm->center - bm->axis * (bm->height * 0.5);
+        // sprinkle a few point lights along its length for afterglow
+        const Material& m = materials[bm->material_id];
+        int segments = std::max(1, (int)std::ceil(bm->height / std::max(0.1, bm->radius * 2.0)));
+        double step = bm->height / segments;
+        for (int i = 0; i < segments; ++i) {
+            Vec3 pos = start + bm->axis * (step * (i + 0.5));
+            outScene.lights.emplace_back(pos, m.color, 0.05);
         }
     }
 
