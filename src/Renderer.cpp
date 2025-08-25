@@ -65,7 +65,12 @@ void Renderer::render_ppm(const std::string& path,
                                     base.y*L.color.y*L.intensity*diff + L.color.y*spec,
                                     base.z*L.color.z*L.intensity*diff + L.color.z*spec);
                     }
-                    if (m.random_alpha) sum *= dist(rng);
+                    if (m.random_alpha) {
+                        double alpha = dist(rng);
+                        double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
+                        alpha = std::pow(alpha, 1.0 + 3.0 * tpos);
+                        sum *= alpha;
+                    }
                     col = sum;
                 } else {
                     col = Vec3(0.0, 0.0, 0.0);
@@ -193,7 +198,12 @@ void Renderer::render_window(const std::vector<Material>& mats,
                                         base.y*L.color.y*L.intensity*diff + L.color.y*spec,
                                         base.z*L.color.z*L.intensity*diff + L.color.z*spec);
                         }
-                        if (m.random_alpha) sum *= dist(rng);
+                        if (m.random_alpha) {
+                            double alpha = dist(rng);
+                            double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
+                            alpha = std::pow(alpha, 1.0 + 3.0 * tpos);
+                            sum *= alpha;
+                        }
                         col = sum;
                     } else {
                         col = Vec3(0.0, 0.0, 0.0);
