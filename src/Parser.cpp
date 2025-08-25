@@ -3,6 +3,7 @@
 #include "rt/Plane.h"
 #include "rt/Cylinder.h"
 #include "rt/Cone.h"
+#include "rt/Beam.h"
 
 #include <fstream>
 #include <sstream>
@@ -135,6 +136,21 @@ bool Parser::parse_rt_file(const std::string& path,
                 materials.emplace_back();
                 materials.back().color = rgb_to_unit(rgb);
                 outScene.objects.push_back(cy);
+                ++mid;
+            }
+        } else if (id == "bm") {
+            std::string s_pos, s_dir, s_rgb, s_g, s_L;
+            iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
+            Vec3 o, dir, rgb; double g = 0.1, L = 1.0;
+            if (parse_triple(s_pos, o) && parse_triple(s_dir, dir)
+                && parse_triple(s_rgb, rgb) && to_double(s_g, g)
+                && to_double(s_L, L)) {
+                auto bm = std::make_shared<Beam>(o, dir, g, L, oid++, mid);
+                materials.emplace_back();
+                materials.back().color = rgb_to_unit(rgb);
+                outScene.objects.push_back(bm);
+                Vec3 center = o + dir.normalized() * (L * 0.5);
+                outScene.lights.emplace_back(center, rgb_to_unit(rgb), 0.1);
                 ++mid;
             }
         } else if (id == "co") {
