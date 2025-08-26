@@ -1,3 +1,0 @@
-/nfs/homes/jzackiew/Downloads/minirt_cpp_skeleton/build/CMakeFiles/minirt.dir
-/nfs/homes/jzackiew/Downloads/minirt_cpp_skeleton/build/CMakeFiles/edit_cache.dir
-/nfs/homes/jzackiew/Downloads/minirt_cpp_skeleton/build/CMakeFiles/rebuild_cache.dir

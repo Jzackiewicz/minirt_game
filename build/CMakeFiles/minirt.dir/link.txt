@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/minirt.dir/src/main.cpp.o CMakeFiles/minirt.dir/src/Parser.cpp.o CMakeFiles/minirt.dir/src/Renderer.cpp.o -o minirt 
