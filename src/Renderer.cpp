@@ -13,9 +13,15 @@ namespace rt {
 static bool in_shadow(const Scene& scene, const Vec3& p, const Vec3& light_pos) {
     Vec3 dir = (light_pos - p).normalized();
     Ray shadow_ray(p + dir*1e-4, dir);
-    HitRecord tmp;
     double dist_to_light = (light_pos - p).length();
-    return scene.hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp);
+    HitRecord tmp;
+    for (const auto& obj : scene.objects) {
+        if (obj->is_beam()) continue;
+        if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 static Vec3 trace_ray(const Scene& scene, const std::vector<Material>& mats,
