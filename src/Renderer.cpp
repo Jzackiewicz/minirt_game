@@ -18,6 +18,45 @@ static bool in_shadow(const Scene& scene, const Vec3& p, const Vec3& light_pos) 
     return scene.hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp);
 }
 
+static Vec3 trace_ray(const Scene& scene, const std::vector<Material>& mats,
+                      const Ray& r, std::mt19937& rng,
+                      std::uniform_real_distribution<double>& dist, int depth = 0) {
+    if (depth > 10) return Vec3(0.0, 0.0, 0.0);
+    HitRecord rec;
+    if (!scene.hit(r, 1e-4, 1e9, rec)) {
+        return Vec3(0.0, 0.0, 0.0);
+    }
+    const Material& m = mats[rec.material_id];
+    Vec3 eye = (r.dir * -1.0).normalized();
+    Vec3 base = m.color;
+    Vec3 sum( base.x*scene.ambient.color.x * scene.ambient.intensity,
+              base.y*scene.ambient.color.y * scene.ambient.intensity,
+              base.z*scene.ambient.color.z * scene.ambient.intensity );
+    for (const auto& L : scene.lights) {
+        if (in_shadow(scene, rec.p, L.position)) continue;
+        Vec3 ldir = (L.position - rec.p).normalized();
+        double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
+        Vec3 h = (ldir + eye).normalized();
+        double spec = std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) * m.specular_k;
+        sum += Vec3(base.x*L.color.x*L.intensity*diff + L.color.x*spec,
+                    base.y*L.color.y*L.intensity*diff + L.color.y*spec,
+                    base.z*L.color.z*L.intensity*diff + L.color.z*spec);
+    }
+    double alpha = m.alpha;
+    if (m.random_alpha) {
+        double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
+        double rand = (1.0 - tpos) * std::pow(dist(rng), tpos);
+        alpha *= rand;
+    }
+    if (alpha < 1.0) {
+        Ray next(rec.p + r.dir*1e-4, r.dir);
+        Vec3 behind = trace_ray(scene, mats, next, rng, dist, depth + 1);
+        return sum * alpha + behind * (1.0 - alpha);
+    }
+    return sum;
+}
+
+
 Renderer::Renderer(const Scene& s, Camera& c)
     : scene(s), cam(c) {}
 
@@ -39,7 +78,6 @@ void Renderer::render_ppm(const std::string& path,
     auto worker = [&]() {
         std::mt19937 rng(std::random_device{}());
         std::uniform_real_distribution<double> dist(0.0, 1.0);
-        HitRecord rec;
         for (;;) {
             int y = next_row.fetch_add(1);
             if (y >= H) break;
@@ -47,35 +85,7 @@ void Renderer::render_ppm(const std::string& path,
                 double u = (x + 0.5) / W;
                 double v = (y + 0.5) / H;
                 Ray r = cam.ray_through(u, v);
-                Vec3 col(0,0,0);
-                if (scene.hit(r, 1e-4, 1e9, rec)) {
-                    const Material& m = mats[rec.material_id];
-                    Vec3 eye = (cam.origin - rec.p).normalized();
-                    Vec3 base = m.color;
-                    Vec3 sum( base.x*scene.ambient.color.x * scene.ambient.intensity,
-                              base.y*scene.ambient.color.y * scene.ambient.intensity,
-                              base.z*scene.ambient.color.z * scene.ambient.intensity );
-                    for (const auto& L : scene.lights) {
-                        if (in_shadow(scene, rec.p, L.position)) continue;
-                        Vec3 ldir = (L.position - rec.p).normalized();
-                        double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
-                        Vec3 h = (ldir + eye).normalized();
-                        double spec = std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) * m.specular_k;
-                        sum += Vec3(base.x*L.color.x*L.intensity*diff + L.color.x*spec,
-                                    base.y*L.color.y*L.intensity*diff + L.color.y*spec,
-                                    base.z*L.color.z*L.intensity*diff + L.color.z*spec);
-                    }
-                    double alpha = m.alpha;
-                    if (m.random_alpha) {
-                        double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-                        double rand = (1.0 - tpos) * std::pow(dist(rng), tpos);
-                        alpha *= rand;
-                    }
-                    sum *= alpha;
-                    col = sum;
-                } else {
-                    col = Vec3(0.0, 0.0, 0.0);
-                }
+                Vec3 col = trace_ray(scene, mats, r, rng, dist);
                 framebuffer[y * W + x] = col;
             }
         }
@@ -173,7 +183,6 @@ void Renderer::render_window(const std::vector<Material>& mats,
         auto worker = [&]() {
             std::mt19937 rng(std::random_device{}());
             std::uniform_real_distribution<double> dist(0.0, 1.0);
-            HitRecord rec;
             for (;;) {
                 int y = next_row.fetch_add(1);
                 if (y >= H) break;
@@ -181,35 +190,7 @@ void Renderer::render_window(const std::vector<Material>& mats,
                     double u = (x + 0.5) / W;
                     double v = (y + 0.5) / H;
                     Ray r = cam.ray_through(u, v);
-                    Vec3 col(0,0,0);
-                    if (scene.hit(r, 1e-4, 1e9, rec)) {
-                        const Material& m = mats[rec.material_id];
-                        Vec3 eye = (cam.origin - rec.p).normalized();
-                        Vec3 base = m.color;
-                        Vec3 sum( base.x*scene.ambient.color.x * scene.ambient.intensity,
-                                  base.y*scene.ambient.color.y * scene.ambient.intensity,
-                                  base.z*scene.ambient.color.z * scene.ambient.intensity );
-                        for (const auto& L : scene.lights) {
-                            if (in_shadow(scene, rec.p, L.position)) continue;
-                            Vec3 ldir = (L.position - rec.p).normalized();
-                            double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
-                            Vec3 h = (ldir + eye).normalized();
-                            double spec = std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) * m.specular_k;
-                            sum += Vec3(base.x*L.color.x*L.intensity*diff + L.color.x*spec,
-                                        base.y*L.color.y*L.intensity*diff + L.color.y*spec,
-                                        base.z*L.color.z*L.intensity*diff + L.color.z*spec);
-                        }
-                        double alpha = m.alpha;
-                        if (m.random_alpha) {
-                            double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-                            double rand = (1.0 - tpos) * std::pow(dist(rng), tpos);
-                            alpha *= rand;
-                        }
-                        sum *= alpha;
-                        col = sum;
-                    } else {
-                        col = Vec3(0.0, 0.0, 0.0);
-                    }
+                    Vec3 col = trace_ray(scene, mats, r, rng, dist);
                     framebuffer[y * W + x] = col;
                 }
             }

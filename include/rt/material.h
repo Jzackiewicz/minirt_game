@@ -31,7 +31,8 @@ inline Vec3 phong(const Material& m, const Ambient& ambient,
                   m.color.y * L.color.y * L.intensity * diff + L.color.y * spec,
                   m.color.z * L.color.z * L.intensity * diff + L.color.z * spec);
     }
-    return c * m.alpha;
+    // Alpha is handled during ray tracing; return the pure lighting result here.
+    return c;
 }
 
 } // namespace rt
