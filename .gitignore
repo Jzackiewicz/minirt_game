@@ -1,0 +1,22 @@
+# Build directories
+build/
+cmake-build-*/
+
+# Compiled objects and binaries
+*.o
+*.obj
+*.out
+*.exe
+*.a
+*.so
+*.dylib
+*.dll
+
+# Logs
+*.log
+
+# Generated images
+*.ppm
+*.png
+*.jpg
+*.jpeg
