@@ -11,11 +11,8 @@ else()
     add_compile_options(-O3 -ffast-math -fno-exceptions -fno-rtti -march=native)
 endif()
 
-add_executable(minirt
-    src/main.cpp
-    src/Parser.cpp
-    src/Renderer.cpp
-)
+file(GLOB SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
+add_executable(minirt ${SRC_FILES})
 
 find_package(Threads REQUIRED)
 find_package(SDL2 REQUIRED CONFIG)
