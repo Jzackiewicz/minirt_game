@@ -266,10 +266,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     if (!obj->is_beam())
       continue;
     Beam *bm = static_cast<Beam *>(obj.get());
-    Vec3 start = bm->center - bm->axis * (bm->height * 0.5);
-    Ray forward(start, bm->axis);
+    Ray forward(bm->path.orig, bm->path.dir);
     HitRecord tmp;
-    double closest = bm->height;
+    double closest = bm->length;
     for (auto &other : outScene.objects)
     {
       if (other.get() == bm)
@@ -279,10 +278,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         closest = tmp.t;
       }
     }
-    if (closest < bm->height)
+    if (closest < bm->length)
     {
-      bm->height = closest;
-      bm->center = start + bm->axis * (closest * 0.5);
+      bm->length = closest;
     }
   }
 
