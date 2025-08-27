@@ -286,7 +286,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     Ray forward(start, bm->axis);
     HitRecord tmp;
     HitRecord closest_rec;
-    double closest = bm->height;
+    double orig_height = bm->height;
+    double closest = orig_height;
     bool hit = false;
     for (auto &other : outScene.objects)
     {
@@ -299,8 +300,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         hit = true;
       }
     }
-    double remaining = bm->height - closest;
-    if (closest < bm->height)
+    double remaining = orig_height - closest;
+    if (closest < orig_height)
     {
       bm->height = closest;
       bm->center = start + bm->axis * (closest * 0.5);
@@ -311,9 +312,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       Vec3 refl_dir =
           forward.dir - closest_rec.normal *
                            2.0 * Vec3::dot(forward.dir, closest_rec.normal);
-      auto new_bm =
-          std::make_shared<Beam>(hit_point, refl_dir, bm->radius, remaining,
-                                 oid++, mid);
+      double start_ratio =
+          bm->start_ratio + (closest / orig_height) * (1.0 - bm->start_ratio);
+      auto new_bm = std::make_shared<Beam>(hit_point, refl_dir, bm->radius,
+                                           remaining, oid++, mid, start_ratio);
       materials.emplace_back(materials[bm->material_id]);
       new_beams.push_back(new_bm);
       ++mid;
