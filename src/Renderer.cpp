@@ -182,12 +182,13 @@ void Renderer::render_window(const std::vector<Material> &mats,
     return;
   }
 
-  SDL_SetRelativeMouseMode(SDL_TRUE);
+  SDL_SetRelativeMouseMode(SDL_FALSE);
 
   std::vector<Vec3> framebuffer(W * H);
   std::vector<unsigned char> pixels(W * H * 3);
   SDL_Event e;
   bool running = true;
+  bool focused = false;
   Uint32 last = SDL_GetTicks();
 
   while (running)
@@ -200,28 +201,44 @@ void Renderer::render_window(const std::vector<Material> &mats,
     {
       if (e.type == SDL_QUIT)
         running = false;
-      else if (e.type == SDL_KEYDOWN &&
-               e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
-        running = false;
-      else if (e.type == SDL_MOUSEMOTION)
+      else if (e.type == SDL_WINDOWEVENT &&
+               e.window.event == SDL_WINDOWEVENT_LEAVE)
+      {
+        focused = false;
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+      }
+      else if (e.type == SDL_MOUSEBUTTONDOWN &&
+               e.button.button == SDL_BUTTON_LEFT)
+      {
+        focused = true;
+        SDL_SetRelativeMouseMode(SDL_TRUE);
+        SDL_WarpMouseInWindow(win, W / 2, H / 2);
+      }
+      else if (focused && e.type == SDL_MOUSEMOTION)
       {
         double sens = 0.002;
         cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
       }
+      else if (focused && e.type == SDL_KEYDOWN &&
+               e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+        running = false;
     }
 
     const Uint8 *state = SDL_GetKeyboardState(nullptr);
-    if (state[SDL_SCANCODE_ESCAPE])
-      running = false;
-    double speed = 15.0 * dt;
-    if (state[SDL_SCANCODE_W])
-      cam.move(cam.forward * speed);
-    if (state[SDL_SCANCODE_S])
-      cam.move(cam.forward * -speed);
-    if (state[SDL_SCANCODE_A])
-      cam.move(cam.right * -speed);
-    if (state[SDL_SCANCODE_D])
-      cam.move(cam.right * speed);
+    if (focused)
+    {
+      if (state[SDL_SCANCODE_ESCAPE])
+        running = false;
+      double speed = 15.0 * dt;
+      if (state[SDL_SCANCODE_W])
+        cam.move(cam.forward * speed);
+      if (state[SDL_SCANCODE_S])
+        cam.move(cam.forward * -speed);
+      if (state[SDL_SCANCODE_A])
+        cam.move(cam.right * -speed);
+      if (state[SDL_SCANCODE_D])
+        cam.move(cam.right * speed);
+    }
 
     std::atomic<int> next_row{0};
     auto worker = [&]()
