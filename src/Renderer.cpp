@@ -155,14 +155,16 @@ void Renderer::render_window(const std::vector<Material> &mats,
     std::cerr << "SDL_Init Error: " << SDL_GetError() << "\n";
     return;
   }
-  SDL_Window *win = SDL_CreateWindow("MiniRT", SDL_WINDOWPOS_UNDEFINED,
-                                     SDL_WINDOWPOS_UNDEFINED, W, H, 0);
+  SDL_Window *win =
+      SDL_CreateWindow("MiniRT", SDL_WINDOWPOS_UNDEFINED,
+                       SDL_WINDOWPOS_UNDEFINED, W, H, 0);
   if (!win)
   {
     std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << "\n";
     SDL_Quit();
     return;
   }
+  SDL_SetWindowResizable(win, SDL_FALSE);
   SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
   if (!ren)
   {
@@ -183,6 +185,9 @@ void Renderer::render_window(const std::vector<Material> &mats,
   }
 
   SDL_SetRelativeMouseMode(SDL_FALSE);
+
+  SDL_ShowCursor(SDL_ENABLE);
+  SDL_SetWindowGrab(win, SDL_FALSE);
 
   std::vector<Vec3> framebuffer(W * H);
   std::vector<unsigned char> pixels(W * H * 3);
@@ -206,12 +211,16 @@ void Renderer::render_window(const std::vector<Material> &mats,
       {
         focused = false;
         SDL_SetRelativeMouseMode(SDL_FALSE);
+        SDL_ShowCursor(SDL_ENABLE);
+        SDL_SetWindowGrab(win, SDL_FALSE);
       }
       else if (e.type == SDL_MOUSEBUTTONDOWN &&
                e.button.button == SDL_BUTTON_LEFT)
       {
         focused = true;
         SDL_SetRelativeMouseMode(SDL_TRUE);
+        SDL_ShowCursor(SDL_DISABLE);
+        SDL_SetWindowGrab(win, SDL_TRUE);
         SDL_WarpMouseInWindow(win, W / 2, H / 2);
       }
       else if (focused && e.type == SDL_MOUSEMOTION)
