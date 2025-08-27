@@ -8,6 +8,13 @@ A minimal ray tracer skeleton implemented in C++.
 - SDL2 development libraries (CMake fetches SDL2 automatically if missing)
 - Make or another build tool
 
+### Installing SDL2
+Install the SDL2 development packages using your system package manager:
+
+- Ubuntu/Debian: `sudo apt install libsdl2-dev`
+- macOS (Homebrew): `brew install sdl2`
+- Windows (MSYS2): `pacman -S mingw-w64-x86_64-SDL2`
+
 ## Build
 ```bash
 cmake -S . -B build
