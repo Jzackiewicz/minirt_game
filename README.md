@@ -1,6 +1,6 @@
-# MiniRT C++ Skeleton
+# MiniRT Game
 
-A minimal ray tracer skeleton implemented in C++.
+Puzzle game basend on miniRT 42School project.
 
 ## Prerequisites
 - CMake >= 3.16
