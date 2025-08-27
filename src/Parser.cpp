@@ -275,7 +275,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     // TODO: textures...
   }
 
-  // Trim beams so they stop at the first blocking object
+  // Trim beams and reflect them off mirrors
+  std::vector<HittablePtr> new_beams;
   for (auto &obj : outScene.objects)
   {
     if (!obj->is_beam())
@@ -284,7 +285,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     Vec3 start = bm->center - bm->axis * (bm->height * 0.5);
     Ray forward(start, bm->axis);
     HitRecord tmp;
+    HitRecord closest_rec;
     double closest = bm->height;
+    bool hit = false;
     for (auto &other : outScene.objects)
     {
       if (other.get() == bm)
@@ -292,14 +295,32 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (other->hit(forward, 1e-4, closest, tmp))
       {
         closest = tmp.t;
+        closest_rec = tmp;
+        hit = true;
       }
     }
+    double remaining = bm->height - closest;
     if (closest < bm->height)
     {
       bm->height = closest;
       bm->center = start + bm->axis * (closest * 0.5);
     }
+    if (hit && materials[closest_rec.material_id].mirror && remaining > 1e-4)
+    {
+      Vec3 hit_point = forward.at(closest);
+      Vec3 refl_dir =
+          forward.dir - closest_rec.normal *
+                           2.0 * Vec3::dot(forward.dir, closest_rec.normal);
+      auto new_bm =
+          std::make_shared<Beam>(hit_point, refl_dir, bm->radius, remaining,
+                                 oid++, mid);
+      materials.emplace_back(materials[bm->material_id]);
+      new_beams.push_back(new_bm);
+      ++mid;
+    }
   }
+  for (auto &nb : new_beams)
+    outScene.objects.push_back(nb);
 
   outCamera =
       Camera(cam_pos, cam_pos + cam_dir, fov, double(width) / double(height));

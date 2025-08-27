@@ -42,13 +42,6 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     return Vec3(0.0, 0.0, 0.0);
   }
   const Material &m = mats[rec.material_id];
-  if (m.mirror)
-  {
-    Vec3 refl = r.dir - rec.normal * 2.0 * Vec3::dot(r.dir, rec.normal);
-    refl = refl.normalized();
-    Ray next(rec.p + refl * 1e-4, refl);
-    return trace_ray(scene, mats, next, rng, dist, depth + 1);
-  }
   Vec3 eye = (r.dir * -1.0).normalized();
   Vec3 base = m.color;
   Vec3 sum(base.x * scene.ambient.color.x * scene.ambient.intensity,
@@ -67,6 +60,15 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     sum += Vec3(base.x * L.color.x * L.intensity * diff + L.color.x * spec,
                 base.y * L.color.y * L.intensity * diff + L.color.y * spec,
                 base.z * L.color.z * L.intensity * diff + L.color.z * spec);
+  }
+  if (m.mirror)
+  {
+    Vec3 refl = r.dir - rec.normal * 2.0 * Vec3::dot(r.dir, rec.normal);
+    refl = refl.normalized();
+    Ray next(rec.p + refl * 1e-4, refl);
+    Vec3 reflected = trace_ray(scene, mats, next, rng, dist, depth + 1);
+    double refl_factor = REFLECTION_FACTOR / 100.0;
+    sum = sum * (1.0 - refl_factor) + reflected * refl_factor;
   }
   double alpha = m.alpha;
   if (m.random_alpha)
