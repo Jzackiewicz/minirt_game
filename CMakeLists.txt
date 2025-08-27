@@ -18,6 +18,17 @@ add_executable(minirt
 )
 
 find_package(Threads REQUIRED)
-find_package(SDL2 REQUIRED CONFIG)
+find_package(SDL2 QUIET CONFIG)
+if(NOT SDL2_FOUND)
+    message(STATUS "SDL2 not found, fetching with FetchContent")
+    include(FetchContent)
+    FetchContent_Declare(
+        SDL2
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG release-2.30.3
+    )
+    set(SDL2_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(SDL2)
+endif()
 target_include_directories(minirt PRIVATE include)
 target_link_libraries(minirt PRIVATE Threads::Threads SDL2::SDL2)

@@ -5,7 +5,7 @@ A minimal ray tracer skeleton implemented in C++.
 ## Prerequisites
 - CMake >= 3.16
 - C++17 compatible compiler (e.g., GCC, Clang, MSVC)
-- SDL2 development libraries
+- SDL2 development libraries (CMake fetches SDL2 automatically if missing)
 - Make or another build tool
 
 ## Build
