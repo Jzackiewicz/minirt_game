@@ -101,6 +101,18 @@ inline bool parse_rgba(std::string_view sv, rt::Vec3 &out, double &a)
 }
 inline double alpha_to_unit(double a) { return a / 255.0; }
 
+inline bool parse_mirror_token(std::string_view sv)
+{
+  if (sv == "R")
+    return true;
+  if (sv == "NR" || sv.empty())
+    return false;
+  int tmp = 0;
+  if (to_int(sv, tmp))
+    return tmp != 0;
+  return false;
+}
+
 } // namespace
 
 namespace rt
@@ -170,7 +182,6 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       iss >> s_pos >> s_r >> s_rgb >> s_mirror;
       Vec3 c, rgb;
       double r = 1.0;
-      int mir = 0;
       double a = 255;
       if (parse_triple(s_pos, c) && to_double(s_r, r) &&
           parse_rgba(s_rgb, rgb, a))
@@ -179,15 +190,15 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
         materials.back().alpha = alpha_to_unit(a);
+        materials.back().mirror = parse_mirror_token(s_mirror);
         outScene.objects.push_back(s);
-        (void)mir; // na razie ignorujemy mirror flag
         ++mid;
       }
     }
     else if (id == "pl")
     {
-      std::string s_p, s_n, s_rgb;
-      iss >> s_p >> s_n >> s_rgb;
+      std::string s_p, s_n, s_rgb, s_mirror;
+      iss >> s_p >> s_n >> s_rgb >> s_mirror;
       Vec3 p, n, rgb;
       double a = 255;
       if (parse_triple(s_p, p) && parse_triple(s_n, n) &&
@@ -197,14 +208,15 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
         materials.back().alpha = alpha_to_unit(a);
+        materials.back().mirror = parse_mirror_token(s_mirror);
         outScene.objects.push_back(pl);
         ++mid;
       }
     }
     else if (id == "cy")
     {
-      std::string s_pos, s_dir, s_d, s_h, s_rgb;
-      iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
+      std::string s_pos, s_dir, s_d, s_h, s_rgb, s_mirror;
+      iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb >> s_mirror;
       Vec3 c, dir, rgb;
       double d = 1.0, h = 1.0;
       double a = 255;
@@ -215,14 +227,15 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
         materials.back().alpha = alpha_to_unit(a);
+        materials.back().mirror = parse_mirror_token(s_mirror);
         outScene.objects.push_back(cy);
         ++mid;
       }
     }
     else if (id == "bm")
     {
-      std::string s_pos, s_dir, s_rgb, s_g, s_L;
-      iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
+      std::string s_pos, s_dir, s_rgb, s_g, s_L, s_mirror;
+      iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L >> s_mirror;
       Vec3 o, dir, rgb;
       double g = 0.1, L = 1.0;
       double a = 255;
@@ -235,14 +248,15 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().color = unit;
         materials.back().alpha = alpha_to_unit(a);
         materials.back().random_alpha = true;
+        materials.back().mirror = parse_mirror_token(s_mirror);
         outScene.objects.push_back(bm);
         ++mid;
       }
     }
     else if (id == "co")
     {
-      std::string s_pos, s_dir, s_d, s_h, s_rgb;
-      iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
+      std::string s_pos, s_dir, s_d, s_h, s_rgb, s_mirror;
+      iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb >> s_mirror;
       Vec3 c, dir, rgb;
       double d = 1.0, h = 1.0;
       double a = 255;
@@ -253,6 +267,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
         materials.back().alpha = alpha_to_unit(a);
+        materials.back().mirror = parse_mirror_token(s_mirror);
         outScene.objects.push_back(co);
         ++mid;
       }
