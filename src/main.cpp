@@ -1,37 +1,41 @@
 
-#include "rt/Scene.h"
-#include "rt/Camera.h"
-#include "rt/Parser.h"    // single translation include for brevity
-#include "rt/Renderer.h"  // same trick
+#include "rt/Camera.hpp"
+#include "rt/Parser.hpp"   // single translation include for brevity
+#include "rt/Renderer.hpp" // same trick
+#include "rt/Scene.hpp"
 #include <iostream>
 #include <thread>
 
-int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::cerr << "Usage: minirt <scene.rt> [width height threads]\n";
-        return 1;
-    }
-    std::string scene_path = argv[1];
-    int width = (argc > 2) ? std::atoi(argv[2]) : 800;
-    int height = (argc > 3) ? std::atoi(argv[3]) : 600;
-    int threads = (argc > 4) ? std::atoi(argv[4]) : std::thread::hardware_concurrency();
+int main(int argc, char **argv)
+{
+  if (argc < 2)
+  {
+    std::cerr << "Usage: minirt <scene.rt> [width height threads]\n";
+    return 1;
+  }
+  std::string scene_path = argv[1];
+  int width = (argc > 2) ? std::atoi(argv[2]) : 800;
+  int height = (argc > 3) ? std::atoi(argv[3]) : 600;
+  int threads =
+      (argc > 4) ? std::atoi(argv[4]) : std::thread::hardware_concurrency();
 
-    rt::Scene scene;
-    rt::Camera cam({0,0,-10}, {0,0,0}, 60.0, double(width)/double(height));
-    if (!rt::Parser::parse_rt_file(scene_path, scene, cam, width, height)) {
-        std::cerr << "Failed to parse scene: " << scene_path << "\n";
-        return 2;
-    }
-    auto mats = rt::Parser::get_materials();
-    scene.build_bvh();
+  rt::Scene scene;
+  rt::Camera cam({0, 0, -10}, {0, 0, 0}, 60.0, double(width) / double(height));
+  if (!rt::Parser::parse_rt_file(scene_path, scene, cam, width, height))
+  {
+    std::cerr << "Failed to parse scene: " << scene_path << "\n";
+    return 2;
+  }
+  auto mats = rt::Parser::get_materials();
+  scene.build_bvh();
 
-    rt::RenderSettings rset;
-    rset.width = width;
-    rset.height = height;
-    rset.threads = threads > 0 ? threads : 8;
+  rt::RenderSettings rset;
+  rset.width = width;
+  rset.height = height;
+  rset.threads = threads > 0 ? threads : 8;
 
-    rt::Renderer renderer(scene, cam);
-    renderer.render_window(mats, rset);
+  rt::Renderer renderer(scene, cam);
+  renderer.render_window(mats, rset);
 
-    return 0;
+  return 0;
 }

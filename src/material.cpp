@@ -1,0 +1,29 @@
+#include "rt/material.hpp"
+#include <algorithm>
+#include <cmath>
+
+namespace rt
+{
+Vec3 phong(const Material &m, const Ambient &ambient,
+           const std::vector<PointLight> &lights, const Vec3 &p, const Vec3 &n,
+           const Vec3 &eye)
+{
+  Vec3 c(0, 0, 0);
+  c = Vec3(m.color.x * ambient.color.x * ambient.intensity,
+           m.color.y * ambient.color.y * ambient.intensity,
+           m.color.z * ambient.color.z * ambient.intensity);
+  for (const auto &L : lights)
+  {
+    Vec3 ldir = (L.position - p).normalized();
+    double diff = std::max(0.0, Vec3::dot(n, ldir));
+    Vec3 h = (ldir + eye).normalized();
+    double spec =
+        std::pow(std::max(0.0, Vec3::dot(n, h)), m.specular_exp) * m.specular_k;
+    c += Vec3(m.color.x * L.color.x * L.intensity * diff + L.color.x * spec,
+              m.color.y * L.color.y * L.intensity * diff + L.color.y * spec,
+              m.color.z * L.color.z * L.intensity * diff + L.color.z * spec);
+  }
+  return c;
+}
+
+} // namespace rt
