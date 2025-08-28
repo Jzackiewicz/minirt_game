@@ -24,11 +24,22 @@ struct HitRecord
 
 struct Hittable
 {
+  bool movable = false;
   virtual ~Hittable() = default;
   virtual bool hit(const Ray &r, double tmin, double tmax,
                    HitRecord &rec) const = 0;
   virtual bool bounding_box(AABB &out) const = 0;
   virtual bool is_beam() const { return false; }
+  // default translation does nothing
+  virtual void translate(const Vec3 &delta) { (void)delta; }
+  // default rotation does nothing
+  virtual void rotate(const Vec3 &axis, double angle)
+  {
+    (void)axis;
+    (void)angle;
+  }
+  virtual void set_id(int id) { (void)id; }
+  virtual int get_id() const { return -1; }
 };
 
 using HittablePtr = std::shared_ptr<Hittable>;

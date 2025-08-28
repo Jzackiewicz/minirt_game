@@ -176,6 +176,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       std::string s_mirror;
       if (!(iss >> s_mirror))
         s_mirror = "NR";
+      std::string s_move;
+      if (!(iss >> s_move))
+        s_move = "IM";
       Vec3 c, rgb;
       double r = 1.0;
       double a = 255;
@@ -183,8 +186,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
           parse_rgba(s_rgb, rgb, a))
       {
         auto s = std::make_shared<Sphere>(c, r, oid++, mid);
+        s->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
+        materials.back().base_color = materials.back().color;
         materials.back().alpha = alpha_to_unit(a);
         materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(s);
@@ -198,14 +203,19 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       std::string s_mirror;
       if (!(iss >> s_mirror))
         s_mirror = "NR";
+      std::string s_move;
+      if (!(iss >> s_move))
+        s_move = "IM";
       Vec3 p, n, rgb;
       double a = 255;
       if (parse_triple(s_p, p) && parse_triple(s_n, n) &&
           parse_rgba(s_rgb, rgb, a))
       {
         auto pl = std::make_shared<Plane>(p, n, oid++, mid);
+        pl->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
+        materials.back().base_color = materials.back().color;
         materials.back().alpha = alpha_to_unit(a);
         materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(pl);
@@ -219,6 +229,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       std::string s_mirror;
       if (!(iss >> s_mirror))
         s_mirror = "NR";
+      std::string s_move;
+      if (!(iss >> s_move))
+        s_move = "IM";
       Vec3 c, dir, rgb;
       double d = 1.0, h = 1.0;
       double a = 255;
@@ -226,8 +239,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
           to_double(s_d, d) && to_double(s_h, h) && parse_rgba(s_rgb, rgb, a))
       {
         auto cy = std::make_shared<Cylinder>(c, dir, d / 2.0, h, oid++, mid);
+        cy->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
+        materials.back().base_color = materials.back().color;
         materials.back().alpha = alpha_to_unit(a);
         materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(cy);
@@ -248,6 +263,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.emplace_back();
         Vec3 unit = rgb_to_unit(rgb);
         materials.back().color = unit;
+        materials.back().base_color = unit;
         materials.back().alpha = alpha_to_unit(a);
         materials.back().random_alpha = true;
         outScene.objects.push_back(bm);
@@ -261,6 +277,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       std::string s_mirror;
       if (!(iss >> s_mirror))
         s_mirror = "NR";
+      std::string s_move;
+      if (!(iss >> s_move))
+        s_move = "IM";
       Vec3 c, dir, rgb;
       double d = 1.0, h = 1.0;
       double a = 255;
@@ -268,8 +287,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
           to_double(s_d, d) && to_double(s_h, h) && parse_rgba(s_rgb, rgb, a))
       {
         auto co = std::make_shared<Cone>(c, dir, d / 2.0, h, oid++, mid);
+        co->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
+        materials.back().base_color = materials.back().color;
         materials.back().alpha = alpha_to_unit(a);
         materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(co);

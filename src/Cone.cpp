@@ -94,4 +94,15 @@ bool Cone::bounding_box(AABB &out) const
   return true;
 }
 
+void Cone::rotate(const Vec3 &ax, double angle)
+{
+  auto rotate_vec = [](const Vec3 &v, const Vec3 &axis, double ang)
+  {
+    double c = std::cos(ang);
+    double s = std::sin(ang);
+    return v * c + Vec3::cross(axis, v) * s + axis * Vec3::dot(axis, v) * (1 - c);
+  };
+  axis = rotate_vec(axis, ax, angle).normalized();
+}
+
 } // namespace rt

@@ -18,14 +18,14 @@ struct RenderSettings
 class Renderer
 {
 public:
-  Renderer(const Scene &s, Camera &c);
+  Renderer(Scene &s, Camera &c);
   void render_ppm(const std::string &path, const std::vector<Material> &mats,
                   const RenderSettings &rset);
-  void render_window(const std::vector<Material> &mats,
+  void render_window(std::vector<Material> &mats,
                      const RenderSettings &rset);
 
 private:
-  const Scene &scene;
+  Scene &scene;
   Camera &cam;
 };
 
