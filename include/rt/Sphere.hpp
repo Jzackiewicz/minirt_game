@@ -1,4 +1,3 @@
-
 #pragma once
 #include "Hittable.hpp"
 #include <cmath>
@@ -17,6 +16,9 @@ struct Sphere : public Hittable
   bool hit(const Ray &r, double tmin, double tmax,
            HitRecord &rec) const override;
   bool bounding_box(AABB &out) const override;
+
+  void translate(const Vec3 &delta) override { center += delta; }
+  void rotate(double, double) override {}
 };
 
 } // namespace rt

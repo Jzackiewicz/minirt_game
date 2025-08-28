@@ -29,10 +29,7 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const Vec3 &light_pos)
   return false;
 }
 
-static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
-                      const Ray &r, std::mt19937 &rng,
-                      std::uniform_real_distribution<double> &dist,
-                      int depth = 0)
+static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats, const Ray &r, std::mt19937 &rng, std::uniform_real_distribution<double> &dist, double time, int depth = 0)
 {
   if (depth > 10)
     return Vec3(0.0, 0.0, 0.0);
@@ -44,6 +41,14 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   const Material &m = mats[rec.material_id];
   Vec3 eye = (r.dir * -1.0).normalized();
   Vec3 base = m.color;
+    const HittablePtr &obj = scene.objects[rec.object_id];
+    Vec3 inv(1.0 - base.x, 1.0 - base.y, 1.0 - base.z);
+    if (obj->selected) {
+      int chk = (int(std::floor(rec.p.x) + std::floor(rec.p.y) + std::floor(rec.p.z)) & 1);
+      base = chk ? base : inv;
+    } else if (obj->highlighted) {
+      if (std::fmod(time, 1.0) > 0.5) base = inv;
+    }
   Vec3 sum(base.x * scene.ambient.color.x * scene.ambient.intensity,
            base.y * scene.ambient.color.y * scene.ambient.intensity,
            base.z * scene.ambient.color.z * scene.ambient.intensity);
@@ -65,7 +70,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   {
     Vec3 refl_dir = r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
     Ray refl(rec.p + refl_dir * 1e-4, refl_dir);
-    Vec3 refl_col = trace_ray(scene, mats, refl, rng, dist, depth + 1);
+    Vec3 refl_col = trace_ray(scene, mats, refl, rng, dist, time, depth + 1);
     double refl_ratio = REFLECTION / 100.0;
     sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
   }
@@ -79,13 +84,13 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   if (alpha < 1.0)
   {
     Ray next(rec.p + r.dir * 1e-4, r.dir);
-    Vec3 behind = trace_ray(scene, mats, next, rng, dist, depth + 1);
+    Vec3 behind = trace_ray(scene, mats, next, rng, dist, time, depth + 1);
     return sum * alpha + behind * (1.0 - alpha);
   }
   return sum;
 }
 
-Renderer::Renderer(const Scene &s, Camera &c) : scene(s), cam(c) {}
+Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
 
 void Renderer::render_ppm(const std::string &path,
                           const std::vector<Material> &mats,
@@ -116,7 +121,7 @@ void Renderer::render_ppm(const std::string &path,
         double u = (x + 0.5) / W;
         double v = (y + 0.5) / H;
         Ray r = cam.ray_through(u, v);
-        Vec3 col = trace_ray(scene, mats, r, rng, dist);
+        Vec3 col = trace_ray(scene, mats, r, rng, dist, 0.0);
         framebuffer[y * W + x] = col;
       }
     }
@@ -202,18 +207,26 @@ void Renderer::render_window(const std::vector<Material> &mats,
   SDL_Event e;
   bool running = true;
   bool focused = false;
+  bool edit_mode = false;
+  int highlighted = -1;
+  int selected_id = -1;
   Uint32 last = SDL_GetTicks();
 
   while (running)
   {
     Uint32 now = SDL_GetTicks();
-    double dt = (now - last) / 1000.0;
+      double dt = (now - last) / 1000.0;
+      double blink_time = now / 1000.0;
     last = now;
 
     while (SDL_PollEvent(&e))
     {
       if (e.type == SDL_QUIT)
         running = false;
+      else if (e.type == SDL_MOUSEWHEEL && edit_mode && selected_id >= 0) {
+        double s = 1.0;
+        scene.objects[selected_id]->translate(cam.up * (e.wheel.y * s));
+      }
       else if (e.type == SDL_WINDOWEVENT &&
                e.window.event == SDL_WINDOWEVENT_LEAVE)
       {
@@ -230,15 +243,48 @@ void Renderer::render_window(const std::vector<Material> &mats,
         SDL_ShowCursor(SDL_DISABLE);
         SDL_SetWindowGrab(win, SDL_TRUE);
         SDL_WarpMouseInWindow(win, W / 2, H / 2);
+        if (edit_mode) {
+          if (selected_id < 0 && highlighted >= 0) {
+            selected_id = highlighted;
+            scene.objects[selected_id]->selected = true;
+            scene.objects[selected_id]->highlighted = false;
+          } else if (selected_id >= 0) {
+            scene.objects[selected_id]->selected = false;
+            selected_id = -1;
+            highlighted = -1;
+          }
+        }
       }
       else if (focused && e.type == SDL_MOUSEMOTION)
       {
         double sens = 0.002;
-        cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
+        if (selected_id >= 0)
+          scene.objects[selected_id]->rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
+        else
+          cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
       }
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
         running = false;
+      else if (e.type == SDL_KEYDOWN && e.key.keysym.scancode == SDL_SCANCODE_R) {
+        if (!edit_mode) {
+          Ray center_ray = cam.ray_through(0.5, 0.5);
+          HitRecord rec;
+          if (scene.hit(center_ray, 1e-4, 1e9, rec)) {
+            if (scene.objects[rec.object_id]->movable) {
+              highlighted = rec.object_id;
+              scene.objects[highlighted]->highlighted = true;
+            }
+          }
+          edit_mode = true;
+        } else {
+          if (highlighted >= 0) scene.objects[highlighted]->highlighted = false;
+          if (selected_id >= 0) scene.objects[selected_id]->selected = false;
+          highlighted = -1;
+          selected_id = -1;
+          edit_mode = false;
+        }
+      }
     }
 
     const Uint8 *state = SDL_GetKeyboardState(nullptr);
@@ -247,17 +293,29 @@ void Renderer::render_window(const std::vector<Material> &mats,
       if (state[SDL_SCANCODE_ESCAPE])
         running = false;
       double speed = 15.0 * dt;
-      if (state[SDL_SCANCODE_W])
-        cam.move(cam.forward * speed);
-      if (state[SDL_SCANCODE_S])
-        cam.move(cam.forward * -speed);
-      if (state[SDL_SCANCODE_A])
-        cam.move(cam.right * -speed);
-      if (state[SDL_SCANCODE_D])
-        cam.move(cam.right * speed);
+      if (selected_id >= 0) {
+        if (state[SDL_SCANCODE_W])
+          scene.objects[selected_id]->translate(cam.forward * speed);
+        if (state[SDL_SCANCODE_S])
+          scene.objects[selected_id]->translate(cam.forward * -speed);
+        if (state[SDL_SCANCODE_A])
+          scene.objects[selected_id]->translate(cam.right * -speed);
+        if (state[SDL_SCANCODE_D])
+          scene.objects[selected_id]->translate(cam.right * speed);
+      } else {
+        if (state[SDL_SCANCODE_W])
+          cam.move(cam.forward * speed);
+        if (state[SDL_SCANCODE_S])
+          cam.move(cam.forward * -speed);
+        if (state[SDL_SCANCODE_A])
+          cam.move(cam.right * -speed);
+        if (state[SDL_SCANCODE_D])
+          cam.move(cam.right * speed);
+      }
     }
 
     std::atomic<int> next_row{0};
+    scene.build_bvh();
     auto worker = [&]()
     {
       std::mt19937 rng(std::random_device{}());
@@ -272,7 +330,7 @@ void Renderer::render_window(const std::vector<Material> &mats,
           double u = (x + 0.5) / W;
           double v = (y + 0.5) / H;
           Ray r = cam.ray_through(u, v);
-          Vec3 col = trace_ray(scene, mats, r, rng, dist);
+          Vec3 col = trace_ray(scene, mats, r, rng, dist, blink_time);
           framebuffer[y * W + x] = col;
         }
       }
