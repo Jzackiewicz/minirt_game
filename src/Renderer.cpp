@@ -91,8 +91,9 @@ static void move_with_collision(Camera &cam, const Scene &scene,
   double len = delta.length();
   if (len < 1e-9)
     return;
-  Ray r(cam.origin, delta / len);
-  double tmin = 1e-4;
+  Vec3 dir = delta / len;
+  Ray r(cam.origin, dir);
+  double tmin = 0.0;
   double tmax = len;
   HitRecord rec;
   while (scene.hit(r, tmin, tmax, rec))
@@ -100,12 +101,12 @@ static void move_with_collision(Camera &cam, const Scene &scene,
     const auto &obj = scene.objects[rec.object_id];
     if (obj->is_beam() || !rec.front_face)
     {
-      tmin = rec.t + 1e-4;
+      tmin = rec.t + 1e-6;
       continue;
     }
-    double move_dist = rec.t - 1e-4;
+    double move_dist = rec.t - 1e-6;
     if (move_dist > 0.0)
-      cam.move(r.dir * move_dist);
+      cam.move(dir * move_dist);
     return;
   }
   cam.move(delta);
@@ -272,7 +273,7 @@ void Renderer::render_window(const std::vector<Material> &mats,
     {
       if (state[SDL_SCANCODE_ESCAPE])
         running = false;
-      double speed = 15.0 * dt;
+      double speed = 7.5 * dt;
       double fmove = 0.0;
       if (state[SDL_SCANCODE_W])
         fmove += speed;
