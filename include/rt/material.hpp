@@ -4,6 +4,8 @@
 #include "light.hpp"
 #include <vector>
 
+#define REFLECTION 50
+
 namespace rt
 {
 struct Material
