@@ -326,10 +326,17 @@ void Renderer::render_window(std::vector<Material> &mats,
         double sens = 0.002;
         if (edit_mode && selected_obj != -1)
         {
-          scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
-          scene.objects[selected_obj]->rotate(cam.right, -e.motion.yrel * sens);
+          auto obj = scene.objects[selected_obj];
+          obj->rotate(cam.up, -e.motion.xrel * sens);
+          obj->rotate(cam.right, -e.motion.yrel * sens);
           scene.update_beams(mats);
           scene.build_bvh();
+          for (size_t i = 0; i < scene.objects.size(); ++i)
+            if (scene.objects[i] == obj)
+            {
+              selected_obj = static_cast<int>(i);
+              break;
+            }
         }
         else
         {
@@ -339,9 +346,16 @@ void Renderer::render_window(std::vector<Material> &mats,
       else if (edit_mode && selected_obj != -1 && e.type == SDL_MOUSEWHEEL)
       {
         double step = e.wheel.y * 1.0;
-        scene.objects[selected_obj]->translate(cam.up * step);
+        auto obj = scene.objects[selected_obj];
+        obj->translate(cam.up * step);
         scene.update_beams(mats);
         scene.build_bvh();
+        for (size_t i = 0; i < scene.objects.size(); ++i)
+          if (scene.objects[i] == obj)
+          {
+            selected_obj = static_cast<int>(i);
+            break;
+          }
       }
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
@@ -363,9 +377,16 @@ void Renderer::render_window(std::vector<Material> &mats,
         move += cam.right * speed;
       if (move.length_squared() > 0)
       {
-        scene.objects[selected_obj]->translate(move);
+        auto obj = scene.objects[selected_obj];
+        obj->translate(move);
         scene.update_beams(mats);
         scene.build_bvh();
+        for (size_t i = 0; i < scene.objects.size(); ++i)
+          if (scene.objects[i] == obj)
+          {
+            selected_obj = static_cast<int>(i);
+            break;
+          }
       }
     }
     else if (focused)
