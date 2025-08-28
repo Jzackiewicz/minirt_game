@@ -176,6 +176,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       std::string s_mirror;
       if (!(iss >> s_mirror))
         s_mirror = "NR";
+      std::string s_move;
+      if (!(iss >> s_move))
+        s_move = "IM";
+      bool movable = (s_move == "M");
       Vec3 c, rgb;
       double r = 1.0;
       double a = 255;
@@ -188,6 +192,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = alpha_to_unit(a);
         materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(s);
+        outScene.movable.push_back(movable);
         ++mid;
       }
     }
@@ -198,6 +203,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       std::string s_mirror;
       if (!(iss >> s_mirror))
         s_mirror = "NR";
+      std::string s_move;
+      if (!(iss >> s_move))
+        s_move = "IM";
+      bool movable = (s_move == "M");
       Vec3 p, n, rgb;
       double a = 255;
       if (parse_triple(s_p, p) && parse_triple(s_n, n) &&
@@ -209,6 +218,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = alpha_to_unit(a);
         materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(pl);
+        outScene.movable.push_back(movable);
         ++mid;
       }
     }
@@ -219,6 +229,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       std::string s_mirror;
       if (!(iss >> s_mirror))
         s_mirror = "NR";
+      std::string s_move;
+      if (!(iss >> s_move))
+        s_move = "IM";
+      bool movable = (s_move == "M");
       Vec3 c, dir, rgb;
       double d = 1.0, h = 1.0;
       double a = 255;
@@ -231,6 +245,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = alpha_to_unit(a);
         materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(cy);
+        outScene.movable.push_back(movable);
         ++mid;
       }
     }
@@ -251,6 +266,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = alpha_to_unit(a);
         materials.back().random_alpha = true;
         outScene.objects.push_back(bm);
+        outScene.movable.push_back(false);
         ++mid;
       }
     }
@@ -261,6 +277,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       std::string s_mirror;
       if (!(iss >> s_mirror))
         s_mirror = "NR";
+      std::string s_move;
+      if (!(iss >> s_move))
+        s_move = "IM";
+      bool movable = (s_move == "M");
       Vec3 c, dir, rgb;
       double d = 1.0, h = 1.0;
       double a = 255;
@@ -273,6 +293,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = alpha_to_unit(a);
         materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(co);
+        outScene.movable.push_back(movable);
         ++mid;
       }
     }
@@ -316,6 +337,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                                new_len, oid++, bm->material_id,
                                                new_start, bm->total_length);
           outScene.objects.push_back(new_bm);
+          outScene.movable.push_back(false);
         }
       }
     }

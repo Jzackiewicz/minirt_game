@@ -32,7 +32,8 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const Vec3 &light_pos)
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                       const Ray &r, std::mt19937 &rng,
                       std::uniform_real_distribution<double> &dist,
-                      int depth = 0)
+                      int depth = 0, int highlight_id = -1,
+                      bool invert = false)
 {
   if (depth > 10)
     return Vec3(0.0, 0.0, 0.0);
@@ -44,6 +45,8 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   const Material &m = mats[rec.material_id];
   Vec3 eye = (r.dir * -1.0).normalized();
   Vec3 base = m.color;
+  if (rec.object_id == highlight_id && invert)
+    base = Vec3(1.0 - base.x, 1.0 - base.y, 1.0 - base.z);
   Vec3 sum(base.x * scene.ambient.color.x * scene.ambient.intensity,
            base.y * scene.ambient.color.y * scene.ambient.intensity,
            base.z * scene.ambient.color.z * scene.ambient.intensity);
@@ -65,7 +68,8 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   {
     Vec3 refl_dir = r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
     Ray refl(rec.p + refl_dir * 1e-4, refl_dir);
-    Vec3 refl_col = trace_ray(scene, mats, refl, rng, dist, depth + 1);
+    Vec3 refl_col =
+        trace_ray(scene, mats, refl, rng, dist, depth + 1, highlight_id, invert);
     double refl_ratio = REFLECTION / 100.0;
     sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
   }
@@ -79,7 +83,8 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   if (alpha < 1.0)
   {
     Ray next(rec.p + r.dir * 1e-4, r.dir);
-    Vec3 behind = trace_ray(scene, mats, next, rng, dist, depth + 1);
+    Vec3 behind =
+        trace_ray(scene, mats, next, rng, dist, depth + 1, highlight_id, invert);
     return sum * alpha + behind * (1.0 - alpha);
   }
   return sum;
@@ -203,6 +208,8 @@ void Renderer::render_window(const std::vector<Material> &mats,
   bool running = true;
   bool focused = false;
   Uint32 last = SDL_GetTicks();
+  bool edit_mode = false;
+  int highlight_id = -1;
 
   while (running)
   {
@@ -239,6 +246,13 @@ void Renderer::render_window(const std::vector<Material> &mats,
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
         running = false;
+      else if (e.type == SDL_KEYDOWN &&
+               e.key.keysym.scancode == SDL_SCANCODE_R && e.key.repeat == 0)
+      {
+        edit_mode = !edit_mode;
+        if (!edit_mode)
+          highlight_id = -1;
+      }
     }
 
     const Uint8 *state = SDL_GetKeyboardState(nullptr);
@@ -247,15 +261,32 @@ void Renderer::render_window(const std::vector<Material> &mats,
       if (state[SDL_SCANCODE_ESCAPE])
         running = false;
       double speed = 15.0 * dt;
-      if (state[SDL_SCANCODE_W])
-        cam.move(cam.forward * speed);
-      if (state[SDL_SCANCODE_S])
-        cam.move(cam.forward * -speed);
-      if (state[SDL_SCANCODE_A])
-        cam.move(cam.right * -speed);
-      if (state[SDL_SCANCODE_D])
-        cam.move(cam.right * speed);
+      if (!edit_mode)
+      {
+        if (state[SDL_SCANCODE_W])
+          cam.move(cam.forward * speed);
+        if (state[SDL_SCANCODE_S])
+          cam.move(cam.forward * -speed);
+        if (state[SDL_SCANCODE_A])
+          cam.move(cam.right * -speed);
+        if (state[SDL_SCANCODE_D])
+          cam.move(cam.right * speed);
+      }
     }
+
+    if (edit_mode)
+    {
+      Ray center = cam.ray_through(0.5, 0.5);
+      HitRecord sel;
+      if (scene.hit(center, 1e-4, 1e9, sel) &&
+          sel.object_id >= 0 && sel.object_id < (int)scene.movable.size() &&
+          scene.movable[sel.object_id])
+        highlight_id = sel.object_id;
+      else
+        highlight_id = -1;
+    }
+
+    bool blink = ((SDL_GetTicks() / 500) % 2) == 0;
 
     std::atomic<int> next_row{0};
     auto worker = [&]()
@@ -272,7 +303,8 @@ void Renderer::render_window(const std::vector<Material> &mats,
           double u = (x + 0.5) / W;
           double v = (y + 0.5) / H;
           Ray r = cam.ray_through(u, v);
-          Vec3 col = trace_ray(scene, mats, r, rng, dist);
+          Vec3 col =
+              trace_ray(scene, mats, r, rng, dist, 0, highlight_id, blink);
           framebuffer[y * W + x] = col;
         }
       }

@@ -11,6 +11,7 @@ namespace rt
 struct Scene
 {
   std::vector<HittablePtr> objects;
+  std::vector<bool> movable; // flags indicating if objects can be edited
   std::vector<PointLight> lights;
   Ambient ambient{Vec3(1, 1, 1), 0.0};
   std::shared_ptr<Hittable> accel;
