@@ -32,6 +32,12 @@ struct Hittable
   virtual bool is_beam() const { return false; }
   // default translation does nothing
   virtual void translate(const Vec3 &delta) { (void)delta; }
+  // default rotation does nothing
+  virtual void rotate(const Vec3 &axis, double angle)
+  {
+    (void)axis;
+    (void)angle;
+  }
 };
 
 using HittablePtr = std::shared_ptr<Hittable>;

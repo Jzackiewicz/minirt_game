@@ -17,6 +17,7 @@ struct Plane : public Hittable
            HitRecord &rec) const override;
   bool bounding_box(AABB &out) const override;
   void translate(const Vec3 &delta) override { point += delta; }
+  void rotate(const Vec3 &axis, double angle) override;
 };
 
 } // namespace rt

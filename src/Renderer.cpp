@@ -5,6 +5,8 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <cstring>
+#include <string>
 #include <random>
 #include <thread>
 
@@ -92,6 +94,47 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     return sum * alpha + behind * (1.0 - alpha);
   }
   return sum;
+}
+
+static const char *hud_chars = "EDITSPCAORM";
+static const uint8_t hud_font[][5] = {
+    {0b11111, 0b10000, 0b11100, 0b10000, 0b11111}, // E
+    {0b11110, 0b10001, 0b10001, 0b10001, 0b11110}, // D
+    {0b11111, 0b00100, 0b00100, 0b00100, 0b11111}, // I
+    {0b11111, 0b00100, 0b00100, 0b00100, 0b00100}, // T
+    {0b01111, 0b10000, 0b01110, 0b00001, 0b11110}, // S
+    {0b11110, 0b10001, 0b11110, 0b10000, 0b10000}, // P
+    {0b01110, 0b10001, 0b10000, 0b10001, 0b01110}, // C
+    {0b01110, 0b10001, 0b11111, 0b10001, 0b10001}, // A
+    {0b01110, 0b10001, 0b10001, 0b10001, 0b01110}, // O
+    {0b11110, 0b10001, 0b11110, 0b10100, 0b10010}, // R
+    {0b10001, 0b11011, 0b10101, 0b10001, 0b10001}  // M
+};
+
+static void draw_char(SDL_Renderer *ren, char c, int x, int y, int scale)
+{
+  const char *p = std::strchr(hud_chars, c);
+  if (!p)
+    return;
+  size_t idx = p - hud_chars;
+  for (int i = 0; i < 5; ++i)
+    for (int j = 0; j < 7; ++j)
+      if (hud_font[idx][i] & (1 << j))
+      {
+        SDL_Rect r{x + i * scale, y + j * scale, scale, scale};
+        SDL_RenderFillRect(ren, &r);
+      }
+}
+
+static void draw_text(SDL_Renderer *ren, const std::string &txt, int x, int y,
+                      int scale)
+{
+  for (size_t i = 0; i < txt.size(); ++i)
+  {
+    if (txt[i] == ' ')
+      continue;
+    draw_char(ren, txt[i], x + static_cast<int>(i) * (6 * scale), y, scale);
+  }
 }
 
 Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
@@ -281,7 +324,16 @@ void Renderer::render_window(std::vector<Material> &mats,
       else if (focused && e.type == SDL_MOUSEMOTION)
       {
         double sens = 0.002;
-        cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
+        if (edit_mode && selected_obj != -1)
+        {
+          scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
+          scene.objects[selected_obj]->rotate(cam.right, -e.motion.yrel * sens);
+          scene.build_bvh();
+        }
+        else
+        {
+          cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
+        }
       }
       else if (edit_mode && selected_obj != -1 && e.type == SDL_MOUSEWHEEL)
       {
@@ -409,6 +461,8 @@ void Renderer::render_window(std::vector<Material> &mats,
     SDL_UpdateTexture(tex, nullptr, pixels.data(), W * 3);
     SDL_RenderClear(ren);
     SDL_RenderCopy(ren, tex, nullptr, nullptr);
+    SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
+    draw_text(ren, edit_mode ? "EDIT" : "SPECTATOR", 5, 5, 2);
     SDL_RenderPresent(ren);
   }
 
