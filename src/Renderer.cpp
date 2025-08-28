@@ -247,14 +247,24 @@ void Renderer::render_window(const std::vector<Material> &mats,
       if (state[SDL_SCANCODE_ESCAPE])
         running = false;
       double speed = 15.0 * dt;
+      auto try_move = [&](const Vec3 &delta)
+      {
+        double dist = delta.length();
+        if (dist < 1e-9)
+          return;
+        Ray r(cam.origin, delta / dist);
+        HitRecord tmp;
+        if (!scene.hit_solid(r, 1e-3, dist, tmp))
+          cam.move(delta);
+      };
       if (state[SDL_SCANCODE_W])
-        cam.move(cam.forward * speed);
+        try_move(cam.forward * speed);
       if (state[SDL_SCANCODE_S])
-        cam.move(cam.forward * -speed);
+        try_move(cam.forward * -speed);
       if (state[SDL_SCANCODE_A])
-        cam.move(cam.right * -speed);
+        try_move(cam.right * -speed);
       if (state[SDL_SCANCODE_D])
-        cam.move(cam.right * speed);
+        try_move(cam.right * speed);
     }
 
     std::atomic<int> next_row{0};
