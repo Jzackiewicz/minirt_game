@@ -252,10 +252,30 @@ void Renderer::render_window(const std::vector<Material> &mats,
         double dist = delta.length();
         if (dist < 1e-9)
           return;
-        Ray r(cam.origin, delta / dist);
-        HitRecord tmp;
-        if (!scene.hit_solid(r, 1e-3, dist, tmp))
+        Vec3 dir = delta / dist;
+        Ray r(cam.origin, dir);
+        HitRecord rec;
+        if (!scene.hit_solid(r, 1e-3, dist, rec))
+        {
           cam.move(delta);
+          return;
+        }
+        double move_t = std::max(0.0, rec.t - 1e-3);
+        if (move_t > 0.0)
+          cam.move(dir * move_t);
+        Vec3 remain = delta - dir * move_t;
+        Vec3 slide = remain - rec.normal * Vec3::dot(remain, rec.normal);
+        double slide_len = slide.length();
+        if (slide_len < 1e-9)
+          return;
+        Vec3 slide_dir = slide / slide_len;
+        double angle_scale =
+            std::max(0.0, 1.0 - std::fabs(Vec3::dot(dir, rec.normal)));
+        double slide_dist = slide_len * angle_scale;
+        Ray slide_ray(cam.origin, slide_dir);
+        HitRecord rec2;
+        if (!scene.hit_solid(slide_ray, 1e-3, slide_dist, rec2))
+          cam.move(slide_dir * slide_dist);
       };
       if (state[SDL_SCANCODE_W])
         try_move(cam.forward * speed);
