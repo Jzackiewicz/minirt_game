@@ -38,6 +38,7 @@ struct Hittable
     (void)axis;
     (void)angle;
   }
+  virtual void set_id(int id) { (void)id; }
 };
 
 using HittablePtr = std::shared_ptr<Hittable>;

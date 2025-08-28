@@ -20,6 +20,7 @@ struct Beam : public Hittable
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const override;
   bool bounding_box(AABB &out) const override;
   bool is_beam() const override;
+  void set_id(int id) override { object_id = id; }
 };
 
 } // namespace rt

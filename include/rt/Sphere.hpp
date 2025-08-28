@@ -18,6 +18,7 @@ struct Sphere : public Hittable
            HitRecord &rec) const override;
   bool bounding_box(AABB &out) const override;
   void translate(const Vec3 &delta) override { center += delta; }
+  void set_id(int id) override { object_id = id; }
 };
 
 } // namespace rt

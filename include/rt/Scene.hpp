@@ -3,6 +3,7 @@
 #include "BVH.hpp"
 #include "Hittable.hpp"
 #include "light.hpp"
+#include "material.hpp"
 #include <memory>
 #include <vector>
 
@@ -17,6 +18,7 @@ struct Scene
 
   void build_bvh();
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
+  void update_beams(const std::vector<Material> &mats);
 };
 
 } // namespace rt
