@@ -85,6 +85,32 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   return sum;
 }
 
+static void move_with_collision(Camera &cam, const Scene &scene,
+                                const Vec3 &delta)
+{
+  double len = delta.length();
+  if (len < 1e-9)
+    return;
+  Ray r(cam.origin, delta / len);
+  double tmin = 1e-4;
+  double tmax = len;
+  HitRecord rec;
+  while (scene.hit(r, tmin, tmax, rec))
+  {
+    const auto &obj = scene.objects[rec.object_id];
+    if (obj->is_beam() || !rec.front_face)
+    {
+      tmin = rec.t + 1e-4;
+      continue;
+    }
+    double move_dist = rec.t - 1e-4;
+    if (move_dist > 0.0)
+      cam.move(r.dir * move_dist);
+    return;
+  }
+  cam.move(delta);
+}
+
 Renderer::Renderer(const Scene &s, Camera &c) : scene(s), cam(c) {}
 
 void Renderer::render_ppm(const std::string &path,
@@ -247,14 +273,18 @@ void Renderer::render_window(const std::vector<Material> &mats,
       if (state[SDL_SCANCODE_ESCAPE])
         running = false;
       double speed = 15.0 * dt;
+      double fmove = 0.0;
       if (state[SDL_SCANCODE_W])
-        cam.move(cam.forward * speed);
+        fmove += speed;
       if (state[SDL_SCANCODE_S])
-        cam.move(cam.forward * -speed);
-      if (state[SDL_SCANCODE_A])
-        cam.move(cam.right * -speed);
+        fmove -= speed;
+      move_with_collision(cam, scene, cam.forward * fmove);
+      double rmove = 0.0;
       if (state[SDL_SCANCODE_D])
-        cam.move(cam.right * speed);
+        rmove += speed;
+      if (state[SDL_SCANCODE_A])
+        rmove -= speed;
+      move_with_collision(cam, scene, cam.right * rmove);
     }
 
     std::atomic<int> next_row{0};
