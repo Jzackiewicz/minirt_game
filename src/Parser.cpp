@@ -281,45 +281,44 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
   {
     if (!obj->is_beam())
       continue;
-    Beam *bm = static_cast<Beam *>(obj.get());
-    Vec3 start = bm->center - bm->axis * (bm->height * 0.5);
-    Ray forward(start, bm->axis);
-    HitRecord tmp;
-    HitRecord closest_rec;
-    double orig_height = bm->height;
-    double closest = orig_height;
-    bool hit = false;
-    for (auto &other : outScene.objects)
-    {
-      if (other.get() == bm)
-        continue;
-      if (other->hit(forward, 1e-4, closest, tmp))
+      Beam *bm = static_cast<Beam *>(obj.get());
+      Vec3 start = bm->ray.orig;
+      Ray forward(start, bm->ray.dir);
+      HitRecord tmp;
+      HitRecord closest_rec;
+      double orig_length = bm->length;
+      double closest = orig_length;
+      bool hit = false;
+      for (auto &other : outScene.objects)
       {
-        closest = tmp.t;
-        closest_rec = tmp;
-        hit = true;
+        if (other.get() == bm)
+          continue;
+        if (other->hit(forward, 1e-4, closest, tmp))
+        {
+          closest = tmp.t;
+          closest_rec = tmp;
+          hit = true;
+        }
       }
-    }
-    double remaining = orig_height - closest;
-    if (closest < orig_height)
-    {
-      bm->height = closest;
-      bm->center = start + bm->axis * (closest * 0.5);
-    }
-    if (hit && materials[closest_rec.material_id].mirror && remaining > 1e-4)
-    {
-      Vec3 hit_point = forward.at(closest);
-      Vec3 refl_dir =
-          forward.dir - closest_rec.normal *
-                           2.0 * Vec3::dot(forward.dir, closest_rec.normal);
-      double start_ratio =
-          bm->start_ratio + (closest / orig_height) * (1.0 - bm->start_ratio);
-      auto new_bm = std::make_shared<Beam>(hit_point, refl_dir, bm->radius,
-                                           remaining, oid++, mid, start_ratio);
-      materials.emplace_back(materials[bm->material_id]);
-      new_beams.push_back(new_bm);
-      ++mid;
-    }
+      double remaining = orig_length - closest;
+      if (closest < orig_length)
+      {
+        bm->length = closest;
+      }
+      if (hit && materials[closest_rec.material_id].mirror && remaining > 1e-4)
+      {
+        Vec3 hit_point = forward.at(closest);
+        Vec3 refl_dir =
+            forward.dir - closest_rec.normal *
+                             2.0 * Vec3::dot(forward.dir, closest_rec.normal);
+        double start_ratio =
+            bm->start_ratio + (closest / orig_length) * (1.0 - bm->start_ratio);
+        auto new_bm = std::make_shared<Beam>(hit_point, refl_dir, bm->radius,
+                                             remaining, oid++, mid, start_ratio);
+        materials.emplace_back(materials[bm->material_id]);
+        new_beams.push_back(new_bm);
+        ++mid;
+      }
   }
   for (auto &nb : new_beams)
     outScene.objects.push_back(nb);

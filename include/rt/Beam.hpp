@@ -1,10 +1,16 @@
 #pragma once
-#include "Cylinder.hpp"
+#include "Hittable.hpp"
+#include "Ray.hpp"
 
 namespace rt
 {
-struct Beam : public Cylinder
+struct Beam : public Hittable
 {
+  Ray ray;
+  double radius;
+  double length;
+  int object_id;
+  int material_id;
   double start_ratio;
 
   Beam(const Vec3 &origin, const Vec3 &dir, double radius, double length,
@@ -13,6 +19,7 @@ struct Beam : public Cylinder
   bool is_beam() const override;
   bool hit(const Ray &r, double tmin, double tmax,
            HitRecord &rec) const override;
+  bool bounding_box(AABB &out) const override;
 };
 
 } // namespace rt
