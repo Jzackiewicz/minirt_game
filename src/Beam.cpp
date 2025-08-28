@@ -13,55 +13,48 @@ Beam::Beam(const Vec3 &origin, const Vec3 &dir, double r, double len, int oid,
 
 bool Beam::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
-  Vec3 u = r.dir;
-  Vec3 v = path.dir;
-  Vec3 w0 = r.orig - path.orig;
-  double a = Vec3::dot(u, u);
-  double b = Vec3::dot(u, v);
-  double c = Vec3::dot(v, v);
-  double d = Vec3::dot(u, w0);
-  double e = Vec3::dot(v, w0);
-  double denom = a * c - b * b;
+  // Intersection with a finite cylinder aligned with `path`
+  Vec3 v = path.dir;            // cylinder axis (normalized)
+  Vec3 dp = r.orig - path.orig; // vector from cylinder base to ray origin
 
-  double sc, tc;
-  if (std::fabs(denom) < 1e-9)
-  {
-    sc = -d / a;
-    tc = (a * e - b * d) / (a * c);
-  }
-  else
-  {
-    sc = (b * e - c * d) / denom;
-    tc = (a * e - b * d) / denom;
-  }
+  double dp_par = Vec3::dot(dp, v);
+  Vec3 dp_perp = dp - v * dp_par;
+  double dir_par = Vec3::dot(r.dir, v);
+  Vec3 dir_perp = r.dir - v * dir_par;
 
-  if (sc < tmin || sc > tmax)
-    return false;
-  if (tc < 0.0 || tc > length)
+  double a = Vec3::dot(dir_perp, dir_perp);
+  double b = 2.0 * Vec3::dot(dir_perp, dp_perp);
+  double c = Vec3::dot(dp_perp, dp_perp) - radius * radius;
+
+  if (std::fabs(a) < 1e-12)
+    return false; // Ray parallel to cylinder axis
+
+  double det = b * b - 4.0 * a * c;
+  if (det < 0.0)
     return false;
 
-  Vec3 pr = r.at(sc);
-  Vec3 pb = path.at(tc);
-  Vec3 diff = pr - pb;
-  double dist2 = diff.length_squared();
-  if (dist2 > radius * radius)
-    return false;
+  double sqrt_det = std::sqrt(det);
+  double t0 = (-b - sqrt_det) / (2.0 * a);
+  double t1 = (-b + sqrt_det) / (2.0 * a);
+  if (t0 > t1)
+    std::swap(t0, t1);
 
-  Vec3 outward;
-  if (dist2 > 1e-12)
+  double t = t0;
+  double tc = dp_par + dir_par * t;
+  if (t < tmin || t > tmax || tc < 0.0 || tc > length)
   {
-    outward = diff.normalized();
-  }
-  else
-  {
-    outward = Vec3::cross(path.dir, Vec3(1, 0, 0));
-    if (outward.length_squared() < 1e-12)
-      outward = Vec3::cross(path.dir, Vec3(0, 1, 0));
-    outward = outward.normalized();
+    t = t1;
+    tc = dp_par + dir_par * t;
+    if (t < tmin || t > tmax || tc < 0.0 || tc > length)
+      return false;
   }
 
-  rec.t = sc;
-  rec.p = pr;
+  Vec3 p_hit = r.at(t);
+  Vec3 axis_pt = path.at(tc);
+  Vec3 outward = (p_hit - axis_pt).normalized();
+
+  rec.t = t;
+  rec.p = p_hit;
   rec.object_id = object_id;
   rec.material_id = material_id;
   rec.beam_ratio = (start + tc) / total_length;
