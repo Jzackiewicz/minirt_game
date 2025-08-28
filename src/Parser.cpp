@@ -101,6 +101,11 @@ inline bool parse_rgba(std::string_view sv, rt::Vec3 &out, double &a)
 }
 inline double alpha_to_unit(double a) { return a / 255.0; }
 
+inline rt::Vec3 reflect(const rt::Vec3 &v, const rt::Vec3 &n)
+{
+  return v - n * (2.0 * rt::Vec3::dot(v, n));
+}
+
 } // namespace
 
 namespace rt
@@ -166,11 +171,13 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     }
     else if (id == "sp")
     {
-      std::string s_pos, s_r, s_rgb, s_mirror;
-      iss >> s_pos >> s_r >> s_rgb >> s_mirror;
+      std::string s_pos, s_r, s_rgb;
+      iss >> s_pos >> s_r >> s_rgb;
+      std::string s_mirror;
+      if (!(iss >> s_mirror))
+        s_mirror = "NR";
       Vec3 c, rgb;
       double r = 1.0;
-      int mir = 0;
       double a = 255;
       if (parse_triple(s_pos, c) && to_double(s_r, r) &&
           parse_rgba(s_rgb, rgb, a))
@@ -179,8 +186,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
         materials.back().alpha = alpha_to_unit(a);
+        materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(s);
-        (void)mir; // na razie ignorujemy mirror flag
         ++mid;
       }
     }
@@ -188,6 +195,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     {
       std::string s_p, s_n, s_rgb;
       iss >> s_p >> s_n >> s_rgb;
+      std::string s_mirror;
+      if (!(iss >> s_mirror))
+        s_mirror = "NR";
       Vec3 p, n, rgb;
       double a = 255;
       if (parse_triple(s_p, p) && parse_triple(s_n, n) &&
@@ -197,6 +207,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
         materials.back().alpha = alpha_to_unit(a);
+        materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(pl);
         ++mid;
       }
@@ -205,6 +216,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     {
       std::string s_pos, s_dir, s_d, s_h, s_rgb;
       iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
+      std::string s_mirror;
+      if (!(iss >> s_mirror))
+        s_mirror = "NR";
       Vec3 c, dir, rgb;
       double d = 1.0, h = 1.0;
       double a = 255;
@@ -215,6 +229,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
         materials.back().alpha = alpha_to_unit(a);
+        materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(cy);
         ++mid;
       }
@@ -243,6 +258,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     {
       std::string s_pos, s_dir, s_d, s_h, s_rgb;
       iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
+      std::string s_mirror;
+      if (!(iss >> s_mirror))
+        s_mirror = "NR";
       Vec3 c, dir, rgb;
       double d = 1.0, h = 1.0;
       double a = 255;
@@ -253,6 +271,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
         materials.back().alpha = alpha_to_unit(a);
+        materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(co);
         ++mid;
       }
@@ -260,14 +279,16 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     // TODO: textures...
   }
 
-  // Trim beams so they stop at the first blocking object
-  for (auto &obj : outScene.objects)
+  // Trim beams and add reflections
+  for (size_t i = 0; i < outScene.objects.size(); ++i)
   {
+    auto obj = outScene.objects[i];
     if (!obj->is_beam())
       continue;
     Beam *bm = static_cast<Beam *>(obj.get());
     Ray forward(bm->path.orig, bm->path.dir);
-    HitRecord tmp;
+    HitRecord tmp, hit_rec;
+    bool hit_any = false;
     double closest = bm->length;
     for (auto &other : outScene.objects)
     {
@@ -276,11 +297,27 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (other->hit(forward, 1e-4, closest, tmp))
       {
         closest = tmp.t;
+        hit_rec = tmp;
+        hit_any = true;
       }
     }
-    if (closest < bm->length)
+    if (hit_any)
     {
       bm->length = closest;
+      if (materials[hit_rec.material_id].mirror)
+      {
+        double new_start = bm->start + closest;
+        double new_len = bm->total_length - new_start;
+        if (new_len > 1e-4)
+        {
+          Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
+          Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
+          auto new_bm = std::make_shared<Beam>(refl_orig, refl_dir, bm->radius,
+                                               new_len, oid++, bm->material_id,
+                                               new_start, bm->total_length);
+          outScene.objects.push_back(new_bm);
+        }
+      }
     }
   }
 

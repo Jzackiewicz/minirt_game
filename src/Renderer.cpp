@@ -61,6 +61,14 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                 base.y * L.color.y * L.intensity * diff + L.color.y * spec,
                 base.z * L.color.z * L.intensity * diff + L.color.z * spec);
   }
+  if (m.mirror)
+  {
+    Vec3 refl_dir = r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
+    Ray refl(rec.p + refl_dir * 1e-4, refl_dir);
+    Vec3 refl_col = trace_ray(scene, mats, refl, rng, dist, depth + 1);
+    double refl_ratio = REFLECTION / 100.0;
+    sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
+  }
   double alpha = m.alpha;
   if (m.random_alpha)
   {
