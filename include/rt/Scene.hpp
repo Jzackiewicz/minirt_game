@@ -19,6 +19,10 @@ struct Scene
   void update_beams(const std::vector<Material> &mats);
   void build_bvh();
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
+  bool try_translate(int obj_id, const Vec3 &delta);
+  bool try_rotate(int obj_id, const Vec3 &axis, double angle);
+private:
+  bool intersects_any(const AABB &box, int skip) const;
 };
 
 } // namespace rt

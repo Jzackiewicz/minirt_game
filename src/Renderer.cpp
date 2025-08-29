@@ -326,10 +326,14 @@ void Renderer::render_window(std::vector<Material> &mats,
         double sens = 0.002;
         if (edit_mode && selected_obj != -1)
         {
-          scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
-          scene.objects[selected_obj]->rotate(cam.right, -e.motion.yrel * sens);
-          scene.update_beams(mats);
-          scene.build_bvh();
+          bool rotated = false;
+          rotated |= scene.try_rotate(selected_obj, cam.up, -e.motion.xrel * sens);
+          rotated |= scene.try_rotate(selected_obj, cam.right, -e.motion.yrel * sens);
+          if (rotated)
+          {
+            scene.update_beams(mats);
+            scene.build_bvh();
+          }
         }
         else
         {
@@ -339,9 +343,11 @@ void Renderer::render_window(std::vector<Material> &mats,
       else if (edit_mode && selected_obj != -1 && e.type == SDL_MOUSEWHEEL)
       {
         double step = e.wheel.y * 1.0;
-        scene.objects[selected_obj]->translate(cam.up * step);
-        scene.update_beams(mats);
-        scene.build_bvh();
+        if (scene.try_translate(selected_obj, cam.up * step))
+        {
+          scene.update_beams(mats);
+          scene.build_bvh();
+        }
       }
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
@@ -363,9 +369,11 @@ void Renderer::render_window(std::vector<Material> &mats,
         move += cam.right * speed;
       if (move.length_squared() > 0)
       {
-        scene.objects[selected_obj]->translate(move);
-        scene.update_beams(mats);
-        scene.build_bvh();
+        if (scene.try_translate(selected_obj, move))
+        {
+          scene.update_beams(mats);
+          scene.build_bvh();
+        }
       }
     }
     else if (focused)

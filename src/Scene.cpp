@@ -116,4 +116,47 @@ bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
   return hit_any;
 }
 
+bool Scene::intersects_any(const AABB &box, int skip) const
+{
+  for (size_t i = 0; i < objects.size(); ++i)
+  {
+    if (static_cast<int>(i) == skip)
+      continue;
+    AABB other;
+    if (objects[i]->bounding_box(other) && box.intersects(other))
+      return true;
+  }
+  return false;
+}
+
+bool Scene::try_translate(int obj_id, const Vec3 &delta)
+{
+  auto obj = objects[obj_id];
+  obj->translate(delta);
+  AABB box;
+  if (!obj->bounding_box(box))
+    return true;
+  if (intersects_any(box, obj_id))
+  {
+    obj->translate(delta * -1.0);
+    return false;
+  }
+  return true;
+}
+
+bool Scene::try_rotate(int obj_id, const Vec3 &axis, double angle)
+{
+  auto obj = objects[obj_id];
+  obj->rotate(axis, angle);
+  AABB box;
+  if (!obj->bounding_box(box))
+    return true;
+  if (intersects_any(box, obj_id))
+  {
+    obj->rotate(axis, -angle);
+    return false;
+  }
+  return true;
+}
+
 } // namespace rt

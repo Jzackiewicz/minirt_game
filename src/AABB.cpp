@@ -32,6 +32,13 @@ bool AABB::hit(const Ray &r, double tmin, double tmax) const
   return true;
 }
 
+bool AABB::intersects(const AABB &other) const
+{
+  return (max.x >= other.min.x && min.x <= other.max.x &&
+          max.y >= other.min.y && min.y <= other.max.y &&
+          max.z >= other.min.z && min.z <= other.max.z);
+}
+
 AABB AABB::surrounding_box(const AABB &box0, const AABB &box1)
 {
   Vec3 small(std::min(box0.min.x, box1.min.x), std::min(box0.min.y, box1.min.y),
