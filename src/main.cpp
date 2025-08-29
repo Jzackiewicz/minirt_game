@@ -4,6 +4,7 @@
 #include "rt/Renderer.hpp" // same trick
 #include "rt/Scene.hpp"
 #include <SDL.h>
+#include <SDL_main.h>
 #include <iostream>
 #include <thread>
 

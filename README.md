@@ -31,10 +31,10 @@ cmake --build build
 3. Configure and build the project:
     ```bash
     cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-    cmake --build build -j
-    ```
-    (Use `-G "MinGW Makefiles"` instead of Ninja if you prefer make.)
-    CMake defines `SDL_MAIN_HANDLED` so linking directly against `SDL2` works without the `SDL2main` wrapper.
+     cmake --build build -j
+     ```
+     (Use `-G "MinGW Makefiles"` instead of Ninja if you prefer make.)
+     The build links against both `SDL2` and `SDL2main` provided by MSYS2.
 4. Run the executable:
     ```bash
     ./build/minirt.exe
