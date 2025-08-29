@@ -13,8 +13,7 @@ int main(int argc, char **argv)
 {
   if (argc < 2)
   {
-    std::cerr
-        << "Usage: minirt <scene.rt> [width height threads] [L|M|H]\n";
+    std::cerr << "Usage: minirt <scene.rt> [width height L|M|H]\n";
     return 1;
   }
   std::string scene_path = argv[1];
@@ -34,8 +33,10 @@ int main(int argc, char **argv)
 
   int width = (argc > 2) ? std::atoi(argv[2]) : 800;
   int height = (argc > 3) ? std::atoi(argv[3]) : 600;
-  int threads =
-      (argc > 4) ? std::atoi(argv[4]) : std::thread::hardware_concurrency();
+
+  unsigned int threads = std::thread::hardware_concurrency();
+  if (threads == 0)
+    threads = 8;
 
   float downscale = 1.0f;
   if (quality == 'M' || quality == 'm')
@@ -57,7 +58,7 @@ int main(int argc, char **argv)
   rt::RenderSettings rset;
   rset.width = width;
   rset.height = height;
-  rset.threads = threads > 0 ? threads : 8;
+  rset.threads = threads;
   rset.downscale = downscale;
 
   rt::Renderer renderer(scene, cam);
