@@ -1,12 +1,34 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
+#include "rt/Plane.hpp"
 #include <algorithm>
+#include <limits>
 
 namespace
 {
 inline rt::Vec3 reflect(const rt::Vec3 &v, const rt::Vec3 &n)
 {
   return v - n * (2.0 * rt::Vec3::dot(v, n));
+}
+
+inline bool box_intersects_plane(const rt::AABB &box, const rt::Plane &pl)
+{
+  rt::Vec3 corners[8] = {rt::Vec3(box.min.x, box.min.y, box.min.z),
+                         rt::Vec3(box.max.x, box.min.y, box.min.z),
+                         rt::Vec3(box.min.x, box.max.y, box.min.z),
+                         rt::Vec3(box.max.x, box.max.y, box.min.z),
+                         rt::Vec3(box.min.x, box.min.y, box.max.z),
+                         rt::Vec3(box.max.x, box.min.y, box.max.z),
+                         rt::Vec3(box.min.x, box.max.y, box.max.z),
+                         rt::Vec3(box.max.x, box.max.y, box.max.z)};
+  double min_dist = std::numeric_limits<double>::infinity();
+  for (const auto &c : corners)
+  {
+    double d = rt::Vec3::dot(c - pl.point, pl.normal);
+    if (d < min_dist)
+      min_dist = d;
+  }
+  return min_dist < 0.0;
 }
 } // namespace
 
@@ -100,11 +122,12 @@ bool Scene::collides(int index) const
   if (index < 0 || index >= static_cast<int>(objects.size()))
     return false;
   auto obj = objects[index];
-  if (obj->is_beam() || obj->is_plane())
+  if (obj->is_beam())
     return false;
 
+  Plane *obj_plane = obj->is_plane() ? static_cast<Plane *>(obj.get()) : nullptr;
   AABB box;
-  if (!obj->bounding_box(box))
+  if (!obj_plane && !obj->bounding_box(box))
     return false;
 
   for (size_t i = 0; i < objects.size(); ++i)
@@ -112,13 +135,33 @@ bool Scene::collides(int index) const
     if (static_cast<int>(i) == index)
       continue;
     auto other = objects[i];
-    if (other->is_beam() || other->is_plane())
+    if (other->is_beam())
       continue;
-    AABB other_box;
-    if (!other->bounding_box(other_box))
-      continue;
-    if (box.intersects(other_box))
-      return true;
+
+    if (obj_plane)
+    {
+      if (other->is_plane())
+        continue;
+      AABB other_box;
+      if (!other->bounding_box(other_box))
+        continue;
+      if (box_intersects_plane(other_box, *obj_plane))
+        return true;
+    }
+    else if (other->is_plane())
+    {
+      auto pl = static_cast<Plane *>(other.get());
+      if (box_intersects_plane(box, *pl))
+        return true;
+    }
+    else
+    {
+      AABB other_box;
+      if (!other->bounding_box(other_box))
+        continue;
+      if (box.intersects(other_box))
+        return true;
+    }
   }
   return false;
 }

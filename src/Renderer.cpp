@@ -492,6 +492,70 @@ void Renderer::render_window(std::vector<Material> &mats,
     SDL_UpdateTexture(tex, nullptr, pixels.data(), RW * 3);
     SDL_RenderClear(ren);
     SDL_RenderCopy(ren, tex, nullptr, nullptr);
+    if (edit_mode)
+    {
+      auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
+      {
+        Vec3 rel = p - cam.origin;
+        double z = Vec3::dot(rel, cam.forward);
+        if (z <= 0.0)
+          return false;
+        double x = Vec3::dot(rel, cam.right);
+        double y = Vec3::dot(rel, cam.up);
+        double fov_rad = cam.fov_deg * M_PI / 180.0;
+        double half_h = std::tan(fov_rad * 0.5);
+        double half_w = cam.aspect * half_h;
+        double u = (x / z / half_w + 1.0) * 0.5;
+        double v = (1.0 - y / z / half_h) * 0.5;
+        sx = static_cast<int>(u * W);
+        sy = static_cast<int>(v * H);
+        return true;
+      };
+      const int edges[12][2] = {{0, 1}, {0, 2}, {0, 4}, {1, 3}, {1, 5},
+                                {2, 3}, {2, 6}, {3, 7}, {4, 5}, {4, 6},
+                                {5, 7}, {6, 7}};
+      for (size_t i = 0; i < scene.objects.size(); ++i)
+      {
+        auto &obj = scene.objects[i];
+        if (obj->is_beam() || obj->is_plane())
+          continue;
+        AABB box;
+        if (!obj->bounding_box(box))
+          continue;
+        Vec3 corners[8] = {Vec3(box.min.x, box.min.y, box.min.z),
+                           Vec3(box.max.x, box.min.y, box.min.z),
+                           Vec3(box.min.x, box.max.y, box.min.z),
+                           Vec3(box.max.x, box.max.y, box.min.z),
+                           Vec3(box.min.x, box.min.y, box.max.z),
+                           Vec3(box.max.x, box.min.y, box.max.z),
+                           Vec3(box.min.x, box.max.y, box.max.z),
+                           Vec3(box.max.x, box.max.y, box.max.z)};
+        SDL_Point pts[8];
+        bool ok = true;
+        for (int j = 0; j < 8; ++j)
+        {
+          int sx, sy;
+          if (!project(corners[j], sx, sy))
+          {
+            ok = false;
+            break;
+          }
+          pts[j].x = sx;
+          pts[j].y = sy;
+        }
+        if (!ok)
+          continue;
+        if (static_cast<int>(i) == selected_obj)
+          SDL_SetRenderDrawColor(ren, 255, 0, 0, 255);
+        else
+          SDL_SetRenderDrawColor(ren, 0, 255, 0, 255);
+        for (const auto &e : edges)
+        {
+          SDL_RenderDrawLine(ren, pts[e[0]].x, pts[e[0]].y, pts[e[1]].x,
+                             pts[e[1]].y);
+        }
+      }
+    }
     SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
     draw_text(ren, edit_mode ? "EDIT" : "SPECTATOR", 5, 5, 2);
     SDL_RenderPresent(ren);
