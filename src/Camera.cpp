@@ -26,7 +26,11 @@ void Camera::rotate(double yaw, double pitch)
   };
   forward = rotate_vec(forward, world_up, yaw);
   right = Vec3::cross(forward, world_up).normalized();
-  forward = rotate_vec(forward, right, pitch);
+
+  Vec3 new_forward = rotate_vec(forward, right, pitch);
+  if (std::abs(Vec3::dot(new_forward, world_up)) < 0.9999)
+    forward = new_forward;
+
   up = Vec3::cross(right, forward).normalized();
 }
 
