@@ -15,6 +15,8 @@ file(GLOB SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
 add_executable(minirt ${SRC_FILES})
 
 find_package(Threads REQUIRED)
-find_package(SDL2 REQUIRED CONFIG)
-target_include_directories(minirt PRIVATE include)
-target_link_libraries(minirt PRIVATE Threads::Threads SDL2::SDL2)
+
+find_package(SDL2 REQUIRED)
+
+target_include_directories(minirt PRIVATE ${SDL2_INCLUDE_DIRS})
+target_link_libraries(minirt PRIVATE ${SDL2_LIBRARIES})
