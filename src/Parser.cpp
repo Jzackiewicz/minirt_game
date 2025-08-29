@@ -323,6 +323,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
 
   outCamera =
       Camera(cam_pos, cam_pos + cam_dir, fov, double(width) / double(height));
+  outScene.next_object_id = oid;
   return true;
 }
 

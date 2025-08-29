@@ -14,8 +14,10 @@ struct Scene
   std::vector<PointLight> lights;
   Ambient ambient{Vec3(1, 1, 1), 0.0};
   std::shared_ptr<Hittable> accel;
+  int next_object_id = 0;
 
   void build_bvh();
+  void update_beams();
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
 };
 

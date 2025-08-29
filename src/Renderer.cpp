@@ -85,7 +85,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   return sum;
 }
 
-Renderer::Renderer(const Scene &s, Camera &c) : scene(s), cam(c) {}
+Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
 
 void Renderer::render_ppm(const std::string &path,
                           const std::vector<Material> &mats,
@@ -101,6 +101,8 @@ void Renderer::render_ppm(const std::string &path,
 
   std::vector<Vec3> framebuffer(W * H);
   std::atomic<int> next_row{0};
+
+  scene.update_beams();
 
   auto worker = [&]()
   {
@@ -256,6 +258,8 @@ void Renderer::render_window(const std::vector<Material> &mats,
       if (state[SDL_SCANCODE_D])
         cam.move(cam.right * speed);
     }
+
+    scene.update_beams();
 
     std::atomic<int> next_row{0};
     auto worker = [&]()
