@@ -1,4 +1,5 @@
 #include "rt/Renderer.hpp"
+#include "rt/Config.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -306,7 +307,7 @@ void Renderer::render_window(std::vector<Material> &mats,
       }
       else if (focused && e.type == SDL_MOUSEMOTION)
       {
-        double sens = 0.002;
+        double sens = MOUSE_SENSITIVITY;
         if (edit_mode)
         {
           scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
@@ -321,7 +322,7 @@ void Renderer::render_window(std::vector<Material> &mats,
       }
       else if (e.type == SDL_MOUSEWHEEL)
       {
-        double step = e.wheel.y * 1.0;
+        double step = e.wheel.y * SCROLL_STEP;
         if (edit_mode)
         {
           scene.objects[selected_obj]->translate(cam.up * step);
@@ -341,7 +342,7 @@ void Renderer::render_window(std::vector<Material> &mats,
     const Uint8 *state = SDL_GetKeyboardState(nullptr);
     if (edit_mode)
     {
-      double speed = 15.0 * dt;
+      double speed = OBJECT_MOVE_SPEED * dt;
       Vec3 move(0, 0, 0);
       if (state[SDL_SCANCODE_W])
         move += cam.forward * speed;
@@ -362,7 +363,7 @@ void Renderer::render_window(std::vector<Material> &mats,
     {
       if (state[SDL_SCANCODE_ESCAPE])
         running = false;
-      double speed = 15.0 * dt;
+      double speed = CAMERA_MOVE_SPEED * dt;
       if (state[SDL_SCANCODE_W])
         cam.move(cam.forward * speed);
       if (state[SDL_SCANCODE_S])
