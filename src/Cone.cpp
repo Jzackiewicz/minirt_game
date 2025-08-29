@@ -88,9 +88,10 @@ bool Cone::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 bool Cone::bounding_box(AABB &out) const
 {
   Vec3 ax = axis * (height * 0.5);
+  Vec3 abs_ax(std::fabs(ax.x), std::fabs(ax.y), std::fabs(ax.z));
   Vec3 ex(radius, radius, radius);
-  Vec3 min = center - ax - ex;
-  Vec3 max = center + ax + ex;
+  Vec3 min = center - abs_ax - ex;
+  Vec3 max = center + abs_ax + ex;
   out = AABB(min, max);
   return true;
 }
