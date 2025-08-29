@@ -42,7 +42,7 @@ int main(int argc, char **argv)
   if (quality == 'M' || quality == 'm')
     downscale = 1.5f;
   else if (quality == 'L' || quality == 'l')
-    downscale = 2.0f;
+    downscale = 2.5f;
 
   rt::Scene scene;
   rt::Camera cam({0, 0, -10}, {0, 0, 0}, 60.0, double(width) / double(height));
