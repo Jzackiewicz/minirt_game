@@ -37,19 +37,38 @@ bool Beam::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
     tc = (a * e - b * d) / denom;
   }
 
-  if (sc < tmin || sc > tmax)
-    return false;
-  if (tc < 0.0 || tc > length)
-    return false;
-
-  Vec3 pr = r.at(sc);
-  Vec3 pb = path.at(tc);
-  Vec3 diff = pr - pb;
-  double dist2 = diff.length_squared();
-  if (dist2 > radius * radius)
-    return false;
+  Vec3 pb;
+  Vec3 pr;
+  Vec3 diff;
+  if (sc < tmin)
+  {
+    double tc0 = e / c;
+    if (tc0 < 0.0 || tc0 > length)
+      return false;
+    pb = path.at(tc0);
+    Vec3 from_origin = r.orig - pb;
+    if (from_origin.length_squared() > radius * radius)
+      return false;
+    tc = tc0;
+    sc = tmin;
+    pr = r.at(sc);
+    diff = from_origin;
+  }
+  else
+  {
+    if (sc > tmax)
+      return false;
+    if (tc < 0.0 || tc > length)
+      return false;
+    pb = path.at(tc);
+    pr = r.at(sc);
+    diff = pr - pb;
+    if (diff.length_squared() > radius * radius)
+      return false;
+  }
 
   Vec3 outward;
+  double dist2 = diff.length_squared();
   if (dist2 > 1e-12)
   {
     outward = diff.normalized();
