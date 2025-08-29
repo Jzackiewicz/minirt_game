@@ -116,4 +116,76 @@ bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
   return hit_any;
 }
 
+bool Scene::try_translate(int idx, const Vec3 &delta)
+{
+  if (idx < 0 || idx >= static_cast<int>(objects.size()))
+    return false;
+  auto &obj = objects[idx];
+  obj->translate(delta);
+  AABB box;
+  bool collide = false;
+  if (!obj->bounding_box(box))
+    collide = true;
+  else
+  {
+    for (size_t i = 0; i < objects.size(); ++i)
+    {
+      if (static_cast<int>(i) == idx)
+        continue;
+      if (objects[i]->is_beam())
+        continue;
+      AABB other;
+      if (!objects[i]->bounding_box(other))
+        continue;
+      if (box.intersects(other))
+      {
+        collide = true;
+        break;
+      }
+    }
+  }
+  if (collide)
+  {
+    obj->translate(delta * -1);
+    return false;
+  }
+  return true;
+}
+
+bool Scene::try_rotate(int idx, const Vec3 &axis, double angle)
+{
+  if (idx < 0 || idx >= static_cast<int>(objects.size()))
+    return false;
+  auto &obj = objects[idx];
+  obj->rotate(axis, angle);
+  AABB box;
+  bool collide = false;
+  if (!obj->bounding_box(box))
+    collide = true;
+  else
+  {
+    for (size_t i = 0; i < objects.size(); ++i)
+    {
+      if (static_cast<int>(i) == idx)
+        continue;
+      if (objects[i]->is_beam())
+        continue;
+      AABB other;
+      if (!objects[i]->bounding_box(other))
+        continue;
+      if (box.intersects(other))
+      {
+        collide = true;
+        break;
+      }
+    }
+  }
+  if (collide)
+  {
+    obj->rotate(axis, -angle);
+    return false;
+  }
+  return true;
+}
+
 } // namespace rt
