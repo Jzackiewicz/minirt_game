@@ -21,13 +21,12 @@ Puzzle game based on miniRT 42School project.
    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
    cmake --build build -j
    ```
-   (Use `-G "MinGW Makefiles"` instead of Ninja if you prefer make.)
 
 ### Linux (Debian)
 1. Install dependencies:
    ```bash
-   sudo apt update
-   sudo apt install build-essential cmake libsdl2-dev
+   sudo apt-get update
+   sudo apt-get install build-essential cmake libsdl2-dev
    ```
 2. Configure and build the project with CMake:
    ```bash
@@ -39,12 +38,13 @@ Puzzle game based on miniRT 42School project.
 
 ### Windows
 ```bash
-./build/minirt.exe scenes/test.rt [width height threads]
+./build/minirt.exe scenes/[map].rt [width height threads]
 ```
 
 ### Linux
 ```bash
-./build/minirt scenes/test.rt [width height threads]
+./build/minirt scenes/[map].rt [width height threads]
 ```
 
-Optional `width`, `height`, and `threads` arguments control the output image size and number of rendering threads. The `scenes` directory contains sample `.rt` files.
+Optional `width`, `height`, and `threads` arguments control the output image size and number of rendering threads. Default values are `width=600` `height=800` `threads=max number of logical cores`.
+The `scenes` directory contains sample `.rt` files.
