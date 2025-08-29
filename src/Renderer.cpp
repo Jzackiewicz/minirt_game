@@ -3,11 +3,12 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
-#include <cstring>
-#include <string>
 #include <random>
+#include <string>
 #include <thread>
 
 namespace rt
@@ -215,6 +216,8 @@ void Renderer::render_window(std::vector<Material> &mats,
     std::cerr << "SDL_Init Error: " << SDL_GetError() << "\n";
     return;
   }
+  if (std::getenv("WSL_DISTRO_NAME"))
+    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "1");
   SDL_Window *win =
       SDL_CreateWindow("MiniRT", SDL_WINDOWPOS_UNDEFINED,
                        SDL_WINDOWPOS_UNDEFINED, W, H, 0);
@@ -323,8 +326,7 @@ void Renderer::render_window(std::vector<Material> &mats,
       }
       else if (focused && e.type == SDL_MOUSEMOTION)
       {
-        // Lowered to keep camera control consistent across native Linux and WSL2
-        double sens = 0.001;
+        double sens = 0.002;
         if (edit_mode && selected_obj != -1)
         {
           scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
