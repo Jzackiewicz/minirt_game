@@ -1,5 +1,5 @@
 #include "rt/Renderer.hpp"
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include <algorithm>
 #include <atomic>
 #include <cmath>

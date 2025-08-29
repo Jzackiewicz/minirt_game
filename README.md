@@ -19,6 +19,26 @@ cmake -S . -B build
 cmake --build build
 ```
 
+### Windows (MSYS2)
+1. Install [MSYS2](https://www.msys2.org/) and open the **MSYS2 UCRT64** shell.
+2. Update the system and install dependencies:
+   ```bash
+   pacman -Syu
+   pacman -S --needed base-devel mingw-w64-ucrt-x86_64-toolchain \
+       mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja \
+       mingw-w64-ucrt-x86_64-SDL2
+   ```
+3. Configure and build the project:
+   ```bash
+   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+   cmake --build build -j
+   ```
+   (Use `-G "MinGW Makefiles"` instead of Ninja if you prefer make.)
+4. Run the executable:
+   ```bash
+   ./build/minirt.exe
+   ```
+
 ## Run
 After building, run the renderer with a scene file:
 ```bash
