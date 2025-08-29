@@ -8,6 +8,16 @@ inline rt::Vec3 reflect(const rt::Vec3 &v, const rt::Vec3 &n)
 {
   return v - n * (2.0 * rt::Vec3::dot(v, n));
 }
+
+inline rt::Vec3 perpendicular(const rt::Vec3 &dir)
+{
+  rt::Vec3 p = rt::Vec3::cross(dir, rt::Vec3(1, 0, 0));
+  if (p.length_squared() < 1e-9)
+    p = rt::Vec3::cross(dir, rt::Vec3(0, 1, 0));
+  return p.normalized();
+}
+
+constexpr double kMinBeamRadius = 0.5;
 } // namespace
 
 namespace rt
@@ -44,6 +54,24 @@ void Scene::update_beams(const std::vector<Material> &mats)
   for (size_t i = 0; i < to_process.size(); ++i)
   {
     auto bm = to_process[i];
+
+    if (bm->radius > kMinBeamRadius)
+    {
+      Vec3 perp = perpendicular(bm->path.dir);
+      double half = bm->radius * 0.5;
+      Vec3 left_orig = bm->path.orig - perp * half;
+      Vec3 right_orig = bm->path.orig + perp * half;
+      auto left = std::make_shared<Beam>(left_orig, bm->path.dir, half,
+                                         bm->length, 0, bm->material_id,
+                                         bm->start, bm->total_length);
+      auto right = std::make_shared<Beam>(right_orig, bm->path.dir, half,
+                                          bm->length, 0, bm->material_id,
+                                          bm->start, bm->total_length);
+      to_process.push_back(left);
+      to_process.push_back(right);
+      continue;
+    }
+
     bm->object_id = next_oid;
     objects.push_back(bm);
     ++next_oid;
