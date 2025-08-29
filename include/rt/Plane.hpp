@@ -8,9 +8,6 @@ struct Plane : public Hittable
 {
   Vec3 point;
   Vec3 normal;
-  int object_id;
-  int material_id;
-
   Plane(const Vec3 &p, const Vec3 &n, int oid, int mid);
 
   bool hit(const Ray &r, double tmin, double tmax,

@@ -5,9 +5,10 @@ namespace rt
 {
 Cylinder::Cylinder(const Vec3 &c, const Vec3 &axis_, double r, double h,
                    int oid, int mid)
-    : center(c), axis(axis_.normalized()), radius(r), height(h), object_id(oid),
-      material_id(mid)
+    : center(c), axis(axis_.normalized()), radius(r), height(h)
 {
+  object_id = oid;
+  material_id = mid;
 }
 
 bool Cylinder::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const

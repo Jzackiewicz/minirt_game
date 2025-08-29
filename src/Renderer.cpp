@@ -328,6 +328,7 @@ void Renderer::render_window(std::vector<Material> &mats,
         {
           scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
           scene.objects[selected_obj]->rotate(cam.right, -e.motion.yrel * sens);
+          scene.update_beams(mats);
           scene.build_bvh();
         }
         else
@@ -339,6 +340,7 @@ void Renderer::render_window(std::vector<Material> &mats,
       {
         double step = e.wheel.y * 1.0;
         scene.objects[selected_obj]->translate(cam.up * step);
+        scene.update_beams(mats);
         scene.build_bvh();
       }
       else if (focused && e.type == SDL_KEYDOWN &&
@@ -362,6 +364,7 @@ void Renderer::render_window(std::vector<Material> &mats,
       if (move.length_squared() > 0)
       {
         scene.objects[selected_obj]->translate(move);
+        scene.update_beams(mats);
         scene.build_bvh();
       }
     }

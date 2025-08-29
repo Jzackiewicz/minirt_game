@@ -10,9 +10,6 @@ struct Cone : public Hittable
   Vec3 axis;
   double radius;
   double height;
-  int object_id;
-  int material_id;
-
   Cone(const Vec3 &c, const Vec3 &ax, double r, double h, int oid, int mid);
 
   bool hit(const Ray &r, double tmin, double tmax,
