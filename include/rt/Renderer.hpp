@@ -14,6 +14,7 @@ struct RenderSettings
   int height = 600;
   int threads = 0; // 0 => auto
   float downscale = 1.0f; // 1.0 => full res, 1.5 => medium, 2.0 => low
+  int samples = 1; // samples per pixel for antialiasing
 };
 
 class Renderer

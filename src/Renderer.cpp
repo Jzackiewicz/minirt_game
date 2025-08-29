@@ -167,11 +167,15 @@ void Renderer::render_ppm(const std::string &path,
         break;
       for (int x = 0; x < W; ++x)
       {
-        double u = (x + 0.5) / W;
-        double v = (y + 0.5) / H;
-        Ray r = cam.ray_through(u, v);
-        Vec3 col = trace_ray(scene, mats, r, rng, dist);
-        framebuffer[y * W + x] = col;
+        Vec3 col(0.0, 0.0, 0.0);
+        for (int s = 0; s < rset.samples; ++s)
+        {
+          double u = (x + dist(rng)) / W;
+          double v = (y + dist(rng)) / H;
+          Ray r = cam.ray_through(u, v);
+          col += trace_ray(scene, mats, r, rng, dist);
+        }
+        framebuffer[y * W + x] = col / static_cast<double>(rset.samples);
       }
     }
   };
@@ -423,11 +427,15 @@ void Renderer::render_window(std::vector<Material> &mats,
           break;
         for (int x = 0; x < RW; ++x)
         {
-          double u = (x + 0.5) / RW;
-          double v = (y + 0.5) / RH;
-          Ray r = cam.ray_through(u, v);
-          Vec3 col = trace_ray(scene, mats, r, rng, dist);
-          framebuffer[y * RW + x] = col;
+          Vec3 col(0.0, 0.0, 0.0);
+          for (int s = 0; s < rset.samples; ++s)
+          {
+            double u = (x + dist(rng)) / RW;
+            double v = (y + dist(rng)) / RH;
+            Ray r = cam.ray_through(u, v);
+            col += trace_ray(scene, mats, r, rng, dist);
+          }
+          framebuffer[y * RW + x] = col / static_cast<double>(rset.samples);
         }
       }
     };
