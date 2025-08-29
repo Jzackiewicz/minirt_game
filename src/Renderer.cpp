@@ -144,9 +144,9 @@ void Renderer::render_ppm(const std::string &path,
                           const std::vector<Material> &mats,
                           const RenderSettings &rset)
 {
-  const int scale = std::max(1, rset.downscale);
-  const int W = rset.width / scale;
-  const int H = rset.height / scale;
+  const float scale = std::max(1.0f, rset.downscale);
+  const int W = std::max(1, static_cast<int>(rset.width / scale));
+  const int H = std::max(1, static_cast<int>(rset.height / scale));
   const int T = (rset.threads > 0)
                     ? rset.threads
                     : (std::thread::hardware_concurrency()
@@ -206,9 +206,9 @@ void Renderer::render_window(std::vector<Material> &mats,
 {
   const int W = rset.width;
   const int H = rset.height;
-  const int scale = std::max(1, rset.downscale);
-  const int RW = std::max(1, W / scale);
-  const int RH = std::max(1, H / scale);
+  const float scale = std::max(1.0f, rset.downscale);
+  const int RW = std::max(1, static_cast<int>(W / scale));
+  const int RH = std::max(1, static_cast<int>(H / scale));
   const int T = (rset.threads > 0)
                     ? rset.threads
                     : (std::thread::hardware_concurrency()

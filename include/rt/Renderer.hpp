@@ -13,7 +13,7 @@ struct RenderSettings
   int width = 800;
   int height = 600;
   int threads = 0; // 0 => auto
-  int downscale = 1; // 1 => full res, 2 => half, 3 => third
+  float downscale = 1.0f; // 1.0 => full res, 1.5 => medium, 2.0 => low
 };
 
 class Renderer

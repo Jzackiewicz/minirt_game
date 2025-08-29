@@ -6,33 +6,42 @@
 #include <SDL.h>
 #include <SDL_main.h>
 #include <iostream>
+#include <string>
 #include <thread>
 
 int main(int argc, char **argv)
 {
   if (argc < 2)
   {
-    std::cerr << "Usage: minirt <scene.rt> [width height threads]\n";
+    std::cerr
+        << "Usage: minirt <scene.rt> [width height threads] [L|M|H]\n";
     return 1;
   }
   std::string scene_path = argv[1];
+
+  char quality = 'H';
+  if (argc > 2)
+  {
+    std::string last = argv[argc - 1];
+    if (last.size() == 1 &&
+        (last == "L" || last == "M" || last == "H" || last == "l" ||
+         last == "m" || last == "h"))
+    {
+      quality = last[0];
+      --argc;
+    }
+  }
+
   int width = (argc > 2) ? std::atoi(argv[2]) : 800;
   int height = (argc > 3) ? std::atoi(argv[3]) : 600;
   int threads =
       (argc > 4) ? std::atoi(argv[4]) : std::thread::hardware_concurrency();
 
-  int downscale = 1;
-  if (std::cin.rdbuf()->in_avail() > 0)
-  {
-    char level;
-    if (std::cin >> level)
-    {
-      if (level == 'M' || level == 'm')
-        downscale = 2;
-      else if (level == 'L' || level == 'l')
-        downscale = 3;
-    }
-  }
+  float downscale = 1.0f;
+  if (quality == 'M' || quality == 'm')
+    downscale = 1.5f;
+  else if (quality == 'L' || quality == 'l')
+    downscale = 2.0f;
 
   rt::Scene scene;
   rt::Camera cam({0, 0, -10}, {0, 0, 0}, 60.0, double(width) / double(height));
