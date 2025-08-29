@@ -323,7 +323,8 @@ void Renderer::render_window(std::vector<Material> &mats,
       }
       else if (focused && e.type == SDL_MOUSEMOTION)
       {
-        double sens = 0.002;
+        // Lowered to keep camera control consistent across native Linux and WSL2
+        double sens = 0.001;
         if (edit_mode && selected_obj != -1)
         {
           scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
