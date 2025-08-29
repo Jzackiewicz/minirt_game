@@ -1,4 +1,5 @@
 #include "rt/Camera.hpp"
+#include <algorithm>
 
 namespace rt
 {
@@ -17,16 +18,24 @@ void Camera::move(const Vec3 &delta) { origin += delta; }
 void Camera::rotate(double yaw, double pitch)
 {
   Vec3 world_up(0, 1, 0);
-  auto rotate_vec = [](const Vec3 &v, const Vec3 &axis, double angle)
-  {
-    double c = std::cos(angle);
-    double s = std::sin(angle);
-    return v * c + Vec3::cross(axis, v) * s +
-           axis * Vec3::dot(axis, v) * (1 - c);
-  };
-  forward = rotate_vec(forward, world_up, yaw);
+
+  // Derive current yaw and pitch from the forward vector so that we can
+  // clamp the pitch and rebuild the orientation from scratch. Without this
+  // clamp the forward vector can align with the world_up vector which makes
+  // the right vector undefined and causes the camera to flip.
+  double current_yaw = std::atan2(-forward.x, -forward.z);
+  double current_pitch = std::asin(forward.y);
+
+  double max_pitch = 89.0 * M_PI / 180.0;
+  double new_pitch = std::clamp(current_pitch + pitch, -max_pitch, max_pitch);
+  double new_yaw = current_yaw + yaw;
+
+  double cos_pitch = std::cos(new_pitch);
+  forward =
+      Vec3(-std::sin(new_yaw) * cos_pitch, std::sin(new_pitch),
+           -std::cos(new_yaw) * cos_pitch);
+
   right = Vec3::cross(forward, world_up).normalized();
-  forward = rotate_vec(forward, right, pitch);
   up = Vec3::cross(right, forward).normalized();
 }
 
