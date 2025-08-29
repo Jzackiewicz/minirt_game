@@ -313,9 +313,9 @@ void Renderer::render_window(std::vector<Material> &mats,
       {
         if (edit_mode)
         {
-          double speed = OBJECT_MOVE_SPEED * dt;
-          Vec3 move = cam.right * (e.motion.xrel * speed) +
-                      cam.forward * (-e.motion.yrel * speed);
+          double sens = OBJECT_MOUSE_SENSITIVITY * dt;
+          Vec3 move = cam.right * (e.motion.xrel * sens) +
+                      cam.up * (-e.motion.yrel * sens);
           if (move.length_squared() > 0)
           {
             scene.objects[selected_obj]->translate(move);
@@ -341,7 +341,7 @@ void Renderer::render_window(std::vector<Material> &mats,
         double step = e.wheel.y * SCROLL_STEP;
         if (edit_mode)
         {
-          Vec3 delta = cam.up * step;
+          Vec3 delta = cam.forward * step;
           scene.objects[selected_obj]->translate(delta);
           if (scene.collides(selected_obj))
             scene.objects[selected_obj]->translate(delta * -1);
