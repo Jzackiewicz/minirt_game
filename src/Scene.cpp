@@ -116,4 +116,58 @@ bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
   return hit_any;
 }
 
+bool Scene::try_translate(int obj_id, const Vec3 &delta)
+{
+  if (obj_id < 0 || obj_id >= static_cast<int>(objects.size()))
+    return false;
+  objects[obj_id]->translate(delta);
+  AABB moved_box;
+  if (!objects[obj_id]->bounding_box(moved_box))
+    return true;
+  for (size_t i = 0; i < objects.size(); ++i)
+  {
+    if (static_cast<int>(i) == obj_id)
+      continue;
+    AABB other_box;
+    if (!objects[i]->bounding_box(other_box))
+      continue;
+    Vec3 size = other_box.max - other_box.min;
+    if (size.x > 1e5 || size.y > 1e5 || size.z > 1e5)
+      continue;
+    if (moved_box.intersects(other_box))
+    {
+      objects[obj_id]->translate(delta * -1.0);
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Scene::try_rotate(int obj_id, const Vec3 &axis, double angle)
+{
+  if (obj_id < 0 || obj_id >= static_cast<int>(objects.size()))
+    return false;
+  objects[obj_id]->rotate(axis, angle);
+  AABB rotated_box;
+  if (!objects[obj_id]->bounding_box(rotated_box))
+    return true;
+  for (size_t i = 0; i < objects.size(); ++i)
+  {
+    if (static_cast<int>(i) == obj_id)
+      continue;
+    AABB other_box;
+    if (!objects[i]->bounding_box(other_box))
+      continue;
+    Vec3 size = other_box.max - other_box.min;
+    if (size.x > 1e5 || size.y > 1e5 || size.z > 1e5)
+      continue;
+    if (rotated_box.intersects(other_box))
+    {
+      objects[obj_id]->rotate(axis, -angle);
+      return false;
+    }
+  }
+  return true;
+}
+
 } // namespace rt
