@@ -95,6 +95,34 @@ void Scene::build_bvh()
   accel = std::make_shared<BVHNode>(objs, 0, objs.size());
 }
 
+bool Scene::collides(int index) const
+{
+  if (index < 0 || index >= static_cast<int>(objects.size()))
+    return false;
+  auto obj = objects[index];
+  if (obj->is_beam() || obj->is_plane())
+    return false;
+
+  AABB box;
+  if (!obj->bounding_box(box))
+    return false;
+
+  for (size_t i = 0; i < objects.size(); ++i)
+  {
+    if (static_cast<int>(i) == index)
+      continue;
+    auto other = objects[i];
+    if (other->is_beam() || other->is_plane())
+      continue;
+    AABB other_box;
+    if (!other->bounding_box(other_box))
+      continue;
+    if (box.intersects(other_box))
+      return true;
+  }
+  return false;
+}
+
 bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
   if (accel)

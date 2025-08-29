@@ -314,10 +314,30 @@ void Renderer::render_window(std::vector<Material> &mats,
         double sens = MOUSE_SENSITIVITY;
         if (edit_mode)
         {
-          scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
-          scene.objects[selected_obj]->rotate(cam.right, -e.motion.yrel * sens);
-          scene.update_beams(mats);
-          scene.build_bvh();
+          bool changed = false;
+          double dx = -e.motion.xrel * sens;
+          if (dx != 0.0)
+          {
+            scene.objects[selected_obj]->rotate(cam.up, dx);
+            if (scene.collides(selected_obj))
+              scene.objects[selected_obj]->rotate(cam.up, -dx);
+            else
+              changed = true;
+          }
+          double dy = -e.motion.yrel * sens;
+          if (dy != 0.0)
+          {
+            scene.objects[selected_obj]->rotate(cam.right, dy);
+            if (scene.collides(selected_obj))
+              scene.objects[selected_obj]->rotate(cam.right, -dy);
+            else
+              changed = true;
+          }
+          if (changed)
+          {
+            scene.update_beams(mats);
+            scene.build_bvh();
+          }
         }
         else
         {
@@ -329,9 +349,15 @@ void Renderer::render_window(std::vector<Material> &mats,
         double step = e.wheel.y * SCROLL_STEP;
         if (edit_mode)
         {
-          scene.objects[selected_obj]->translate(cam.up * step);
-          scene.update_beams(mats);
-          scene.build_bvh();
+          Vec3 delta = cam.up * step;
+          scene.objects[selected_obj]->translate(delta);
+          if (scene.collides(selected_obj))
+            scene.objects[selected_obj]->translate(delta * -1);
+          else
+          {
+            scene.update_beams(mats);
+            scene.build_bvh();
+          }
         }
         else if (focused)
         {
@@ -359,8 +385,15 @@ void Renderer::render_window(std::vector<Material> &mats,
       if (move.length_squared() > 0)
       {
         scene.objects[selected_obj]->translate(move);
-        scene.update_beams(mats);
-        scene.build_bvh();
+        if (scene.collides(selected_obj))
+        {
+          scene.objects[selected_obj]->translate(move * -1);
+        }
+        else
+        {
+          scene.update_beams(mats);
+          scene.build_bvh();
+        }
       }
     }
     else if (focused)
