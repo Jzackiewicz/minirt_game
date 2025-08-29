@@ -154,6 +154,9 @@ void Renderer::render_ppm(const std::string &path,
 
   std::vector<Vec3> framebuffer(W * H);
   std::atomic<int> next_row{0};
+  const int block = 4;
+  const double invW = 1.0 / W;
+  const double invH = 1.0 / H;
 
   auto worker = [&]()
   {
@@ -161,16 +164,20 @@ void Renderer::render_ppm(const std::string &path,
     std::uniform_real_distribution<double> dist(0.0, 1.0);
     for (;;)
     {
-      int y = next_row.fetch_add(1);
+      int y = next_row.fetch_add(block);
       if (y >= H)
         break;
-      for (int x = 0; x < W; ++x)
+      int y_end = std::min(y + block, H);
+      for (int yy = y; yy < y_end; ++yy)
       {
-        double u = (x + 0.5) / W;
-        double v = (y + 0.5) / H;
-        Ray r = cam.ray_through(u, v);
-        Vec3 col = trace_ray(scene, mats, r, rng, dist);
-        framebuffer[y * W + x] = col;
+        for (int x = 0; x < W; ++x)
+        {
+          double u = (x + 0.5) * invW;
+          double v = (yy + 0.5) * invH;
+          Ray r = cam.ray_through(u, v);
+          Vec3 col = trace_ray(scene, mats, r, rng, dist);
+          framebuffer[yy * W + x] = col;
+        }
       }
     }
   };
@@ -408,22 +415,29 @@ void Renderer::render_window(std::vector<Material> &mats,
     }
 
     std::atomic<int> next_row{0};
+    const int block = 4;
+    const double invW = 1.0 / W;
+    const double invH = 1.0 / H;
     auto worker = [&]()
     {
       std::mt19937 rng(std::random_device{}());
       std::uniform_real_distribution<double> dist(0.0, 1.0);
       for (;;)
       {
-        int y = next_row.fetch_add(1);
+        int y = next_row.fetch_add(block);
         if (y >= H)
           break;
-        for (int x = 0; x < W; ++x)
+        int y_end = std::min(y + block, H);
+        for (int yy = y; yy < y_end; ++yy)
         {
-          double u = (x + 0.5) / W;
-          double v = (y + 0.5) / H;
-          Ray r = cam.ray_through(u, v);
-          Vec3 col = trace_ray(scene, mats, r, rng, dist);
-          framebuffer[y * W + x] = col;
+          for (int x = 0; x < W; ++x)
+          {
+            double u = (x + 0.5) * invW;
+            double v = (yy + 0.5) * invH;
+            Ray r = cam.ray_through(u, v);
+            Vec3 col = trace_ray(scene, mats, r, rng, dist);
+            framebuffer[yy * W + x] = col;
+          }
         }
       }
     };
