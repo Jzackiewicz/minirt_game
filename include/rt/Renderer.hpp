@@ -13,6 +13,7 @@ struct RenderSettings
   int width = 800;
   int height = 600;
   int threads = 0; // 0 => auto
+  int samples = 4; // AA samples per pixel
 };
 
 class Renderer

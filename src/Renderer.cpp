@@ -151,6 +151,7 @@ void Renderer::render_ppm(const std::string &path,
                     : (std::thread::hardware_concurrency()
                            ? (int)std::thread::hardware_concurrency()
                            : 8);
+  const int S = std::max(1, rset.samples);
 
   std::vector<Vec3> framebuffer(W * H);
   std::atomic<int> next_row{0};
@@ -166,11 +167,15 @@ void Renderer::render_ppm(const std::string &path,
         break;
       for (int x = 0; x < W; ++x)
       {
-        double u = (x + 0.5) / W;
-        double v = (y + 0.5) / H;
-        Ray r = cam.ray_through(u, v);
-        Vec3 col = trace_ray(scene, mats, r, rng, dist);
-        framebuffer[y * W + x] = col;
+        Vec3 col(0.0, 0.0, 0.0);
+        for (int s = 0; s < S; ++s)
+        {
+          double u = (x + dist(rng)) / W;
+          double v = (y + dist(rng)) / H;
+          Ray r = cam.ray_through(u, v);
+          col += trace_ray(scene, mats, r, rng, dist);
+        }
+        framebuffer[y * W + x] = col * (1.0 / S);
       }
     }
   };
@@ -210,6 +215,7 @@ void Renderer::render_window(std::vector<Material> &mats,
                     : (std::thread::hardware_concurrency()
                            ? (int)std::thread::hardware_concurrency()
                            : 8);
+  const int S = std::max(1, rset.samples);
 
   if (SDL_Init(SDL_INIT_VIDEO) != 0)
   {
@@ -419,11 +425,15 @@ void Renderer::render_window(std::vector<Material> &mats,
           break;
         for (int x = 0; x < W; ++x)
         {
-          double u = (x + 0.5) / W;
-          double v = (y + 0.5) / H;
-          Ray r = cam.ray_through(u, v);
-          Vec3 col = trace_ray(scene, mats, r, rng, dist);
-          framebuffer[y * W + x] = col;
+          Vec3 col(0.0, 0.0, 0.0);
+          for (int s = 0; s < S; ++s)
+          {
+            double u = (x + dist(rng)) / W;
+            double v = (y + dist(rng)) / H;
+            Ray r = cam.ray_through(u, v);
+            col += trace_ray(scene, mats, r, rng, dist);
+          }
+          framebuffer[y * W + x] = col * (1.0 / S);
         }
       }
     };
