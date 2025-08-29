@@ -322,11 +322,25 @@ void Renderer::render_window(std::vector<Material> &mats,
           }
         }
       }
-      else if (focused && e.type == SDL_MOUSEMOTION)
+      else if (edit_mode && selected_obj != -1 && e.type == SDL_MOUSEWHEEL)
+      {
+        double step = e.wheel.y * 1.0;
+        scene.objects[selected_obj]->translate(cam.up * step);
+        scene.update_beams(mats);
+        scene.build_bvh();
+      }
+      else if (focused && e.type == SDL_KEYDOWN &&
+               e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+        running = false;
+    }
+
+    if (focused)
+    {
+      int xrel = 0, yrel = 0;
+      SDL_GetRelativeMouseState(&xrel, &yrel);
+      if (xrel || yrel)
       {
         double sens = 0.002;
-        int xrel = 0, yrel = 0;
-        SDL_GetRelativeMouseState(&xrel, &yrel);
         if (edit_mode && selected_obj != -1)
         {
           scene.objects[selected_obj]->rotate(cam.up, -xrel * sens);
@@ -339,16 +353,6 @@ void Renderer::render_window(std::vector<Material> &mats,
           cam.rotate(-xrel * sens, -yrel * sens);
         }
       }
-      else if (edit_mode && selected_obj != -1 && e.type == SDL_MOUSEWHEEL)
-      {
-        double step = e.wheel.y * 1.0;
-        scene.objects[selected_obj]->translate(cam.up * step);
-        scene.update_beams(mats);
-        scene.build_bvh();
-      }
-      else if (focused && e.type == SDL_KEYDOWN &&
-               e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
-        running = false;
     }
 
     const Uint8 *state = SDL_GetKeyboardState(nullptr);
