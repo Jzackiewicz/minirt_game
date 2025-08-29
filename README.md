@@ -29,15 +29,16 @@ cmake --build build
        mingw-w64-ucrt-x86_64-SDL2
    ```
 3. Configure and build the project:
-   ```bash
-   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-   cmake --build build -j
-   ```
-   (Use `-G "MinGW Makefiles"` instead of Ninja if you prefer make.)
+    ```bash
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    cmake --build build -j
+    ```
+    (Use `-G "MinGW Makefiles"` instead of Ninja if you prefer make.)
+    CMake defines `SDL_MAIN_HANDLED` so linking directly against `SDL2` works without the `SDL2main` wrapper.
 4. Run the executable:
-   ```bash
-   ./build/minirt.exe
-   ```
+    ```bash
+    ./build/minirt.exe
+    ```
 
 ## Run
 After building, run the renderer with a scene file:
