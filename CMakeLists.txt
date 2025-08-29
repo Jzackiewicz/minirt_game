@@ -18,5 +18,5 @@ find_package(Threads REQUIRED)
 
 find_package(SDL2 REQUIRED)
 
-target_include_directories(minirt PRIVATE ${SDL2_INCLUDE_DIRS})
-target_link_libraries(minirt PRIVATE ${SDL2_LIBRARIES})
+target_include_directories(minirt PRIVATE ${SDL2_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(minirt PRIVATE ${SDL2_LIBRARIES} Threads::Threads)
