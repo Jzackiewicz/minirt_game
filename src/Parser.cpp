@@ -11,6 +11,7 @@
 #include <fstream>
 #include <sstream>
 #include <string_view>
+#include <cstring>
 
 namespace
 {
@@ -27,7 +28,7 @@ inline bool to_double(std::string_view sv, double &out)
   // awaryjnie, gdy libstdc++ ma słabe from_chars dla double (stare systemy)
   char buf[128];
   size_t n = std::min(sv.size(), sizeof(buf) - 1);
-  memcpy(buf, sv.data(), n);
+  std::memcpy(buf, sv.data(), n);
   buf[n] = 0;
   char *end = nullptr;
   out = std::strtod(buf, &end);
