@@ -4,8 +4,10 @@
 namespace rt
 {
 Plane::Plane(const Vec3 &p, const Vec3 &n, int oid, int mid)
-    : point(p), normal(n.normalized()), object_id(oid), material_id(mid)
+    : point(p), normal(n.normalized())
 {
+  object_id = oid;
+  material_id = mid;
 }
 
 bool Plane::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const

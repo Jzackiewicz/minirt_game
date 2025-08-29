@@ -4,9 +4,10 @@
 namespace rt
 {
 Cone::Cone(const Vec3 &c, const Vec3 &ax, double r, double h, int oid, int mid)
-    : center(c), axis(ax.normalized()), radius(r), height(h), object_id(oid),
-      material_id(mid)
+    : center(c), axis(ax.normalized()), radius(r), height(h)
 {
+  object_id = oid;
+  material_id = mid;
 }
 
 bool Cone::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const

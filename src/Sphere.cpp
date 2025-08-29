@@ -4,8 +4,10 @@
 namespace rt
 {
 Sphere::Sphere(const Vec3 &c, double r, int oid, int mid)
-    : center(c), radius(r), object_id(oid), material_id(mid)
+    : center(c), radius(r)
 {
+  object_id = oid;
+  material_id = mid;
 }
 
 bool Sphere::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const

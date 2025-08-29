@@ -10,9 +10,6 @@ struct Cylinder : public Hittable
   Vec3 axis;
   double radius;
   double height;
-  int object_id;
-  int material_id;
-
   Cylinder(const Vec3 &c, const Vec3 &axis_, double r, double h, int oid,
            int mid);
 
