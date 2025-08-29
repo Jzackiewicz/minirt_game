@@ -244,6 +244,7 @@ void Renderer::render_window(std::vector<Material> &mats,
     return;
   }
 
+  SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "1");
   SDL_SetRelativeMouseMode(SDL_FALSE);
 
   SDL_ShowCursor(SDL_ENABLE);
@@ -303,7 +304,7 @@ void Renderer::render_window(std::vector<Material> &mats,
         SDL_SetRelativeMouseMode(SDL_TRUE);
         SDL_ShowCursor(SDL_DISABLE);
         SDL_SetWindowGrab(win, SDL_TRUE);
-        SDL_WarpMouseInWindow(win, W / 2, H / 2);
+        SDL_GetRelativeMouseState(nullptr, nullptr);
         if (edit_mode)
         {
           if (selected_obj == -1 && hover_obj >= 0)
@@ -324,16 +325,18 @@ void Renderer::render_window(std::vector<Material> &mats,
       else if (focused && e.type == SDL_MOUSEMOTION)
       {
         double sens = 0.002;
+        int xrel = 0, yrel = 0;
+        SDL_GetRelativeMouseState(&xrel, &yrel);
         if (edit_mode && selected_obj != -1)
         {
-          scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
-          scene.objects[selected_obj]->rotate(cam.right, -e.motion.yrel * sens);
+          scene.objects[selected_obj]->rotate(cam.up, -xrel * sens);
+          scene.objects[selected_obj]->rotate(cam.right, -yrel * sens);
           scene.update_beams(mats);
           scene.build_bvh();
         }
         else
         {
-          cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
+          cam.rotate(-xrel * sens, -yrel * sens);
         }
       }
       else if (edit_mode && selected_obj != -1 && e.type == SDL_MOUSEWHEEL)
