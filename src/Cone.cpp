@@ -1,4 +1,5 @@
 #include "rt/Cone.hpp"
+#include <algorithm>
 #include <cmath>
 
 namespace rt
@@ -88,9 +89,18 @@ bool Cone::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 bool Cone::bounding_box(AABB &out) const
 {
   Vec3 ax = axis * (height * 0.5);
+  Vec3 top_center = center + ax;
+  Vec3 base_center = center - ax;
+
   Vec3 ex(radius, radius, radius);
-  Vec3 min = center - ax - ex;
-  Vec3 max = center + ax + ex;
+  Vec3 min(std::min(top_center.x, base_center.x),
+           std::min(top_center.y, base_center.y),
+           std::min(top_center.z, base_center.z));
+  Vec3 max(std::max(top_center.x, base_center.x),
+           std::max(top_center.y, base_center.y),
+           std::max(top_center.z, base_center.z));
+  min = min - ex;
+  max = max + ex;
   out = AABB(min, max);
   return true;
 }

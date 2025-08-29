@@ -1,4 +1,5 @@
 #include "rt/Cylinder.hpp"
+#include <algorithm>
 #include <cmath>
 
 namespace rt
@@ -108,9 +109,18 @@ bool Cylinder::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 bool Cylinder::bounding_box(AABB &out) const
 {
   Vec3 ax = axis * (height / 2);
+  Vec3 top_center = center + ax;
+  Vec3 bottom_center = center - ax;
+
   Vec3 ex(radius, radius, radius);
-  Vec3 min = center - ax - ex;
-  Vec3 max = center + ax + ex;
+  Vec3 min(std::min(top_center.x, bottom_center.x),
+           std::min(top_center.y, bottom_center.y),
+           std::min(top_center.z, bottom_center.z));
+  Vec3 max(std::max(top_center.x, bottom_center.x),
+           std::max(top_center.y, bottom_center.y),
+           std::max(top_center.z, bottom_center.z));
+  min = min - ex;
+  max = max + ex;
   out = AABB(min, max);
   return true;
 }
