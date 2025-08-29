@@ -326,10 +326,21 @@ void Renderer::render_window(std::vector<Material> &mats,
         double sens = 0.002;
         if (edit_mode && selected_obj != -1)
         {
-          scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
-          scene.objects[selected_obj]->rotate(cam.right, -e.motion.yrel * sens);
-          scene.update_beams(mats);
-          scene.build_bvh();
+          double ax = -e.motion.xrel * sens;
+          double ay = -e.motion.yrel * sens;
+          auto obj = scene.objects[selected_obj];
+          obj->rotate(cam.up, ax);
+          obj->rotate(cam.right, ay);
+          if (scene.intersects_any(selected_obj))
+          {
+            obj->rotate(cam.right, -ay);
+            obj->rotate(cam.up, -ax);
+          }
+          else
+          {
+            scene.update_beams(mats);
+            scene.build_bvh();
+          }
         }
         else
         {
@@ -339,9 +350,16 @@ void Renderer::render_window(std::vector<Material> &mats,
       else if (edit_mode && selected_obj != -1 && e.type == SDL_MOUSEWHEEL)
       {
         double step = e.wheel.y * 1.0;
-        scene.objects[selected_obj]->translate(cam.up * step);
-        scene.update_beams(mats);
-        scene.build_bvh();
+        auto obj = scene.objects[selected_obj];
+        Vec3 delta = cam.up * step;
+        obj->translate(delta);
+        if (scene.intersects_any(selected_obj))
+          obj->translate(delta * -1.0);
+        else
+        {
+          scene.update_beams(mats);
+          scene.build_bvh();
+        }
       }
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
@@ -363,9 +381,17 @@ void Renderer::render_window(std::vector<Material> &mats,
         move += cam.right * speed;
       if (move.length_squared() > 0)
       {
-        scene.objects[selected_obj]->translate(move);
-        scene.update_beams(mats);
-        scene.build_bvh();
+        auto obj = scene.objects[selected_obj];
+        obj->translate(move);
+        if (scene.intersects_any(selected_obj))
+        {
+          obj->translate(move * -1.0);
+        }
+        else
+        {
+          scene.update_beams(mats);
+          scene.build_bvh();
+        }
       }
     }
     else if (focused)

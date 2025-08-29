@@ -95,6 +95,28 @@ void Scene::build_bvh()
   accel = std::make_shared<BVHNode>(objs, 0, objs.size());
 }
 
+bool Scene::intersects_any(int index) const
+{
+  if (index < 0 || static_cast<size_t>(index) >= objects.size())
+    return false;
+
+  AABB box_i;
+  if (!objects[index]->bounding_box(box_i))
+    return false;
+
+  for (size_t j = 0; j < objects.size(); ++j)
+  {
+    if (static_cast<int>(j) == index)
+      continue;
+    AABB box_j;
+    if (!objects[j]->bounding_box(box_j))
+      continue;
+    if (box_i.intersects(box_j))
+      return true;
+  }
+  return false;
+}
+
 bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
   if (accel)
