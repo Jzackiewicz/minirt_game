@@ -343,6 +343,11 @@ void Renderer::render_window(std::vector<Material> &mats,
         scene.update_beams(mats);
         scene.build_bvh();
       }
+      else if (!edit_mode && focused && e.type == SDL_MOUSEWHEEL)
+      {
+        double step = e.wheel.y * 1.0;
+        cam.move(cam.up * step);
+      }
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
         running = false;
