@@ -15,58 +15,53 @@ Beam::Beam(const Vec3 &origin, const Vec3 &dir, double r, double len, int oid,
 
 bool Beam::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
-  Vec3 u = r.dir;
   Vec3 v = path.dir;
-  Vec3 w0 = r.orig - path.orig;
-  double a = Vec3::dot(u, u);
-  double b = Vec3::dot(u, v);
-  double c = Vec3::dot(v, v);
-  double d = Vec3::dot(u, w0);
-  double e = Vec3::dot(v, w0);
-  double denom = a * c - b * b;
-
-  double sc, tc;
-  if (std::fabs(denom) < 1e-9)
-  {
-    sc = -d / a;
-    tc = (a * e - b * d) / (a * c);
-  }
-  else
-  {
-    sc = (b * e - c * d) / denom;
-    tc = (a * e - b * d) / denom;
-  }
-
-  if (sc < tmin || sc > tmax)
-    return false;
-  if (tc < 0.0 || tc > length)
+  Vec3 dp = r.dir - v * Vec3::dot(r.dir, v);
+  double a = Vec3::dot(dp, dp);
+  if (a < 1e-12)
     return false;
 
-  Vec3 pr = r.at(sc);
-  Vec3 pb = path.at(tc);
-  Vec3 diff = pr - pb;
-  double dist2 = diff.length_squared();
-  if (dist2 > radius * radius)
+  Vec3 ao = r.orig - path.orig;
+  Vec3 ao_perp = ao - v * Vec3::dot(ao, v);
+  double half_b = Vec3::dot(dp, ao_perp);
+  double c = Vec3::dot(ao_perp, ao_perp) - radius * radius;
+  double discriminant = half_b * half_b - a * c;
+  if (discriminant < 0.0)
     return false;
 
-  Vec3 outward;
-  if (dist2 > 1e-12)
+  double sqrtd = std::sqrt(discriminant);
+  double root = (-half_b - sqrtd) / a;
+  if (root < tmin || root > tmax)
   {
-    outward = diff.normalized();
+    root = (-half_b + sqrtd) / a;
+    if (root < tmin || root > tmax)
+      return false;
   }
-  else
+
+  Vec3 p = r.at(root);
+  double proj = Vec3::dot(p - path.orig, v);
+  if (proj < 0.0 || proj > length)
+    return false;
+
+  Vec3 center = path.at(proj);
+  Vec3 outward = p - center;
+  if (outward.length_squared() < 1e-12)
   {
-    outward = Vec3::cross(path.dir, Vec3(1, 0, 0));
+    outward = Vec3::cross(v, Vec3(1, 0, 0));
     if (outward.length_squared() < 1e-12)
-      outward = Vec3::cross(path.dir, Vec3(0, 1, 0));
+      outward = Vec3::cross(v, Vec3(0, 1, 0));
+    outward = outward.normalized();
+  }
+  else
+  {
     outward = outward.normalized();
   }
 
-  rec.t = sc;
-  rec.p = pr;
+  rec.t = root;
+  rec.p = p;
   rec.object_id = object_id;
   rec.material_id = material_id;
-  rec.beam_ratio = (start + tc) / total_length;
+  rec.beam_ratio = (start + proj) / total_length;
   rec.set_face_normal(r, outward);
   return true;
 }
