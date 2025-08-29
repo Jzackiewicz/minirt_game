@@ -303,7 +303,7 @@ void Renderer::render_window(std::vector<Material> &mats,
         SDL_SetRelativeMouseMode(SDL_TRUE);
         SDL_ShowCursor(SDL_DISABLE);
         SDL_SetWindowGrab(win, SDL_TRUE);
-        SDL_WarpMouseInWindow(win, W / 2, H / 2);
+        SDL_GetRelativeMouseState(nullptr, nullptr);
         if (edit_mode)
         {
           if (selected_obj == -1 && hover_obj >= 0)
