@@ -41,9 +41,26 @@ cmake --build build
     ```
 
 ## Run
-After building, run the renderer with a scene file:
+
+### Windows (MSYS2)
+After building, launch the game from the MSYS2 shell:
+```bash
+./build/minirt.exe scenes/test.rt [width height threads]
+```
+Example with optional arguments:
+```bash
+./build/minirt.exe scenes/test.rt 1024 768 4
+```
+
+### Linux (Ubuntu)
+After building, run the renderer:
 ```bash
 ./build/minirt scenes/test.rt [width height threads]
 ```
+Example with optional arguments:
+```bash
+./build/minirt scenes/test.rt 1024 768 4
+```
+
 Optional `width`, `height`, and `threads` arguments control the output image size and number of rendering threads. The `scenes` directory contains sample `.rt` files.
 
