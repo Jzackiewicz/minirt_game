@@ -1,5 +1,6 @@
 #include "rt/Parser.hpp"
 #include "rt/Beam.hpp"
+#include "rt/Cube.hpp"
 #include "rt/Cone.hpp"
 #include "rt/Cylinder.hpp"
 #include "rt/Plane.hpp"
@@ -242,6 +243,32 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = alpha_to_unit(a);
         materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
         outScene.objects.push_back(cy);
+        ++mid;
+      }
+    }
+    else if (id == "cu")
+    {
+      std::string s_pos, s_a, s_rgb;
+      iss >> s_pos >> s_a >> s_rgb;
+      std::string s_mirror;
+      if (!(iss >> s_mirror))
+        s_mirror = "NR";
+      std::string s_move;
+      if (!(iss >> s_move))
+        s_move = "IM";
+      Vec3 c, rgb;
+      double a = 1.0;
+      double alpha = 255;
+      if (parse_triple(s_pos, c) && to_double(s_a, a) && parse_rgba(s_rgb, rgb, alpha))
+      {
+        auto cu = std::make_shared<Cube>(c, a, oid++, mid);
+        cu->movable = (s_move == "M");
+        materials.emplace_back();
+        materials.back().color = rgb_to_unit(rgb);
+        materials.back().base_color = materials.back().color;
+        materials.back().alpha = alpha_to_unit(alpha);
+        materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
+        outScene.objects.push_back(cu);
         ++mid;
       }
     }
