@@ -279,23 +279,6 @@ void Renderer::render_window(std::vector<Material> &mats,
         SDL_ShowCursor(SDL_ENABLE);
         SDL_SetWindowGrab(win, SDL_FALSE);
       }
-      else if (e.type == SDL_KEYDOWN &&
-               e.key.keysym.scancode == SDL_SCANCODE_R)
-      {
-        edit_mode = !edit_mode;
-        if (!edit_mode)
-        {
-          if (hover_mat >= 0)
-            mats[hover_mat].color = mats[hover_mat].base_color;
-          hover_obj = hover_mat = -1;
-          if (selected_mat >= 0)
-          {
-            mats[selected_mat].checkered = false;
-            mats[selected_mat].color = mats[selected_mat].base_color;
-          }
-          selected_obj = selected_mat = -1;
-        }
-      }
       else if (e.type == SDL_MOUSEBUTTONDOWN &&
                e.button.button == SDL_BUTTON_LEFT)
       {
@@ -304,27 +287,27 @@ void Renderer::render_window(std::vector<Material> &mats,
         SDL_ShowCursor(SDL_DISABLE);
         SDL_SetWindowGrab(win, SDL_TRUE);
         SDL_WarpMouseInWindow(win, W / 2, H / 2);
-        if (edit_mode)
+        if (!edit_mode && hover_obj >= 0)
         {
-          if (selected_obj == -1 && hover_obj >= 0)
-          {
-            selected_obj = hover_obj;
-            selected_mat = hover_mat;
-            mats[selected_mat].checkered = true;
-            mats[selected_mat].color = mats[selected_mat].base_color;
-          }
-          else if (selected_obj != -1)
-          {
-            mats[selected_mat].checkered = false;
-            mats[selected_mat].color = mats[selected_mat].base_color;
-            selected_obj = selected_mat = -1;
-          }
+          selected_obj = hover_obj;
+          selected_mat = hover_mat;
+          hover_obj = hover_mat = -1;
+          mats[selected_mat].checkered = true;
+          mats[selected_mat].color = mats[selected_mat].base_color;
+          edit_mode = true;
+        }
+        else if (edit_mode)
+        {
+          mats[selected_mat].checkered = false;
+          mats[selected_mat].color = mats[selected_mat].base_color;
+          selected_obj = selected_mat = -1;
+          edit_mode = false;
         }
       }
       else if (focused && e.type == SDL_MOUSEMOTION)
       {
         double sens = 0.002;
-        if (edit_mode && selected_obj != -1)
+        if (edit_mode)
         {
           scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
           scene.objects[selected_obj]->rotate(cam.right, -e.motion.yrel * sens);
@@ -336,17 +319,19 @@ void Renderer::render_window(std::vector<Material> &mats,
           cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
         }
       }
-      else if (edit_mode && selected_obj != -1 && e.type == SDL_MOUSEWHEEL)
+      else if (e.type == SDL_MOUSEWHEEL)
       {
         double step = e.wheel.y * 1.0;
-        scene.objects[selected_obj]->translate(cam.up * step);
-        scene.update_beams(mats);
-        scene.build_bvh();
-      }
-      else if (!edit_mode && focused && e.type == SDL_MOUSEWHEEL)
-      {
-        double step = e.wheel.y * 1.0;
-        cam.move(cam.up * step);
+        if (edit_mode)
+        {
+          scene.objects[selected_obj]->translate(cam.up * step);
+          scene.update_beams(mats);
+          scene.build_bvh();
+        }
+        else if (focused)
+        {
+          cam.move(cam.up * step);
+        }
       }
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
@@ -354,7 +339,7 @@ void Renderer::render_window(std::vector<Material> &mats,
     }
 
     const Uint8 *state = SDL_GetKeyboardState(nullptr);
-    if (edit_mode && selected_obj != -1)
+    if (edit_mode)
     {
       double speed = 15.0 * dt;
       Vec3 move(0, 0, 0);
@@ -388,7 +373,7 @@ void Renderer::render_window(std::vector<Material> &mats,
         cam.move(cam.right * speed);
     }
 
-    if (edit_mode && selected_obj == -1)
+    if (!edit_mode)
     {
       Ray center_ray = cam.ray_through(0.5, 0.5);
       HitRecord hrec;
