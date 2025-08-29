@@ -47,4 +47,12 @@ Puzzle game based on miniRT 42School project.
 ```
 
 Optional `width`, `height`, and `threads` arguments control the output image size and number of rendering threads. Default values are `width=600` `height=800` `threads=max number of logical cores`.
+
+You can also pipe a single character (`L`, `M`, or `H`) to standard input to render at low, medium, or high quality. `H` is the default if no input is provided. For example:
+
+```bash
+echo M | ./build/minirt scenes/[map].rt
+```
+
+This example renders the scene at half resolution but scales it to the requested window size.
 The `scenes` directory contains sample `.rt` files.

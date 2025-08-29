@@ -21,6 +21,19 @@ int main(int argc, char **argv)
   int threads =
       (argc > 4) ? std::atoi(argv[4]) : std::thread::hardware_concurrency();
 
+  int downscale = 1;
+  if (std::cin.rdbuf()->in_avail() > 0)
+  {
+    char level;
+    if (std::cin >> level)
+    {
+      if (level == 'M' || level == 'm')
+        downscale = 2;
+      else if (level == 'L' || level == 'l')
+        downscale = 3;
+    }
+  }
+
   rt::Scene scene;
   rt::Camera cam({0, 0, -10}, {0, 0, 0}, 60.0, double(width) / double(height));
   if (!rt::Parser::parse_rt_file(scene_path, scene, cam, width, height))
@@ -36,6 +49,7 @@ int main(int argc, char **argv)
   rset.width = width;
   rset.height = height;
   rset.threads = threads > 0 ? threads : 8;
+  rset.downscale = downscale;
 
   rt::Renderer renderer(scene, cam);
   renderer.render_window(mats, rset);

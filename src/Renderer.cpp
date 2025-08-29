@@ -144,8 +144,9 @@ void Renderer::render_ppm(const std::string &path,
                           const std::vector<Material> &mats,
                           const RenderSettings &rset)
 {
-  const int W = rset.width;
-  const int H = rset.height;
+  const int scale = std::max(1, rset.downscale);
+  const int W = rset.width / scale;
+  const int H = rset.height / scale;
   const int T = (rset.threads > 0)
                     ? rset.threads
                     : (std::thread::hardware_concurrency()
@@ -205,6 +206,9 @@ void Renderer::render_window(std::vector<Material> &mats,
 {
   const int W = rset.width;
   const int H = rset.height;
+  const int scale = std::max(1, rset.downscale);
+  const int RW = std::max(1, W / scale);
+  const int RH = std::max(1, H / scale);
   const int T = (rset.threads > 0)
                     ? rset.threads
                     : (std::thread::hardware_concurrency()
@@ -235,7 +239,7 @@ void Renderer::render_window(std::vector<Material> &mats,
     return;
   }
   SDL_Texture *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24,
-                                       SDL_TEXTUREACCESS_STREAMING, W, H);
+                                       SDL_TEXTUREACCESS_STREAMING, RW, RH);
   if (!tex)
   {
     std::cerr << "SDL_CreateTexture Error: " << SDL_GetError() << "\n";
@@ -250,8 +254,8 @@ void Renderer::render_window(std::vector<Material> &mats,
   SDL_ShowCursor(SDL_ENABLE);
   SDL_SetWindowGrab(win, SDL_FALSE);
 
-  std::vector<Vec3> framebuffer(W * H);
-  std::vector<unsigned char> pixels(W * H * 3);
+  std::vector<Vec3> framebuffer(RW * RH);
+  std::vector<unsigned char> pixels(RW * RH * 3);
   SDL_Event e;
   bool running = true;
   bool focused = false;
@@ -415,15 +419,15 @@ void Renderer::render_window(std::vector<Material> &mats,
       for (;;)
       {
         int y = next_row.fetch_add(1);
-        if (y >= H)
+        if (y >= RH)
           break;
-        for (int x = 0; x < W; ++x)
+        for (int x = 0; x < RW; ++x)
         {
-          double u = (x + 0.5) / W;
-          double v = (y + 0.5) / H;
+          double u = (x + 0.5) / RW;
+          double v = (y + 0.5) / RH;
           Ray r = cam.ray_through(u, v);
           Vec3 col = trace_ray(scene, mats, r, rng, dist);
-          framebuffer[y * W + x] = col;
+          framebuffer[y * RW + x] = col;
         }
       }
     };
@@ -435,24 +439,24 @@ void Renderer::render_window(std::vector<Material> &mats,
     for (auto &th : pool)
       th.join();
 
-    for (int y = 0; y < H; ++y)
+    for (int y = 0; y < RH; ++y)
     {
-      for (int x = 0; x < W; ++x)
+      for (int x = 0; x < RW; ++x)
       {
-        Vec3 c = framebuffer[y * W + x];
+        Vec3 c = framebuffer[y * RW + x];
         c.x = std::clamp(c.x, 0.0, 1.0);
         c.y = std::clamp(c.y, 0.0, 1.0);
         c.z = std::clamp(c.z, 0.0, 1.0);
-        pixels[(y * W + x) * 3 + 0] =
+        pixels[(y * RW + x) * 3 + 0] =
             static_cast<unsigned char>(std::lround(c.x * 255.0));
-        pixels[(y * W + x) * 3 + 1] =
+        pixels[(y * RW + x) * 3 + 1] =
             static_cast<unsigned char>(std::lround(c.y * 255.0));
-        pixels[(y * W + x) * 3 + 2] =
+        pixels[(y * RW + x) * 3 + 2] =
             static_cast<unsigned char>(std::lround(c.z * 255.0));
       }
     }
 
-    SDL_UpdateTexture(tex, nullptr, pixels.data(), W * 3);
+    SDL_UpdateTexture(tex, nullptr, pixels.data(), RW * 3);
     SDL_RenderClear(ren);
     SDL_RenderCopy(ren, tex, nullptr, nullptr);
     SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
