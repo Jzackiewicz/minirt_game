@@ -1,5 +1,6 @@
 #include "rt/AABB.hpp"
 #include <algorithm>
+#include <cmath>
 
 namespace rt
 {
@@ -37,6 +38,16 @@ bool AABB::intersects(const AABB &other) const
   return (max.x > other.min.x && min.x < other.max.x &&
           max.y > other.min.y && min.y < other.max.y &&
           max.z > other.min.z && min.z < other.max.z);
+}
+
+bool AABB::intersects_plane(const Vec3 &point, const Vec3 &normal) const
+{
+  Vec3 c = (min + max) * 0.5;
+  Vec3 e = (max - min) * 0.5;
+  double dist = Vec3::dot(c - point, normal);
+  double r = std::abs(e.x * normal.x) + std::abs(e.y * normal.y) +
+             std::abs(e.z * normal.z);
+  return std::abs(dist) <= r;
 }
 
 AABB AABB::surrounding_box(const AABB &box0, const AABB &box1)
