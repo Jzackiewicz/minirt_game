@@ -1,6 +1,8 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
+#include "rt/Plane.hpp"
 #include <algorithm>
+#include <limits>
 
 namespace
 {
@@ -8,6 +10,7 @@ inline rt::Vec3 reflect(const rt::Vec3 &v, const rt::Vec3 &n)
 {
   return v - n * (2.0 * rt::Vec3::dot(v, n));
 }
+
 } // namespace
 
 namespace rt
@@ -86,26 +89,88 @@ void Scene::update_beams(const std::vector<Material> &mats)
 
 void Scene::build_bvh()
 {
-  if (objects.empty())
+  std::vector<HittablePtr> objs;
+  objs.reserve(objects.size());
+  for (auto &o : objects)
+    if (!o->is_plane())
+      objs.push_back(o);
+  if (objs.empty())
   {
     accel.reset();
     return;
   }
-  std::vector<HittablePtr> objs = objects;
   accel = std::make_shared<BVHNode>(objs, 0, objs.size());
+}
+
+bool Scene::collides(int index) const
+{
+  if (index < 0 || index >= static_cast<int>(objects.size()))
+    return false;
+  auto obj = objects[index];
+  if (obj->is_beam())
+    return false;
+
+  if (obj->is_plane())
+  {
+    auto pl = std::static_pointer_cast<Plane>(obj);
+    for (size_t i = 0; i < objects.size(); ++i)
+    {
+      if (static_cast<int>(i) == index)
+        continue;
+      auto other = objects[i];
+      if (other->is_beam() || other->is_plane())
+        continue;
+      AABB obox;
+      if (!other->bounding_box(obox))
+        continue;
+      if (obox.intersects_plane(pl->point, pl->normal))
+        return true;
+    }
+    return false;
+  }
+
+  AABB box;
+  if (!obj->bounding_box(box))
+    return false;
+
+  for (size_t i = 0; i < objects.size(); ++i)
+  {
+    if (static_cast<int>(i) == index)
+      continue;
+    auto other = objects[i];
+    if (other->is_beam())
+      continue;
+    if (other->is_plane())
+    {
+      auto pl = std::static_pointer_cast<Plane>(other);
+      if (box.intersects_plane(pl->point, pl->normal))
+        return true;
+      continue;
+    }
+    AABB other_box;
+    if (!other->bounding_box(other_box))
+      continue;
+    if (box.intersects(other_box))
+      return true;
+  }
+  return false;
 }
 
 bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
-  if (accel)
-  {
-    return accel->hit(r, tmin, tmax, rec);
-  }
   bool hit_any = false;
   HitRecord tmp;
   double closest = tmax;
+  if (accel && accel->hit(r, tmin, tmax, tmp))
+  {
+    hit_any = true;
+    closest = tmp.t;
+    rec = tmp;
+  }
   for (auto &o : objects)
   {
+    if (!o->is_plane())
+      continue;
     if (o->hit(r, tmin, closest, tmp))
     {
       hit_any = true;

@@ -32,9 +32,8 @@ bool Plane::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 
 bool Plane::bounding_box(AABB &out) const
 {
-  double big = 1e6;
-  out = AABB(Vec3(-big, -big, -big), Vec3(big, big, big));
-  return true;
+  (void)out;
+  return false;
 }
 
 void Plane::rotate(const Vec3 &axis, double angle)
