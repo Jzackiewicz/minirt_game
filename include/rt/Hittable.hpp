@@ -32,6 +32,7 @@ struct Hittable
                    HitRecord &rec) const = 0;
   virtual bool bounding_box(AABB &out) const = 0;
   virtual bool is_beam() const { return false; }
+  virtual bool is_plane() const { return false; }
   // default translation does nothing
   virtual void translate(const Vec3 &delta) { (void)delta; }
   // default rotation does nothing

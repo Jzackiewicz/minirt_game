@@ -311,16 +311,28 @@ void Renderer::render_window(std::vector<Material> &mats,
       }
       else if (focused && e.type == SDL_MOUSEMOTION)
       {
-        double sens = MOUSE_SENSITIVITY;
         if (edit_mode)
         {
-          scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
-          scene.objects[selected_obj]->rotate(cam.right, -e.motion.yrel * sens);
-          scene.update_beams(mats);
-          scene.build_bvh();
+          double sens = OBJECT_MOUSE_SENSITIVITY * dt;
+          Vec3 move = cam.right * (e.motion.xrel * sens) +
+                      cam.up * (-e.motion.yrel * sens);
+          if (move.length_squared() > 0)
+          {
+            scene.objects[selected_obj]->translate(move);
+            if (scene.collides(selected_obj))
+            {
+              scene.objects[selected_obj]->translate(move * -1);
+            }
+            else
+            {
+              scene.update_beams(mats);
+              scene.build_bvh();
+            }
+          }
         }
         else
         {
+          double sens = MOUSE_SENSITIVITY;
           cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
         }
       }
@@ -329,9 +341,15 @@ void Renderer::render_window(std::vector<Material> &mats,
         double step = e.wheel.y * SCROLL_STEP;
         if (edit_mode)
         {
-          scene.objects[selected_obj]->translate(cam.up * step);
-          scene.update_beams(mats);
-          scene.build_bvh();
+          Vec3 delta = cam.forward * step;
+          scene.objects[selected_obj]->translate(delta);
+          if (scene.collides(selected_obj))
+            scene.objects[selected_obj]->translate(delta * -1);
+          else
+          {
+            scene.update_beams(mats);
+            scene.build_bvh();
+          }
         }
         else if (focused)
         {
@@ -346,19 +364,42 @@ void Renderer::render_window(std::vector<Material> &mats,
     const Uint8 *state = SDL_GetKeyboardState(nullptr);
     if (edit_mode)
     {
-      double speed = OBJECT_MOVE_SPEED * dt;
-      Vec3 move(0, 0, 0);
+      double speed = OBJECT_ROTATE_SPEED * dt;
+      bool changed = false;
       if (state[SDL_SCANCODE_W])
-        move += cam.forward * speed;
-      if (state[SDL_SCANCODE_S])
-        move += cam.forward * -speed;
-      if (state[SDL_SCANCODE_A])
-        move += cam.right * -speed;
-      if (state[SDL_SCANCODE_D])
-        move += cam.right * speed;
-      if (move.length_squared() > 0)
       {
-        scene.objects[selected_obj]->translate(move);
+        scene.objects[selected_obj]->rotate(cam.right, speed);
+        if (scene.collides(selected_obj))
+          scene.objects[selected_obj]->rotate(cam.right, -speed);
+        else
+          changed = true;
+      }
+      if (state[SDL_SCANCODE_S])
+      {
+        scene.objects[selected_obj]->rotate(cam.right, -speed);
+        if (scene.collides(selected_obj))
+          scene.objects[selected_obj]->rotate(cam.right, speed);
+        else
+          changed = true;
+      }
+      if (state[SDL_SCANCODE_A])
+      {
+        scene.objects[selected_obj]->rotate(cam.up, speed);
+        if (scene.collides(selected_obj))
+          scene.objects[selected_obj]->rotate(cam.up, -speed);
+        else
+          changed = true;
+      }
+      if (state[SDL_SCANCODE_D])
+      {
+        scene.objects[selected_obj]->rotate(cam.up, -speed);
+        if (scene.collides(selected_obj))
+          scene.objects[selected_obj]->rotate(cam.up, speed);
+        else
+          changed = true;
+      }
+      if (changed)
+      {
         scene.update_beams(mats);
         scene.build_bvh();
       }
@@ -459,6 +500,70 @@ void Renderer::render_window(std::vector<Material> &mats,
     SDL_UpdateTexture(tex, nullptr, pixels.data(), RW * 3);
     SDL_RenderClear(ren);
     SDL_RenderCopy(ren, tex, nullptr, nullptr);
+    if (edit_mode)
+    {
+      auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
+      {
+        Vec3 rel = p - cam.origin;
+        double z = Vec3::dot(rel, cam.forward);
+        if (z <= 0.0)
+          return false;
+        double x = Vec3::dot(rel, cam.right);
+        double y = Vec3::dot(rel, cam.up);
+        double fov_rad = cam.fov_deg * M_PI / 180.0;
+        double half_h = std::tan(fov_rad * 0.5);
+        double half_w = cam.aspect * half_h;
+        double u = (x / z / half_w + 1.0) * 0.5;
+        double v = (1.0 - y / z / half_h) * 0.5;
+        sx = static_cast<int>(u * W);
+        sy = static_cast<int>(v * H);
+        return true;
+      };
+      const int edges[12][2] = {{0, 1}, {0, 2}, {0, 4}, {1, 3}, {1, 5},
+                                {2, 3}, {2, 6}, {3, 7}, {4, 5}, {4, 6},
+                                {5, 7}, {6, 7}};
+      for (size_t i = 0; i < scene.objects.size(); ++i)
+      {
+        auto &obj = scene.objects[i];
+        if (obj->is_beam() || obj->is_plane())
+          continue;
+        AABB box;
+        if (!obj->bounding_box(box))
+          continue;
+        Vec3 corners[8] = {Vec3(box.min.x, box.min.y, box.min.z),
+                           Vec3(box.max.x, box.min.y, box.min.z),
+                           Vec3(box.min.x, box.max.y, box.min.z),
+                           Vec3(box.max.x, box.max.y, box.min.z),
+                           Vec3(box.min.x, box.min.y, box.max.z),
+                           Vec3(box.max.x, box.min.y, box.max.z),
+                           Vec3(box.min.x, box.max.y, box.max.z),
+                           Vec3(box.max.x, box.max.y, box.max.z)};
+        SDL_Point pts[8];
+        bool ok = true;
+        for (int j = 0; j < 8; ++j)
+        {
+          int sx, sy;
+          if (!project(corners[j], sx, sy))
+          {
+            ok = false;
+            break;
+          }
+          pts[j].x = sx;
+          pts[j].y = sy;
+        }
+        if (!ok)
+          continue;
+        if (static_cast<int>(i) == selected_obj)
+          SDL_SetRenderDrawColor(ren, 255, 0, 0, 255);
+        else
+          SDL_SetRenderDrawColor(ren, 0, 255, 0, 255);
+        for (const auto &e : edges)
+        {
+          SDL_RenderDrawLine(ren, pts[e[0]].x, pts[e[0]].y, pts[e[1]].x,
+                             pts[e[1]].y);
+        }
+      }
+    }
     SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
     draw_text(ren, edit_mode ? "EDIT" : "SPECTATOR", 5, 5, 2);
     SDL_RenderPresent(ren);

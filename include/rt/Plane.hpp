@@ -13,6 +13,7 @@ struct Plane : public Hittable
   bool hit(const Ray &r, double tmin, double tmax,
            HitRecord &rec) const override;
   bool bounding_box(AABB &out) const override;
+  bool is_plane() const override { return true; }
   void translate(const Vec3 &delta) override { point += delta; }
   void rotate(const Vec3 &axis, double angle) override;
 };
