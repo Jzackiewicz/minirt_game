@@ -133,17 +133,22 @@ bool Scene::collides(int index) const
   if (accel && accel->is_bvh())
   {
     static_cast<BVHNode const *>(accel.get())->query(box, candidates);
+    candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
+                                    [](const HittablePtr &h) {
+                                      return h->is_beam();
+                                    }),
+                     candidates.end());
   }
   else
   {
     for (auto &o : objects)
-      if (!o->is_plane())
+      if (!o->is_plane() && !o->is_beam())
         candidates.push_back(o);
   }
 
   for (auto &cand : candidates)
   {
-    if (cand.get() == obj.get())
+    if (cand.get() == obj.get() || cand->is_beam())
       continue;
     if (precise_collision(obj, cand))
       return true;
