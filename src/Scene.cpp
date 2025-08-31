@@ -1,6 +1,5 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
-#include "rt/Plane.hpp"
 #include <algorithm>
 #include <limits>
 
@@ -107,27 +106,8 @@ bool Scene::collides(int index) const
   if (index < 0 || index >= static_cast<int>(objects.size()))
     return false;
   auto obj = objects[index];
-  if (obj->is_beam())
+  if (obj->is_beam() || obj->is_plane())
     return false;
-
-  if (obj->is_plane())
-  {
-    auto pl = std::static_pointer_cast<Plane>(obj);
-    for (size_t i = 0; i < objects.size(); ++i)
-    {
-      if (static_cast<int>(i) == index)
-        continue;
-      auto other = objects[i];
-      if (other->is_beam() || other->is_plane())
-        continue;
-      AABB obox;
-      if (!other->bounding_box(obox))
-        continue;
-      if (obox.intersects_plane(pl->point, pl->normal))
-        return true;
-    }
-    return false;
-  }
 
   AABB box;
   if (!obj->bounding_box(box))
@@ -138,15 +118,23 @@ bool Scene::collides(int index) const
     if (static_cast<int>(i) == index)
       continue;
     auto other = objects[i];
-    if (other->is_beam())
+    if (other->is_beam() || other->is_plane())
       continue;
-    if (other->is_plane())
-    {
-      auto pl = std::static_pointer_cast<Plane>(other);
-      if (box.intersects_plane(pl->point, pl->normal))
-        return true;
+    AABB other_box;
+    if (!other->bounding_box(other_box))
       continue;
-    }
+    if (box.intersects(other_box))
+      return true;
+  }
+  return false;
+}
+
+bool Scene::collides_box(const AABB &box) const
+{
+  for (auto &other : objects)
+  {
+    if (other->is_beam() || other->is_plane())
+      continue;
     AABB other_box;
     if (!other->bounding_box(other_box))
       continue;

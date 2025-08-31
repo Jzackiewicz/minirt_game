@@ -40,16 +40,6 @@ bool AABB::intersects(const AABB &other) const
           max.z > other.min.z && min.z < other.max.z);
 }
 
-bool AABB::intersects_plane(const Vec3 &point, const Vec3 &normal) const
-{
-  Vec3 c = (min + max) * 0.5;
-  Vec3 e = (max - min) * 0.5;
-  double dist = Vec3::dot(c - point, normal);
-  double r = std::abs(e.x * normal.x) + std::abs(e.y * normal.y) +
-             std::abs(e.z * normal.z);
-  return std::abs(dist) <= r;
-}
-
 AABB AABB::surrounding_box(const AABB &box0, const AABB &box1)
 {
   Vec3 small(std::min(box0.min.x, box1.min.x), std::min(box0.min.y, box1.min.y),

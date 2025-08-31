@@ -459,6 +459,16 @@ void Renderer::render_window(std::vector<Material> &mats,
         cam.move(cam.right * speed);
     }
 
+    AABB cam_box(
+        cam.origin -
+            Vec3(CAMERA_COLLISION_RADIUS, CAMERA_COLLISION_RADIUS,
+                 CAMERA_COLLISION_RADIUS),
+        cam.origin +
+            Vec3(CAMERA_COLLISION_RADIUS, CAMERA_COLLISION_RADIUS,
+                 CAMERA_COLLISION_RADIUS));
+    if (scene.collides_box(cam_box))
+      cam.origin = prev_cam_origin;
+
     if (edit_mode)
     {
       Vec3 desired = cam.origin + cam.forward * edit_dist;
