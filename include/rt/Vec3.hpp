@@ -20,6 +20,7 @@ struct Vec3
 
   Vec3 operator+(const Vec3 &b) const;
   Vec3 operator-(const Vec3 &b) const;
+  Vec3 operator-() const;
   Vec3 operator*(double s) const;
   Vec3 operator/(double s) const;
   Vec3 &operator+=(const Vec3 &b);

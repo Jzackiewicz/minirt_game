@@ -23,6 +23,8 @@ Vec3 Vec3::operator-(const Vec3 &b) const
   return {x - b.x, y - b.y, z - b.z};
 }
 
+Vec3 Vec3::operator-() const { return {-x, -y, -z}; }
+
 Vec3 Vec3::operator*(double s) const { return {x * s, y * s, z * s}; }
 
 Vec3 Vec3::operator/(double s) const { return {x / s, y / s, z / s}; }
