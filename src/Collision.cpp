@@ -61,6 +61,64 @@ static Vec3 support_box(const AABB &b, const Vec3 &dir)
               dir.z > 0 ? b.max.z : b.min.z);
 }
 
+static bool sat_cube_cube(const Cube &a, const Cube &b)
+{
+  constexpr double EPS = 1e-6;
+
+  double R[3][3];
+  double absR[3][3];
+  for (int i = 0; i < 3; ++i)
+  {
+    for (int j = 0; j < 3; ++j)
+    {
+      R[i][j] = Vec3::dot(a.axis[i], b.axis[j]);
+      absR[i][j] = std::fabs(R[i][j]) + EPS;
+    }
+  }
+
+  Vec3 tVec = b.center - a.center;
+  double t[3] = {Vec3::dot(tVec, a.axis[0]), Vec3::dot(tVec, a.axis[1]),
+                 Vec3::dot(tVec, a.axis[2])};
+
+  double ra, rb;
+
+  for (int i = 0; i < 3; ++i)
+  {
+    ra = a.half;
+    rb = b.half * (absR[i][0] + absR[i][1] + absR[i][2]);
+    if (std::fabs(t[i]) > ra + rb)
+      return false;
+  }
+
+  for (int i = 0; i < 3; ++i)
+  {
+    ra = a.half * (absR[0][i] + absR[1][i] + absR[2][i]);
+    rb = b.half;
+    double tval = std::fabs(t[0] * R[0][i] + t[1] * R[1][i] + t[2] * R[2][i]);
+    if (tval > ra + rb)
+      return false;
+  }
+
+  for (int i = 0; i < 3; ++i)
+  {
+    int i1 = (i + 1) % 3;
+    int i2 = (i + 2) % 3;
+    for (int j = 0; j < 3; ++j)
+    {
+      int j1 = (j + 1) % 3;
+      int j2 = (j + 2) % 3;
+      ra = a.half * (absR[i1][j] + absR[i2][j]);
+      rb = b.half * (absR[i][j1] + absR[i][j2]);
+      double tval =
+          std::fabs(t[i2] * R[i1][j] - t[i1] * R[i2][j]);
+      if (tval > ra + rb)
+        return false;
+    }
+  }
+
+  return true;
+}
+
 static Vec3 support(const Hittable &h, const Vec3 &dir)
 {
   switch (h.shape_type())
@@ -189,7 +247,7 @@ static bool gjk(const Hittable &a, const Hittable &b)
   int size = 0;
   simplex[size++] = support(a, dir) - support(b, (-1) * dir);
   dir = (-1) * simplex[0];
-  for (int iterations = 0; iterations < 20; ++iterations)
+  for (int iterations = 0; iterations < 64; ++iterations)
   {
     Vec3 p = support(a, dir) - support(b, (-1) * dir);
     if (Vec3::dot(p, dir) <= 0)
@@ -260,6 +318,13 @@ bool precise_collision(const HittablePtr &a, const HittablePtr &b)
       return false;
     }
     }
+  }
+
+  if (ta == ShapeType::Cube && tb == ShapeType::Cube)
+  {
+    const Cube *ca = static_cast<const Cube *>(a.get());
+    const Cube *cb = static_cast<const Cube *>(b.get());
+    return sat_cube_cube(*ca, *cb);
   }
 
   if (ta == ShapeType::Sphere && tb == ShapeType::Sphere)
