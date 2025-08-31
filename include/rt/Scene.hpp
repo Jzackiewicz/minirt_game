@@ -1,7 +1,10 @@
 
 #pragma once
-#include "BVH.hpp"
+#include "Config.hpp"
 #include "Hittable.hpp"
+#if USE_BVH
+#include "BVH.hpp"
+#endif
 #include "light.hpp"
 #include "material.hpp"
 #include <memory>

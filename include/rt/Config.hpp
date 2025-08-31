@@ -2,6 +2,7 @@
 
 // Gameplay configuration constants
 
+#define USE_BVH true
 #define SCROLL_STEP 0.1
 #define CAMERA_MOVE_SPEED 15.0
 #define MOUSE_SENSITIVITY 0.002

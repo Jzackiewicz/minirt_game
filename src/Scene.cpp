@@ -1,6 +1,9 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
 #include "rt/Plane.hpp"
+#if USE_BVH
+#include "rt/BVH.hpp"
+#endif
 #include <algorithm>
 #include <limits>
 
@@ -89,6 +92,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
 
 void Scene::build_bvh()
 {
+#if USE_BVH
   std::vector<HittablePtr> objs;
   objs.reserve(objects.size());
   for (auto &o : objects)
@@ -100,6 +104,9 @@ void Scene::build_bvh()
     return;
   }
   accel = std::make_shared<BVHNode>(objs, 0, objs.size());
+#else
+  accel.reset();
+#endif
 }
 
 bool Scene::collides(int index) const
@@ -158,6 +165,7 @@ bool Scene::collides(int index) const
 
 bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
+#if USE_BVH
   bool hit_any = false;
   HitRecord tmp;
   double closest = tmax;
@@ -179,6 +187,21 @@ bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
     }
   }
   return hit_any;
+#else
+  bool hit_any = false;
+  HitRecord tmp;
+  double closest = tmax;
+  for (auto &o : objects)
+  {
+    if (o->hit(r, tmin, closest, tmp))
+    {
+      hit_any = true;
+      closest = tmp.t;
+      rec = tmp;
+    }
+  }
+  return hit_any;
+#endif
 }
 
 } // namespace rt
