@@ -85,6 +85,17 @@ bool Cube::bounding_box(AABB &out) const
   return true;
 }
 
+Vec3 Cube::support(const Vec3 &dir) const
+{
+  Vec3 result = center;
+  for (int i = 0; i < 3; ++i)
+  {
+    double sign = Vec3::dot(axis[i], dir) >= 0.0 ? 1.0 : -1.0;
+    result += axis[i] * (half * sign);
+  }
+  return result;
+}
+
 void Cube::rotate(const Vec3 &ax, double angle)
 {
   auto rotate_vec = [](const Vec3 &v, const Vec3 &axis, double ang) {

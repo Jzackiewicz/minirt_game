@@ -1,14 +1,170 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
 #include "rt/Plane.hpp"
+#include "rt/Sphere.hpp"
+#include "rt/Cube.hpp"
+#include "rt/Cylinder.hpp"
+#include "rt/Cone.hpp"
 #include <algorithm>
 #include <limits>
 
 namespace
 {
-inline rt::Vec3 reflect(const rt::Vec3 &v, const rt::Vec3 &n)
+using rt::Vec3;
+using rt::Hittable;
+using rt::Sphere;
+using rt::Plane;
+
+inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
 {
-  return v - n * (2.0 * rt::Vec3::dot(v, n));
+  return v - n * (2.0 * Vec3::dot(v, n));
+}
+
+struct Simplex
+{
+  Vec3 pts[4];
+  int size = 0;
+  void add(const Vec3 &p) { pts[size++] = p; }
+  Vec3 &operator[](int i) { return pts[i]; }
+};
+
+Vec3 support(const Hittable &a, const Hittable &b, const Vec3 &dir)
+{
+  return a.support(dir) - b.support(dir * (-1.0));
+}
+
+bool handle_simplex(Simplex &s, Vec3 &dir)
+{
+  Vec3 a = s[s.size - 1];
+  Vec3 ao = a * (-1.0);
+  if (s.size == 2)
+  {
+    Vec3 b = s[0];
+    Vec3 ab = b - a;
+    dir = Vec3::cross(Vec3::cross(ab, ao), ab);
+  }
+  else if (s.size == 3)
+  {
+    Vec3 b = s[1];
+    Vec3 c = s[0];
+    Vec3 ab = b - a;
+    Vec3 ac = c - a;
+    Vec3 abc = Vec3::cross(ab, ac);
+    Vec3 ab_perp = Vec3::cross(abc, ab);
+    if (Vec3::dot(ab_perp, ao) > 0)
+    {
+      s[0] = b;
+      s[1] = a;
+      s.size = 2;
+      dir = Vec3::cross(Vec3::cross(ab, ao), ab);
+    }
+    else
+    {
+      Vec3 ac_perp = Vec3::cross(ac, abc);
+      if (Vec3::dot(ac_perp, ao) > 0)
+      {
+        s[1] = a;
+        s.size = 2;
+        dir = Vec3::cross(Vec3::cross(ac, ao), ac);
+      }
+      else
+      {
+        if (Vec3::dot(abc, ao) > 0)
+          dir = abc;
+        else
+        {
+          std::swap(s[0], s[1]);
+          dir = abc * (-1.0);
+        }
+      }
+    }
+  }
+  else if (s.size == 4)
+  {
+    Vec3 b = s[2];
+    Vec3 c = s[1];
+    Vec3 d = s[0];
+    Vec3 ab = b - a;
+    Vec3 ac = c - a;
+    Vec3 ad = d - a;
+    Vec3 abc = Vec3::cross(ab, ac);
+    Vec3 acd = Vec3::cross(ac, ad);
+    Vec3 adb = Vec3::cross(ad, ab);
+    if (Vec3::dot(abc, ao) > 0)
+    {
+      s[0] = c;
+      s[1] = b;
+      s[2] = a;
+      s.size = 3;
+      dir = abc;
+    }
+    else if (Vec3::dot(acd, ao) > 0)
+    {
+      s[0] = d;
+      s[1] = c;
+      s[2] = a;
+      s.size = 3;
+      dir = acd;
+    }
+    else if (Vec3::dot(adb, ao) > 0)
+    {
+      s[0] = b;
+      s[1] = d;
+      s[2] = a;
+      s.size = 3;
+      dir = adb;
+    }
+    else
+    {
+      return true; // origin inside tetrahedron
+    }
+  }
+  else
+  {
+    dir = Vec3(1, 0, 0);
+  }
+  return false;
+}
+
+bool gjk(const Hittable &a, const Hittable &b)
+{
+  Simplex s;
+  Vec3 dir(1, 0, 0);
+  s.add(support(a, b, dir));
+  dir = s[0] * (-1.0);
+  for (int i = 0; i < 20; ++i)
+  {
+    Vec3 p = support(a, b, dir);
+    if (Vec3::dot(p, dir) < 0)
+      return false;
+    s.add(p);
+    if (handle_simplex(s, dir))
+      return true;
+  }
+  return false;
+}
+
+bool sphere_sphere(const Sphere &a, const Sphere &b)
+{
+  double r = a.radius + b.radius;
+  return (a.center - b.center).length_squared() <= r * r;
+}
+
+bool plane_convex(const Plane &pl, const Hittable &obj)
+{
+  Vec3 p = obj.support(pl.normal * (-1.0));
+  return Vec3::dot(p - pl.point, pl.normal) <= 0.0;
+}
+
+bool narrow_phase(const Hittable &a, const Hittable &b)
+{
+  if (a.is_sphere() && b.is_sphere())
+  {
+    const Sphere &sa = static_cast<const Sphere &>(a);
+    const Sphere &sb = static_cast<const Sphere &>(b);
+    return sphere_sphere(sa, sb);
+  }
+  return gjk(a, b);
 }
 
 } // namespace
@@ -113,17 +269,11 @@ bool Scene::collides(int index) const
   if (obj->is_plane())
   {
     auto pl = std::static_pointer_cast<Plane>(obj);
-    for (size_t i = 0; i < objects.size(); ++i)
+    for (auto &other : objects)
     {
-      if (static_cast<int>(i) == index)
+      if (other.get() == obj.get() || other->is_beam() || other->is_plane())
         continue;
-      auto other = objects[i];
-      if (other->is_beam() || other->is_plane())
-        continue;
-      AABB obox;
-      if (!other->bounding_box(obox))
-        continue;
-      if (obox.intersects_plane(pl->point, pl->normal))
+      if (plane_convex(*pl, *other))
         return true;
     }
     return false;
@@ -133,26 +283,40 @@ bool Scene::collides(int index) const
   if (!obj->bounding_box(box))
     return false;
 
-  for (size_t i = 0; i < objects.size(); ++i)
+  std::vector<HittablePtr> candidates;
+  candidates.reserve(16);
+
+  if (accel)
   {
-    if (static_cast<int>(i) == index)
-      continue;
-    auto other = objects[i];
-    if (other->is_beam())
-      continue;
-    if (other->is_plane())
+    std::static_pointer_cast<BVHNode>(accel)->query(box, candidates, obj.get());
+  }
+  else
+  {
+    for (auto &other : objects)
     {
-      auto pl = std::static_pointer_cast<Plane>(other);
-      if (box.intersects_plane(pl->point, pl->normal))
-        return true;
-      continue;
+      if (other.get() == obj.get() || other->is_beam() || other->is_plane())
+        continue;
+      AABB ob;
+      if (other->bounding_box(ob) && box.intersects(ob))
+        candidates.push_back(other);
     }
-    AABB other_box;
-    if (!other->bounding_box(other_box))
+  }
+
+  for (auto &o : objects)
+  {
+    if (!o->is_plane())
       continue;
-    if (box.intersects(other_box))
+    auto pl = std::static_pointer_cast<Plane>(o);
+    if (plane_convex(*pl, *obj))
       return true;
   }
+
+  for (auto &cand : candidates)
+  {
+    if (narrow_phase(*obj, *cand))
+      return true;
+  }
+
   return false;
 }
 

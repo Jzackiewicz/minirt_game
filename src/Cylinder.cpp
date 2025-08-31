@@ -116,6 +116,19 @@ bool Cylinder::bounding_box(AABB &out) const
   return true;
 }
 
+Vec3 Cylinder::support(const Vec3 &dir) const
+{
+  double half = height / 2.0;
+  double axis_dot = Vec3::dot(axis, dir);
+  Vec3 axial = axis * (axis_dot > 0.0 ? half : -half);
+  Vec3 radial = dir - axis * axis_dot;
+  if (radial.length_squared() > 1e-9)
+    radial = radial.normalized() * radius;
+  else
+    radial = Vec3();
+  return center + axial + radial;
+}
+
 void Cylinder::rotate(const Vec3 &ax, double angle)
 {
   auto rotate_vec = [](const Vec3 &v, const Vec3 &axis, double ang)

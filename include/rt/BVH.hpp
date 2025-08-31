@@ -19,6 +19,13 @@ struct BVHNode : public Hittable
   bool hit(const Ray &r, double tmin, double tmax,
            HitRecord &rec) const override;
   bool bounding_box(AABB &out) const override;
+  bool is_bvh() const override { return true; }
+
+  // Collect all objects whose bounding boxes overlap the given AABB. The
+  // optional `ignore` pointer skips a specific object (typically the query
+  // object itself).
+  void query(const AABB &target, std::vector<HittablePtr> &out,
+             const Hittable *ignore = nullptr) const;
 
 private:
   static int choose_axis(std::vector<HittablePtr> &objs, size_t start,

@@ -96,6 +96,31 @@ bool Cone::bounding_box(AABB &out) const
   return true;
 }
 
+Vec3 Cone::support(const Vec3 &dir) const
+{
+  Vec3 nd = dir.normalized();
+  double cosA = height / std::sqrt(height * height + radius * radius);
+  double d = Vec3::dot(nd, axis);
+  Vec3 apex = center + axis * (height * 0.5);
+  Vec3 base_center = center - axis * (height * 0.5);
+  if (d > cosA)
+  {
+    return apex;
+  }
+  Vec3 radial = nd - axis * d;
+  if (radial.length_squared() > 1e-9)
+    radial = radial.normalized() * radius;
+  else
+    radial = Vec3();
+  if (d < 0)
+  {
+    // direction points toward base
+    return base_center + radial;
+  }
+  // direction points outward to side surface
+  return base_center + radial;
+}
+
 void Cone::rotate(const Vec3 &ax, double angle)
 {
   auto rotate_vec = [](const Vec3 &v, const Vec3 &axis, double ang)

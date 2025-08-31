@@ -33,6 +33,17 @@ struct Hittable
   virtual bool bounding_box(AABB &out) const = 0;
   virtual bool is_beam() const { return false; }
   virtual bool is_plane() const { return false; }
+  virtual bool is_bvh() const { return false; }
+  virtual bool is_sphere() const { return false; }
+  // Support mapping for convex collision detection
+  // Returns the furthest point in a given direction. Default implementation
+  // returns the origin which is suitable for non-convex or analytic cases that
+  // override collision checks.
+  virtual Vec3 support(const Vec3 &dir) const
+  {
+    (void)dir;
+    return Vec3();
+  }
   // default translation does nothing
   virtual void translate(const Vec3 &delta) { (void)delta; }
   // default rotation does nothing
