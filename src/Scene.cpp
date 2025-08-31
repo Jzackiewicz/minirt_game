@@ -179,6 +179,28 @@ bool Scene::collides(int index) const
   return false;
 }
 
+bool Scene::collides_box(const AABB &box) const
+{
+  for (auto &other : objects)
+  {
+    if (other->is_beam())
+      continue;
+    if (other->is_plane())
+    {
+      auto pl = std::static_pointer_cast<Plane>(other);
+      if (box.intersects_plane(pl->point, pl->normal))
+        return true;
+      continue;
+    }
+    AABB other_box;
+    if (!other->bounding_box(other_box))
+      continue;
+    if (box.intersects(other_box))
+      return true;
+  }
+  return false;
+}
+
 bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
   bool hit_any = false;

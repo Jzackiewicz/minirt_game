@@ -2,6 +2,7 @@
 #pragma once
 #include "BVH.hpp"
 #include "Hittable.hpp"
+#include "AABB.hpp"
 #include "light.hpp"
 #include "material.hpp"
 #include <memory>
@@ -22,6 +23,7 @@ struct Scene
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
   bool collides(int index) const;
   bool collides(const Vec3 &point) const;
+  bool collides_box(const AABB &box) const;
 };
 
 } // namespace rt
