@@ -5,6 +5,7 @@
 #include "rt/Cylinder.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Sphere.hpp"
+#include "rt/Mat4.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -182,7 +183,11 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_pos, c) && to_double(s_r, r) &&
           parse_rgba(s_rgb, rgb, a))
       {
-        auto s = std::make_shared<Sphere>(c, r, oid++, mid);
+        Mat4 trans = Mat4::translate(c);
+        Mat4 scale = Mat4::scale(Vec3(r, r, r));
+        Vec3 world_center = (trans * scale).apply_point(Vec3(0, 0, 0));
+        double world_radius = scale.apply_vector(Vec3(1, 0, 0)).length();
+        auto s = std::make_shared<Sphere>(world_center, world_radius, oid++, mid);
         s->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
@@ -208,7 +213,11 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_p, p) && parse_triple(s_n, n) &&
           parse_rgba(s_rgb, rgb, a))
       {
-        auto pl = std::make_shared<Plane>(p, n, oid++, mid);
+        Mat4 trans = Mat4::translate(p);
+        Mat4 rot = Mat4::rotate_from_to(Vec3(0, 1, 0), n);
+        Vec3 world_point = trans.apply_point(Vec3(0, 0, 0));
+        Vec3 world_normal = rot.apply_vector(Vec3(0, 1, 0)).normalized();
+        auto pl = std::make_shared<Plane>(world_point, world_normal, oid++, mid);
         pl->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
@@ -235,7 +244,11 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_pos, c) && parse_triple(s_dir, dir) &&
           to_double(s_d, d) && to_double(s_h, h) && parse_rgba(s_rgb, rgb, a))
       {
-        auto cy = std::make_shared<Cylinder>(c, dir, d / 2.0, h, oid++, mid);
+        Mat4 trans = Mat4::translate(c);
+        Mat4 rot = Mat4::rotate_from_to(Vec3(0, 1, 0), dir);
+        Vec3 world_center = trans.apply_point(Vec3(0, 0, 0));
+        Vec3 world_axis = rot.apply_vector(Vec3(0, 1, 0)).normalized();
+        auto cy = std::make_shared<Cylinder>(world_center, world_axis, d / 2.0, h, oid++, mid);
         cy->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
@@ -261,7 +274,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       double alpha = 255;
       if (parse_triple(s_pos, c) && to_double(s_a, a) && parse_rgba(s_rgb, rgb, alpha))
       {
-        auto cu = std::make_shared<Cube>(c, a, oid++, mid);
+        Mat4 trans = Mat4::translate(c);
+        Vec3 world_center = trans.apply_point(Vec3(0, 0, 0));
+        auto cu = std::make_shared<Cube>(world_center, a, oid++, mid);
         cu->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
@@ -309,7 +324,11 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_pos, c) && parse_triple(s_dir, dir) &&
           to_double(s_d, d) && to_double(s_h, h) && parse_rgba(s_rgb, rgb, a))
       {
-        auto co = std::make_shared<Cone>(c, dir, d / 2.0, h, oid++, mid);
+        Mat4 trans = Mat4::translate(c);
+        Mat4 rot = Mat4::rotate_from_to(Vec3(0, 1, 0), dir);
+        Vec3 world_center = trans.apply_point(Vec3(0, 0, 0));
+        Vec3 world_axis = rot.apply_vector(Vec3(0, 1, 0)).normalized();
+        auto co = std::make_shared<Cone>(world_center, world_axis, d / 2.0, h, oid++, mid);
         co->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
