@@ -265,6 +265,16 @@ void Renderer::render_window(std::vector<Material> &mats,
   int hover_mat = -1;
   int selected_obj = -1;
   int selected_mat = -1;
+  double edit_dist = 0.0;
+  bool rotating = false;
+
+  auto get_center = [&](int idx) {
+    AABB box;
+    if (!scene.objects[idx]->bounding_box(box))
+      return Vec3(0, 0, 0);
+    return Vec3((box.min.x + box.max.x) * 0.5, (box.min.y + box.max.y) * 0.5,
+                (box.min.z + box.max.z) * 0.5);
+  };
 
   while (running)
   {
@@ -300,6 +310,13 @@ void Renderer::render_window(std::vector<Material> &mats,
           mats[selected_mat].checkered = true;
           mats[selected_mat].color = mats[selected_mat].base_color;
           edit_mode = true;
+          Vec3 center = get_center(selected_obj);
+          Vec3 to_obj = center - cam.origin;
+          edit_dist = to_obj.length();
+          Vec3 target = cam.origin + cam.forward * edit_dist;
+          scene.objects[selected_obj]->translate(target - center);
+          scene.update_beams(mats);
+          scene.build_bvh();
         }
         else if (edit_mode)
         {
@@ -307,21 +324,64 @@ void Renderer::render_window(std::vector<Material> &mats,
           mats[selected_mat].color = mats[selected_mat].base_color;
           selected_obj = selected_mat = -1;
           edit_mode = false;
+          rotating = false;
         }
+      }
+      else if (focused && e.type == SDL_MOUSEBUTTONDOWN &&
+               e.button.button == SDL_BUTTON_RIGHT && edit_mode)
+      {
+        rotating = true;
+      }
+      else if (e.type == SDL_MOUSEBUTTONUP &&
+               e.button.button == SDL_BUTTON_RIGHT)
+      {
+        rotating = false;
       }
       else if (focused && e.type == SDL_MOUSEMOTION)
       {
-        if (edit_mode)
+        if (edit_mode && rotating)
         {
-          double sens = OBJECT_MOUSE_SENSITIVITY * dt;
-          Vec3 move = cam.right * (e.motion.xrel * sens) +
-                      cam.up * (-e.motion.yrel * sens);
-          if (move.length_squared() > 0)
+          double sens = MOUSE_SENSITIVITY;
+          bool changed = false;
+          if (e.motion.xrel != 0)
           {
-            scene.objects[selected_obj]->translate(move);
+            scene.objects[selected_obj]->rotate(cam.up, -e.motion.xrel * sens);
+            if (scene.collides(selected_obj))
+              scene.objects[selected_obj]->rotate(cam.up, e.motion.xrel * sens);
+            else
+              changed = true;
+          }
+          if (e.motion.yrel != 0)
+          {
+            scene.objects[selected_obj]->rotate(cam.right, -e.motion.yrel * sens);
+            if (scene.collides(selected_obj))
+              scene.objects[selected_obj]->rotate(cam.right, e.motion.yrel * sens);
+            else
+              changed = true;
+          }
+          if (changed)
+          {
+            scene.update_beams(mats);
+            scene.build_bvh();
+          }
+        }
+        else
+        {
+          double sens = MOUSE_SENSITIVITY;
+          Vec3 old_f = cam.forward, old_r = cam.right, old_u = cam.up;
+          cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
+          if (edit_mode)
+          {
+            Vec3 center = get_center(selected_obj);
+            Vec3 new_pos = cam.origin + cam.forward * edit_dist;
+            Vec3 delta = new_pos - center;
+            scene.objects[selected_obj]->translate(delta);
             if (scene.collides(selected_obj))
             {
-              scene.objects[selected_obj]->translate(move * -1);
+              scene.objects[selected_obj]->translate(delta * -1);
+              cam.forward = old_f;
+              cam.right = old_r;
+              cam.up = old_u;
             }
             else
             {
@@ -330,23 +390,24 @@ void Renderer::render_window(std::vector<Material> &mats,
             }
           }
         }
-        else
-        {
-          double sens = MOUSE_SENSITIVITY;
-          cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
-        }
       }
       else if (e.type == SDL_MOUSEWHEEL)
       {
         double step = e.wheel.y * SCROLL_STEP;
         if (edit_mode)
         {
-          Vec3 delta = cam.forward * step;
+          double new_dist = std::max(0.1, edit_dist + step);
+          Vec3 center = get_center(selected_obj);
+          Vec3 new_pos = cam.origin + cam.forward * new_dist;
+          Vec3 delta = new_pos - center;
           scene.objects[selected_obj]->translate(delta);
           if (scene.collides(selected_obj))
+          {
             scene.objects[selected_obj]->translate(delta * -1);
+          }
           else
           {
+            edit_dist = new_dist;
             scene.update_beams(mats);
             scene.build_bvh();
           }
@@ -364,37 +425,46 @@ void Renderer::render_window(std::vector<Material> &mats,
     const Uint8 *state = SDL_GetKeyboardState(nullptr);
     if (edit_mode)
     {
+      Vec3 move_delta(0, 0, 0);
+      double move_speed = CAMERA_MOVE_SPEED * dt;
+      if (state[SDL_SCANCODE_W])
+        move_delta += cam.forward * move_speed;
+      if (state[SDL_SCANCODE_S])
+        move_delta += cam.forward * -move_speed;
+      if (state[SDL_SCANCODE_A])
+        move_delta += cam.right * -move_speed;
+      if (state[SDL_SCANCODE_D])
+        move_delta += cam.right * move_speed;
+      if (move_delta.length_squared() > 0)
+      {
+        cam.move(move_delta);
+        scene.objects[selected_obj]->translate(move_delta);
+        if (scene.collides(selected_obj))
+        {
+          scene.objects[selected_obj]->translate(move_delta * -1);
+          cam.move(move_delta * -1);
+        }
+        else
+        {
+          scene.update_beams(mats);
+          scene.build_bvh();
+        }
+      }
       double speed = OBJECT_ROTATE_SPEED * dt;
       bool changed = false;
-      if (state[SDL_SCANCODE_W])
+      if (state[SDL_SCANCODE_Q])
       {
-        scene.objects[selected_obj]->rotate(cam.right, speed);
+        scene.objects[selected_obj]->rotate(cam.forward, speed);
         if (scene.collides(selected_obj))
-          scene.objects[selected_obj]->rotate(cam.right, -speed);
+          scene.objects[selected_obj]->rotate(cam.forward, -speed);
         else
           changed = true;
       }
-      if (state[SDL_SCANCODE_S])
+      if (state[SDL_SCANCODE_E])
       {
-        scene.objects[selected_obj]->rotate(cam.right, -speed);
+        scene.objects[selected_obj]->rotate(cam.forward, -speed);
         if (scene.collides(selected_obj))
-          scene.objects[selected_obj]->rotate(cam.right, speed);
-        else
-          changed = true;
-      }
-      if (state[SDL_SCANCODE_A])
-      {
-        scene.objects[selected_obj]->rotate(cam.up, speed);
-        if (scene.collides(selected_obj))
-          scene.objects[selected_obj]->rotate(cam.up, -speed);
-        else
-          changed = true;
-      }
-      if (state[SDL_SCANCODE_D])
-      {
-        scene.objects[selected_obj]->rotate(cam.up, -speed);
-        if (scene.collides(selected_obj))
-          scene.objects[selected_obj]->rotate(cam.up, speed);
+          scene.objects[selected_obj]->rotate(cam.forward, speed);
         else
           changed = true;
       }
