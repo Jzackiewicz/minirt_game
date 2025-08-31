@@ -41,6 +41,8 @@ struct Hittable
     (void)axis;
     (void)angle;
   }
+  // default center
+  virtual Vec3 get_center() const { return Vec3(); }
 };
 
 using HittablePtr = std::shared_ptr<Hittable>;

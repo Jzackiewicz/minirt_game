@@ -18,6 +18,7 @@ struct Cylinder : public Hittable
   bool bounding_box(AABB &out) const override;
   void translate(const Vec3 &delta) override { center += delta; }
   void rotate(const Vec3 &axis, double angle) override;
+  Vec3 get_center() const override { return center; }
 };
 
 } // namespace rt
