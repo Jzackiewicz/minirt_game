@@ -16,6 +16,7 @@ struct Plane : public Hittable
   bool is_plane() const override { return true; }
   void translate(const Vec3 &delta) override { point += delta; }
   void rotate(const Vec3 &axis, double angle) override;
+  ShapeType shape_type() const override { return ShapeType::Plane; }
 };
 
 } // namespace rt
