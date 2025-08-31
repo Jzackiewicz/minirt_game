@@ -16,5 +16,14 @@ struct Cube : public Hittable
   bool bounding_box(AABB &out) const override;
   void translate(const Vec3 &delta) override { center += delta; }
   void rotate(const Vec3 &axis, double angle) override;
+  Vec3 support(const Vec3 &dir) const override
+  {
+    Vec3 local(Vec3::dot(dir, axis[0]), Vec3::dot(dir, axis[1]),
+               Vec3::dot(dir, axis[2]));
+    Vec3 corner(local.x >= 0 ? half : -half,
+                local.y >= 0 ? half : -half,
+                local.z >= 0 ? half : -half);
+    return center + axis[0] * corner.x + axis[1] * corner.y + axis[2] * corner.z;
+  }
 };
 } // namespace rt

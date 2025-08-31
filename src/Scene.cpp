@@ -1,6 +1,7 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
 #include "rt/Plane.hpp"
+#include "rt/Collision.hpp"
 #include <algorithm>
 #include <limits>
 
@@ -110,20 +111,17 @@ bool Scene::collides(int index) const
   if (obj->is_beam())
     return false;
 
+  static thread_local std::vector<HittablePtr> candidates;
+  candidates.clear();
+
   if (obj->is_plane())
   {
     auto pl = std::static_pointer_cast<Plane>(obj);
-    for (size_t i = 0; i < objects.size(); ++i)
+    for (auto &other : objects)
     {
-      if (static_cast<int>(i) == index)
+      if (other.get() == obj.get() || other->is_beam() || other->is_plane())
         continue;
-      auto other = objects[i];
-      if (other->is_beam() || other->is_plane())
-        continue;
-      AABB obox;
-      if (!other->bounding_box(obox))
-        continue;
-      if (obox.intersects_plane(pl->point, pl->normal))
+      if (plane_convex(*pl, *other))
         return true;
     }
     return false;
@@ -133,26 +131,42 @@ bool Scene::collides(int index) const
   if (!obj->bounding_box(box))
     return false;
 
-  for (size_t i = 0; i < objects.size(); ++i)
+  if (accel)
   {
-    if (static_cast<int>(i) == index)
-      continue;
-    auto other = objects[i];
-    if (other->is_beam())
+    auto bvh = std::static_pointer_cast<BVHNode>(accel);
+    bvh->query(box, candidates);
+  }
+  else
+  {
+    for (auto &o : objects)
+      if (!o->is_plane())
+        candidates.push_back(o);
+  }
+
+  for (auto &other : candidates)
+  {
+    if (other.get() == obj.get() || other->is_beam())
       continue;
     if (other->is_plane())
     {
       auto pl = std::static_pointer_cast<Plane>(other);
-      if (box.intersects_plane(pl->point, pl->normal))
+      if (plane_convex(*pl, *obj))
         return true;
       continue;
     }
-    AABB other_box;
-    if (!other->bounding_box(other_box))
-      continue;
-    if (box.intersects(other_box))
+    if (narrow_phase(*obj, *other))
       return true;
   }
+
+  for (auto &other : objects)
+  {
+    if (!other->is_plane())
+      continue;
+    auto pl = std::static_pointer_cast<Plane>(other);
+    if (plane_convex(*pl, *obj))
+      return true;
+  }
+
   return false;
 }
 

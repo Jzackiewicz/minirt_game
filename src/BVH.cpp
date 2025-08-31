@@ -69,6 +69,28 @@ bool BVHNode::bounding_box(AABB &out) const
   return true;
 }
 
+void BVHNode::query(const AABB &target, std::vector<HittablePtr> &out) const
+{
+  if (!box.intersects(target))
+    return;
+  if (left->is_bvh())
+    static_cast<BVHNode *>(left.get())->query(target, out);
+  else
+  {
+    AABB lb;
+    if (left->bounding_box(lb) && lb.intersects(target))
+      out.push_back(left);
+  }
+  if (right->is_bvh())
+    static_cast<BVHNode *>(right.get())->query(target, out);
+  else
+  {
+    AABB rb;
+    if (right->bounding_box(rb) && rb.intersects(target))
+      out.push_back(right);
+  }
+}
+
 int BVHNode::choose_axis(std::vector<HittablePtr> &objs, size_t start,
                          size_t end)
 {

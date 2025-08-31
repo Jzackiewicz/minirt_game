@@ -31,8 +31,19 @@ struct Hittable
   virtual bool hit(const Ray &r, double tmin, double tmax,
                    HitRecord &rec) const = 0;
   virtual bool bounding_box(AABB &out) const = 0;
+  // Farthest point in given direction for convex collision queries
+  virtual Vec3 support(const Vec3 &dir) const
+  {
+    AABB box;
+    bounding_box(box);
+    return Vec3(dir.x >= 0 ? box.max.x : box.min.x,
+                dir.y >= 0 ? box.max.y : box.min.y,
+                dir.z >= 0 ? box.max.z : box.min.z);
+  }
   virtual bool is_beam() const { return false; }
   virtual bool is_plane() const { return false; }
+  virtual bool is_bvh() const { return false; }
+  virtual bool is_sphere() const { return false; }
   // default translation does nothing
   virtual void translate(const Vec3 &delta) { (void)delta; }
   // default rotation does nothing
