@@ -5,6 +5,7 @@
 #include "rt/Cylinder.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Sphere.hpp"
+#include "rt/Mat4.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -182,7 +183,12 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_pos, c) && to_double(s_r, r) &&
           parse_rgba(s_rgb, rgb, a))
       {
-        auto s = std::make_shared<Sphere>(c, r, oid++, mid);
+        Mat4 T = Mat4::translation(c);
+        Mat4 S = Mat4::scaling(Vec3(r, r, r));
+        Mat4 M = T * S;
+        Vec3 center = M.transform_point(Vec3(0, 0, 0));
+        double radius = M.transform_vector(Vec3(1, 0, 0)).length();
+        auto s = std::make_shared<Sphere>(center, radius, oid++, mid);
         s->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
@@ -208,7 +214,12 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_p, p) && parse_triple(s_n, n) &&
           parse_rgba(s_rgb, rgb, a))
       {
-        auto pl = std::make_shared<Plane>(p, n, oid++, mid);
+        Mat4 R = Mat4::rotation_from_to(Vec3(0, 1, 0), n);
+        Mat4 T = Mat4::translation(p);
+        Mat4 M = T * R;
+        Vec3 point = M.transform_point(Vec3(0, 0, 0));
+        Vec3 normal = R.transform_vector(Vec3(0, 1, 0)).normalized();
+        auto pl = std::make_shared<Plane>(point, normal, oid++, mid);
         pl->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
@@ -235,7 +246,17 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_pos, c) && parse_triple(s_dir, dir) &&
           to_double(s_d, d) && to_double(s_h, h) && parse_rgba(s_rgb, rgb, a))
       {
-        auto cy = std::make_shared<Cylinder>(c, dir, d / 2.0, h, oid++, mid);
+        Mat4 S = Mat4::scaling(Vec3(d / 2.0, h, d / 2.0));
+        Mat4 R = Mat4::rotation_from_to(Vec3(0, 1, 0), dir);
+        Mat4 T = Mat4::translation(c);
+        Mat4 M = T * R * S;
+        Vec3 top = M.transform_point(Vec3(0, 0.5, 0));
+        Vec3 bottom = M.transform_point(Vec3(0, -0.5, 0));
+        Vec3 center = (top + bottom) * 0.5;
+        Vec3 axis = (top - bottom).normalized();
+        double height = (top - bottom).length();
+        double radius = M.transform_vector(Vec3(1, 0, 0)).length();
+        auto cy = std::make_shared<Cylinder>(center, axis, radius, height, oid++, mid);
         cy->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
@@ -261,7 +282,18 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       double alpha = 255;
       if (parse_triple(s_pos, c) && to_double(s_a, a) && parse_rgba(s_rgb, rgb, alpha))
       {
-        auto cu = std::make_shared<Cube>(c, a, oid++, mid);
+        Mat4 S = Mat4::scaling(Vec3(a, a, a));
+        Mat4 T = Mat4::translation(c);
+        Mat4 M = T * S;
+        Vec3 center = M.transform_point(Vec3(0, 0, 0));
+        Vec3 ex = M.transform_vector(Vec3(1, 0, 0));
+        Vec3 ey = M.transform_vector(Vec3(0, 1, 0));
+        Vec3 ez = M.transform_vector(Vec3(0, 0, 1));
+        double side = ex.length();
+        auto cu = std::make_shared<Cube>(center, side, oid++, mid);
+        cu->axis[0] = ex.normalized();
+        cu->axis[1] = ey.normalized();
+        cu->axis[2] = ez.normalized();
         cu->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
@@ -282,7 +314,16 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_pos, o) && parse_triple(s_dir, dir) &&
           parse_rgba(s_rgb, rgb, a) && to_double(s_g, g) && to_double(s_L, L))
       {
-        auto bm = std::make_shared<Beam>(o, dir, g, L, oid++, mid);
+        Mat4 S = Mat4::scaling(Vec3(g, L, g));
+        Mat4 R = Mat4::rotation_from_to(Vec3(0, 1, 0), dir);
+        Mat4 T = Mat4::translation(o);
+        Mat4 M = T * R * S;
+        Vec3 origin = M.transform_point(Vec3(0, 0, 0));
+        Vec3 end = M.transform_point(Vec3(0, 1, 0));
+        Vec3 direction = (end - origin).normalized();
+        double length = (end - origin).length();
+        double radius = M.transform_vector(Vec3(1, 0, 0)).length();
+        auto bm = std::make_shared<Beam>(origin, direction, radius, length, oid++, mid);
         materials.emplace_back();
         Vec3 unit = rgb_to_unit(rgb);
         materials.back().color = unit;
@@ -309,7 +350,17 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_pos, c) && parse_triple(s_dir, dir) &&
           to_double(s_d, d) && to_double(s_h, h) && parse_rgba(s_rgb, rgb, a))
       {
-        auto co = std::make_shared<Cone>(c, dir, d / 2.0, h, oid++, mid);
+        Mat4 S = Mat4::scaling(Vec3(d / 2.0, h, d / 2.0));
+        Mat4 R = Mat4::rotation_from_to(Vec3(0, 1, 0), dir);
+        Mat4 T = Mat4::translation(c);
+        Mat4 M = T * R * S;
+        Vec3 top = M.transform_point(Vec3(0, 0.5, 0));
+        Vec3 bottom = M.transform_point(Vec3(0, -0.5, 0));
+        Vec3 center = (top + bottom) * 0.5;
+        Vec3 axis = (top - bottom).normalized();
+        double height = (top - bottom).length();
+        double radius = M.transform_vector(Vec3(1, 0, 0)).length();
+        auto co = std::make_shared<Cone>(center, axis, radius, height, oid++, mid);
         co->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
