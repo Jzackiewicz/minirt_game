@@ -1,6 +1,7 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
 #include "rt/Plane.hpp"
+#include "rt/Collision.hpp"
 #include <algorithm>
 #include <limits>
 
@@ -113,17 +114,11 @@ bool Scene::collides(int index) const
   if (obj->is_plane())
   {
     auto pl = std::static_pointer_cast<Plane>(obj);
-    for (size_t i = 0; i < objects.size(); ++i)
+    for (auto &other : objects)
     {
-      if (static_cast<int>(i) == index)
+      if (other.get() == obj.get() || other->is_beam() || other->is_plane())
         continue;
-      auto other = objects[i];
-      if (other->is_beam() || other->is_plane())
-        continue;
-      AABB obox;
-      if (!other->bounding_box(obox))
-        continue;
-      if (obox.intersects_plane(pl->point, pl->normal))
+      if (precise_collision(pl, other))
         return true;
     }
     return false;
@@ -133,26 +128,35 @@ bool Scene::collides(int index) const
   if (!obj->bounding_box(box))
     return false;
 
-  for (size_t i = 0; i < objects.size(); ++i)
+  std::vector<HittablePtr> candidates;
+  candidates.reserve(16);
+  if (accel && accel->is_bvh())
   {
-    if (static_cast<int>(i) == index)
+    static_cast<BVHNode const *>(accel.get())->query(box, candidates);
+  }
+  else
+  {
+    for (auto &o : objects)
+      if (!o->is_plane())
+        candidates.push_back(o);
+  }
+
+  for (auto &cand : candidates)
+  {
+    if (cand.get() == obj.get())
       continue;
-    auto other = objects[i];
-    if (other->is_beam())
-      continue;
-    if (other->is_plane())
-    {
-      auto pl = std::static_pointer_cast<Plane>(other);
-      if (box.intersects_plane(pl->point, pl->normal))
-        return true;
-      continue;
-    }
-    AABB other_box;
-    if (!other->bounding_box(other_box))
-      continue;
-    if (box.intersects(other_box))
+    if (precise_collision(obj, cand))
       return true;
   }
+
+  for (auto &o : objects)
+  {
+    if (!o->is_plane())
+      continue;
+    if (precise_collision(obj, o))
+      return true;
+  }
+
   return false;
 }
 

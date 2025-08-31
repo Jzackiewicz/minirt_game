@@ -1,0 +1,276 @@
+#include "rt/Collision.hpp"
+#include "rt/Sphere.hpp"
+#include "rt/Cube.hpp"
+#include "rt/Cylinder.hpp"
+#include "rt/Cone.hpp"
+#include "rt/Plane.hpp"
+#include "rt/AABB.hpp"
+#include <array>
+#include <cmath>
+#include <algorithm>
+
+namespace rt
+{
+namespace
+{
+
+static Vec3 support(const Sphere &s, const Vec3 &dir)
+{
+  Vec3 d = dir.length_squared() > 0 ? dir.normalized() : Vec3(1, 0, 0);
+  return s.center + d * s.radius;
+}
+
+static Vec3 support(const Cube &c, const Vec3 &dir)
+{
+  Vec3 res = c.center;
+  for (int i = 0; i < 3; ++i)
+  {
+    double sign = Vec3::dot(c.axis[i], dir) > 0 ? 1.0 : -1.0;
+    res += c.axis[i] * (c.half * sign);
+  }
+  return res;
+}
+
+static Vec3 support(const Cylinder &cy, const Vec3 &dir)
+{
+  double axial = Vec3::dot(dir, cy.axis);
+  Vec3 res = cy.center + cy.axis * (axial > 0 ? cy.height * 0.5 : -cy.height * 0.5);
+  Vec3 radial = dir - cy.axis * axial;
+  if (radial.length_squared() > 1e-9)
+    res += radial.normalized() * cy.radius;
+  return res;
+}
+
+static Vec3 support(const Cone &co, const Vec3 &dir)
+{
+  double axial = Vec3::dot(dir, co.axis);
+  Vec3 apex = co.center + co.axis * (co.height * 0.5);
+  Vec3 base = co.center - co.axis * (co.height * 0.5);
+  if (axial > 0)
+    return apex;
+  Vec3 radial = dir - co.axis * axial;
+  if (radial.length_squared() > 1e-9)
+    radial = radial.normalized() * co.radius;
+  return base + radial;
+}
+
+static Vec3 support_box(const AABB &b, const Vec3 &dir)
+{
+  return Vec3(dir.x > 0 ? b.max.x : b.min.x,
+              dir.y > 0 ? b.max.y : b.min.y,
+              dir.z > 0 ? b.max.z : b.min.z);
+}
+
+static Vec3 support(const Hittable &h, const Vec3 &dir)
+{
+  switch (h.shape_type())
+  {
+  case ShapeType::Sphere:
+    return support(*static_cast<const Sphere *>(&h), dir);
+  case ShapeType::Cube:
+    return support(*static_cast<const Cube *>(&h), dir);
+  case ShapeType::Cylinder:
+    return support(*static_cast<const Cylinder *>(&h), dir);
+  case ShapeType::Cone:
+    return support(*static_cast<const Cone *>(&h), dir);
+  default:
+  {
+    AABB box;
+    if (h.bounding_box(box))
+      return support_box(box, dir);
+    return Vec3(0, 0, 0);
+  }
+  }
+}
+
+static bool same_direction(const Vec3 &a, const Vec3 &b)
+{
+  return Vec3::dot(a, b) > 0;
+}
+
+static bool handle_simplex(std::array<Vec3, 4> &simplex, int &size, Vec3 &dir)
+{
+  Vec3 A = simplex[size - 1];
+  Vec3 AO = (-1) * A;
+  if (size == 2)
+  {
+    Vec3 B = simplex[0];
+    Vec3 AB = B - A;
+    if (same_direction(AB, AO))
+      dir = Vec3::cross(Vec3::cross(AB, AO), AB);
+    else
+    {
+      simplex[0] = A;
+      size = 1;
+      dir = AO;
+    }
+    return false;
+  }
+  if (size == 3)
+  {
+    Vec3 B = simplex[0];
+    Vec3 C = simplex[1];
+    Vec3 AB = B - A;
+    Vec3 AC = C - A;
+    Vec3 ABC = Vec3::cross(AB, AC);
+    if (same_direction(Vec3::cross(ABC, AC), AO))
+    {
+      simplex[0] = A;
+      simplex[1] = C;
+      size = 2;
+      dir = Vec3::cross(Vec3::cross(AC, AO), AC);
+      return false;
+    }
+    if (same_direction(Vec3::cross(AB, ABC), AO))
+    {
+      simplex[1] = A;
+      size = 2;
+      dir = Vec3::cross(Vec3::cross(AB, AO), AB);
+      return false;
+    }
+    if (same_direction(ABC, AO))
+    {
+      dir = ABC;
+    }
+    else
+    {
+      std::swap(simplex[0], simplex[1]);
+      dir = (-1) * ABC;
+    }
+    return false;
+  }
+  if (size == 4)
+  {
+    Vec3 B = simplex[0];
+    Vec3 C = simplex[1];
+    Vec3 D = simplex[2];
+    Vec3 AB = B - A;
+    Vec3 AC = C - A;
+    Vec3 AD = D - A;
+    Vec3 ABC = Vec3::cross(AB, AC);
+    Vec3 ACD = Vec3::cross(AC, AD);
+    Vec3 ADB = Vec3::cross(AD, AB);
+    if (same_direction(ABC, AO))
+    {
+      simplex[0] = A;
+      simplex[1] = B;
+      simplex[2] = C;
+      size = 3;
+      dir = ABC;
+      return false;
+    }
+    if (same_direction(ACD, AO))
+    {
+      simplex[0] = A;
+      simplex[1] = C;
+      simplex[2] = D;
+      size = 3;
+      dir = ACD;
+      return false;
+    }
+    if (same_direction(ADB, AO))
+    {
+      simplex[0] = A;
+      simplex[1] = D;
+      simplex[2] = B;
+      size = 3;
+      dir = ADB;
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+static bool gjk(const Hittable &a, const Hittable &b)
+{
+  Vec3 dir(1, 0, 0);
+  std::array<Vec3, 4> simplex;
+  int size = 0;
+  simplex[size++] = support(a, dir) - support(b, (-1) * dir);
+  dir = (-1) * simplex[0];
+  for (int iterations = 0; iterations < 20; ++iterations)
+  {
+    Vec3 p = support(a, dir) - support(b, (-1) * dir);
+    if (Vec3::dot(p, dir) <= 0)
+      return false;
+    simplex[size++] = p;
+    if (handle_simplex(simplex, size, dir))
+      return true;
+  }
+  return false;
+}
+
+} // namespace
+
+bool precise_collision(const HittablePtr &a, const HittablePtr &b)
+{
+  if (!a || !b)
+    return false;
+
+  ShapeType ta = a->shape_type();
+  ShapeType tb = b->shape_type();
+
+  if (ta == ShapeType::Plane || tb == ShapeType::Plane)
+  {
+    const Plane *pl =
+        (ta == ShapeType::Plane) ? static_cast<const Plane *>(a.get())
+                                 : static_cast<const Plane *>(b.get());
+    HittablePtr other = (ta == ShapeType::Plane) ? b : a;
+    switch (other->shape_type())
+    {
+    case ShapeType::Sphere:
+    {
+      const Sphere *s = static_cast<const Sphere *>(other.get());
+      double dist = Vec3::dot(s->center - pl->point, pl->normal);
+      return std::fabs(dist) <= s->radius;
+    }
+    case ShapeType::Cube:
+    {
+      const Cube *c = static_cast<const Cube *>(other.get());
+      double dist = Vec3::dot(c->center - pl->point, pl->normal);
+      double r = std::fabs(Vec3::dot(c->axis[0], pl->normal)) * c->half +
+                 std::fabs(Vec3::dot(c->axis[1], pl->normal)) * c->half +
+                 std::fabs(Vec3::dot(c->axis[2], pl->normal)) * c->half;
+      return std::fabs(dist) <= r;
+    }
+    case ShapeType::Cylinder:
+    {
+      const Cylinder *cy = static_cast<const Cylinder *>(other.get());
+      double axial = std::fabs(Vec3::dot(cy->axis, pl->normal));
+      double radial = std::sqrt(std::max(0.0, 1.0 - axial * axial)) * cy->radius;
+      double extent = axial * (cy->height * 0.5) + radial;
+      double dist = std::fabs(Vec3::dot(cy->center - pl->point, pl->normal));
+      return dist <= extent;
+    }
+    case ShapeType::Cone:
+    {
+      const Cone *co = static_cast<const Cone *>(other.get());
+      double axial = std::fabs(Vec3::dot(co->axis, pl->normal));
+      double radial = std::sqrt(std::max(0.0, 1.0 - axial * axial)) * co->radius;
+      double extent = axial * (co->height * 0.5) + radial;
+      double dist = std::fabs(Vec3::dot(co->center - pl->point, pl->normal));
+      return dist <= extent;
+    }
+    default:
+    {
+      AABB box;
+      if (other->bounding_box(box))
+        return box.intersects_plane(pl->point, pl->normal);
+      return false;
+    }
+    }
+  }
+
+  if (ta == ShapeType::Sphere && tb == ShapeType::Sphere)
+  {
+    const Sphere *sa = static_cast<const Sphere *>(a.get());
+    const Sphere *sb = static_cast<const Sphere *>(b.get());
+    double rad = sa->radius + sb->radius;
+    return (sa->center - sb->center).length_squared() <= rad * rad;
+  }
+
+  return gjk(*a, *b);
+}
+
+} // namespace rt
