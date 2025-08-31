@@ -408,17 +408,27 @@ void Renderer::render_window(std::vector<Material> &mats,
     }
 
     const Uint8 *state = SDL_GetKeyboardState(nullptr);
+    Vec3 forward_xz = cam.forward;
+    forward_xz.y = 0.0;
+    if (forward_xz.length_squared() > 0.0)
+      forward_xz = forward_xz.normalized();
+    Vec3 right_xz = cam.right; // already horizontal
+
     if (edit_mode)
     {
       double cam_speed = CAMERA_MOVE_SPEED * dt;
       if (state[SDL_SCANCODE_W])
-        cam.move(cam.forward * cam_speed);
+        cam.move(forward_xz * cam_speed);
       if (state[SDL_SCANCODE_S])
-        cam.move(cam.forward * -cam_speed);
+        cam.move(forward_xz * -cam_speed);
       if (state[SDL_SCANCODE_A])
-        cam.move(cam.right * -cam_speed);
+        cam.move(right_xz * -cam_speed);
       if (state[SDL_SCANCODE_D])
-        cam.move(cam.right * cam_speed);
+        cam.move(right_xz * cam_speed);
+      if (state[SDL_SCANCODE_SPACE])
+        cam.move(Vec3(0, 1, 0) * cam_speed);
+      if (state[SDL_SCANCODE_LCTRL])
+        cam.move(Vec3(0, -1, 0) * cam_speed);
 
       double rot_speed = OBJECT_ROTATE_SPEED * dt;
       bool changed = false;
@@ -450,13 +460,17 @@ void Renderer::render_window(std::vector<Material> &mats,
         running = false;
       double speed = CAMERA_MOVE_SPEED * dt;
       if (state[SDL_SCANCODE_W])
-        cam.move(cam.forward * speed);
+        cam.move(forward_xz * speed);
       if (state[SDL_SCANCODE_S])
-        cam.move(cam.forward * -speed);
+        cam.move(forward_xz * -speed);
       if (state[SDL_SCANCODE_A])
-        cam.move(cam.right * -speed);
+        cam.move(right_xz * -speed);
       if (state[SDL_SCANCODE_D])
-        cam.move(cam.right * speed);
+        cam.move(right_xz * speed);
+      if (state[SDL_SCANCODE_SPACE])
+        cam.move(Vec3(0, 1, 0) * speed);
+      if (state[SDL_SCANCODE_LCTRL])
+        cam.move(Vec3(0, -1, 0) * speed);
     }
 
     if (edit_mode)
