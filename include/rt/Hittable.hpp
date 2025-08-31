@@ -10,6 +10,18 @@ namespace rt
 
 struct Material;
 
+enum class ShapeKind
+{
+  Generic,
+  Sphere,
+  Cube,
+  Cylinder,
+  Cone,
+  Plane,
+  Beam,
+  BVH
+};
+
 struct HitRecord
 {
   Vec3 p;
@@ -33,6 +45,12 @@ struct Hittable
   virtual bool bounding_box(AABB &out) const = 0;
   virtual bool is_beam() const { return false; }
   virtual bool is_plane() const { return false; }
+  virtual ShapeKind kind() const { return ShapeKind::Generic; }
+  virtual Vec3 support(const Vec3 &dir) const
+  {
+    (void)dir;
+    return Vec3(0.0, 0.0, 0.0);
+  }
   // default translation does nothing
   virtual void translate(const Vec3 &delta) { (void)delta; }
   // default rotation does nothing

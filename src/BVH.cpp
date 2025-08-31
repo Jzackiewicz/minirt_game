@@ -3,7 +3,7 @@
 
 namespace rt
 {
-BVHNode::BVHNode() {}
+BVHNode::BVHNode() : left_leaf(true), right_leaf(true) {}
 
 BVHNode::BVHNode(std::vector<HittablePtr> &objects, size_t start, size_t end)
 {
@@ -25,6 +25,7 @@ BVHNode::BVHNode(std::vector<HittablePtr> &objects, size_t start, size_t end)
   if (object_span == 1)
   {
     left = right = objects[start];
+    left_leaf = right_leaf = true;
   }
   else if (object_span == 2)
   {
@@ -38,6 +39,7 @@ BVHNode::BVHNode(std::vector<HittablePtr> &objects, size_t start, size_t end)
       left = objects[start + 1];
       right = objects[start];
     }
+    left_leaf = right_leaf = true;
   }
   else
   {
@@ -45,6 +47,7 @@ BVHNode::BVHNode(std::vector<HittablePtr> &objects, size_t start, size_t end)
     size_t mid = start + object_span / 2;
     left = std::make_shared<BVHNode>(objects, start, mid);
     right = std::make_shared<BVHNode>(objects, mid, end);
+    left_leaf = right_leaf = false;
   }
   AABB boxLeft, boxRight;
   left->bounding_box(boxLeft);
@@ -67,6 +70,49 @@ bool BVHNode::bounding_box(AABB &out) const
 {
   out = box;
   return true;
+}
+
+void BVHNode::query(const AABB &b, std::vector<HittablePtr> &out,
+                    const Hittable *ignore) const
+{
+  if (!box.intersects(b))
+    return;
+  if (left_leaf && right_leaf && left.get() == right.get())
+  {
+    if (left.get() != ignore)
+    {
+      AABB lb;
+      if (left->bounding_box(lb) && lb.intersects(b))
+        out.push_back(left);
+    }
+    return;
+  }
+  if (left_leaf)
+  {
+    if (left.get() != ignore)
+    {
+      AABB lb;
+      if (left->bounding_box(lb) && lb.intersects(b))
+        out.push_back(left);
+    }
+  }
+  else
+  {
+    std::static_pointer_cast<BVHNode>(left)->query(b, out, ignore);
+  }
+  if (right_leaf)
+  {
+    if (right.get() != ignore && right.get() != left.get())
+    {
+      AABB rb;
+      if (right->bounding_box(rb) && rb.intersects(b))
+        out.push_back(right);
+    }
+  }
+  else
+  {
+    std::static_pointer_cast<BVHNode>(right)->query(b, out, ignore);
+  }
 }
 
 int BVHNode::choose_axis(std::vector<HittablePtr> &objs, size_t start,

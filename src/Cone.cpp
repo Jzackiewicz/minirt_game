@@ -96,6 +96,29 @@ bool Cone::bounding_box(AABB &out) const
   return true;
 }
 
+Vec3 Cone::support(const Vec3 &dir) const
+{
+  double proj = Vec3::dot(dir, axis);
+  Vec3 apex = center + axis * (height * 0.5);
+  Vec3 base_center = center - axis * (height * 0.5);
+  Vec3 radial = dir - axis * proj;
+  if (proj > 0.0 && radial.length_squared() <= 1e-9)
+    return apex;
+  if (proj > 0.0)
+  {
+    // decide between apex and base rim
+    Vec3 rim_dir = radial.normalized();
+    Vec3 rim_point = base_center + rim_dir * radius;
+    Vec3 candidate = proj * axis + radial;
+    if (Vec3::dot(apex, dir) > Vec3::dot(rim_point, dir))
+      return apex;
+    return rim_point;
+  }
+  if (radial.length_squared() > 1e-9)
+    return base_center + radial.normalized() * radius;
+  return base_center;
+}
+
 void Cone::rotate(const Vec3 &ax, double angle)
 {
   auto rotate_vec = [](const Vec3 &v, const Vec3 &axis, double ang)

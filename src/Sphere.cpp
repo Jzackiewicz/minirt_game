@@ -48,4 +48,10 @@ bool Sphere::bounding_box(AABB &out) const
   return true;
 }
 
+Vec3 Sphere::support(const Vec3 &dir) const
+{
+  Vec3 n = dir.normalized();
+  return center + n * radius;
+}
+
 } // namespace rt

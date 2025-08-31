@@ -1,6 +1,10 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
 #include "rt/Plane.hpp"
+#include "rt/Sphere.hpp"
+#include "rt/Cube.hpp"
+#include "rt/Cylinder.hpp"
+#include "rt/Cone.hpp"
 #include <algorithm>
 #include <limits>
 
@@ -9,6 +13,173 @@ namespace
 inline rt::Vec3 reflect(const rt::Vec3 &v, const rt::Vec3 &n)
 {
   return v - n * (2.0 * rt::Vec3::dot(v, n));
+}
+
+inline bool sphere_sphere(const rt::Sphere &a, const rt::Sphere &b)
+{
+  rt::Vec3 diff = a.center - b.center;
+  double rad = a.radius + b.radius;
+  return diff.length_squared() <= rad * rad;
+}
+
+inline bool sphere_cube(const rt::Sphere &s, const rt::Cube &c)
+{
+  rt::Vec3 d = s.center - c.center;
+  double local[3] = {rt::Vec3::dot(d, c.axis[0]), rt::Vec3::dot(d, c.axis[1]),
+                     rt::Vec3::dot(d, c.axis[2])};
+  double clamped[3];
+  for (int i = 0; i < 3; ++i)
+    clamped[i] = std::clamp(local[i], -c.half, c.half);
+  rt::Vec3 closest = c.center + c.axis[0] * clamped[0] +
+                     c.axis[1] * clamped[1] + c.axis[2] * clamped[2];
+  rt::Vec3 diff = s.center - closest;
+  return diff.length_squared() <= s.radius * s.radius;
+}
+
+inline bool object_plane(const rt::Hittable &obj, const rt::Plane &pl)
+{
+  rt::Vec3 pt = obj.support((-1.0) * pl.normal);
+  double dist = rt::Vec3::dot(pt - pl.point, pl.normal);
+  return dist <= 0.0;
+}
+
+inline rt::Vec3 support_minkowski(const rt::Hittable &a, const rt::Hittable &b,
+                                  const rt::Vec3 &dir)
+{
+  return a.support(dir) - b.support((-1.0) * dir);
+}
+
+inline bool update_simplex(rt::Vec3 *simplex, int &n, rt::Vec3 &dir)
+{
+  using namespace rt;
+  if (n == 2)
+  {
+    Vec3 a = simplex[1];
+    Vec3 b = simplex[0];
+    Vec3 ab = b - a;
+    Vec3 ao = a * (-1.0);
+    dir = Vec3::cross(Vec3::cross(ab, ao), ab);
+  }
+  else if (n == 3)
+  {
+    Vec3 a = simplex[2];
+    Vec3 b = simplex[1];
+    Vec3 c = simplex[0];
+    Vec3 ab = b - a;
+    Vec3 ac = c - a;
+    Vec3 ao = a * (-1.0);
+    Vec3 abc = Vec3::cross(ab, ac);
+    Vec3 abp = Vec3::cross(abc, ab);
+    if (Vec3::dot(abp, ao) > 0)
+    {
+      simplex[0] = a;
+      simplex[1] = b;
+      n = 2;
+      dir = Vec3::cross(Vec3::cross(ab, ao), ab);
+    }
+    else
+    {
+      Vec3 acp = Vec3::cross(ac, abc);
+      if (Vec3::dot(acp, ao) > 0)
+      {
+        simplex[1] = a;
+        simplex[0] = c;
+        n = 2;
+        dir = Vec3::cross(Vec3::cross(ac, ao), ac);
+      }
+      else
+      {
+        if (Vec3::dot(abc, ao) > 0)
+          dir = abc;
+        else
+        {
+          std::swap(simplex[0], simplex[1]);
+          dir = abc * -1.0;
+        }
+      }
+    }
+  }
+  else if (n == 4)
+  {
+    Vec3 a = simplex[3];
+    Vec3 b = simplex[2];
+    Vec3 c = simplex[1];
+    Vec3 d = simplex[0];
+    Vec3 ao = a * (-1.0);
+    Vec3 ab = b - a;
+    Vec3 ac = c - a;
+    Vec3 ad = d - a;
+    Vec3 abc = Vec3::cross(ab, ac);
+    Vec3 acd = Vec3::cross(ac, ad);
+    Vec3 adb = Vec3::cross(ad, ab);
+    if (Vec3::dot(abc, ao) > 0)
+    {
+      simplex[0] = c;
+      simplex[1] = b;
+      simplex[2] = a;
+      n = 3;
+      dir = abc;
+    }
+    else if (Vec3::dot(acd, ao) > 0)
+    {
+      simplex[0] = d;
+      simplex[1] = c;
+      simplex[2] = a;
+      n = 3;
+      dir = acd;
+    }
+    else if (Vec3::dot(adb, ao) > 0)
+    {
+      simplex[0] = b;
+      simplex[1] = d;
+      simplex[2] = a;
+      n = 3;
+      dir = adb;
+    }
+    else
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+inline bool gjk(const rt::Hittable &a, const rt::Hittable &b)
+{
+  using namespace rt;
+  Vec3 dir(1, 0, 0);
+  Vec3 simplex[4];
+  int n = 0;
+  simplex[n++] = support_minkowski(a, b, dir);
+  dir = simplex[0] * -1.0;
+  for (int iter = 0; iter < 32; ++iter)
+  {
+    Vec3 pt = support_minkowski(a, b, dir);
+    if (Vec3::dot(pt, dir) <= 0)
+      return false;
+    simplex[n++] = pt;
+    if (update_simplex(simplex, n, dir))
+      return true;
+  }
+  return false;
+}
+
+inline bool narrow_phase(const rt::Hittable &a, const rt::Hittable &b)
+{
+  if (a.is_plane())
+    return object_plane(b, static_cast<const rt::Plane &>(a));
+  if (b.is_plane())
+    return object_plane(a, static_cast<const rt::Plane &>(b));
+  if (a.kind() == rt::ShapeKind::Sphere && b.kind() == rt::ShapeKind::Sphere)
+    return sphere_sphere(static_cast<const rt::Sphere &>(a),
+                         static_cast<const rt::Sphere &>(b));
+  if (a.kind() == rt::ShapeKind::Sphere && b.kind() == rt::ShapeKind::Cube)
+    return sphere_cube(static_cast<const rt::Sphere &>(a),
+                       static_cast<const rt::Cube &>(b));
+  if (b.kind() == rt::ShapeKind::Sphere && a.kind() == rt::ShapeKind::Cube)
+    return sphere_cube(static_cast<const rt::Sphere &>(b),
+                       static_cast<const rt::Cube &>(a));
+  return gjk(a, b);
 }
 
 } // namespace
@@ -109,7 +280,6 @@ bool Scene::collides(int index) const
   auto obj = objects[index];
   if (obj->is_beam())
     return false;
-
   if (obj->is_plane())
   {
     auto pl = std::static_pointer_cast<Plane>(obj);
@@ -118,12 +288,9 @@ bool Scene::collides(int index) const
       if (static_cast<int>(i) == index)
         continue;
       auto other = objects[i];
-      if (other->is_beam() || other->is_plane())
+      if (other->is_beam())
         continue;
-      AABB obox;
-      if (!other->bounding_box(obox))
-        continue;
-      if (obox.intersects_plane(pl->point, pl->normal))
+      if (narrow_phase(*pl, *other))
         return true;
     }
     return false;
@@ -133,24 +300,36 @@ bool Scene::collides(int index) const
   if (!obj->bounding_box(box))
     return false;
 
-  for (size_t i = 0; i < objects.size(); ++i)
+  static thread_local std::vector<HittablePtr> candidates;
+  candidates.clear();
+  if (accel)
+    std::static_pointer_cast<BVHNode>(accel)->query(box, candidates,
+                                                   obj.get());
+  else
   {
-    if (static_cast<int>(i) == index)
-      continue;
-    auto other = objects[i];
-    if (other->is_beam())
-      continue;
-    if (other->is_plane())
+    for (size_t i = 0; i < objects.size(); ++i)
     {
-      auto pl = std::static_pointer_cast<Plane>(other);
-      if (box.intersects_plane(pl->point, pl->normal))
-        return true;
-      continue;
+      if (static_cast<int>(i) == index)
+        continue;
+      auto other = objects[i];
+      if (other->is_beam() || other->is_plane())
+        continue;
+      candidates.push_back(other);
     }
-    AABB other_box;
-    if (!other->bounding_box(other_box))
-      continue;
-    if (box.intersects(other_box))
+  }
+
+  for (auto &o : objects)
+  {
+    if (o->is_plane())
+    {
+      if (narrow_phase(*obj, *o))
+        return true;
+    }
+  }
+
+  for (auto &other : candidates)
+  {
+    if (narrow_phase(*obj, *other))
       return true;
   }
   return false;

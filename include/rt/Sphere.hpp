@@ -15,6 +15,8 @@ struct Sphere : public Hittable
            HitRecord &rec) const override;
   bool bounding_box(AABB &out) const override;
   void translate(const Vec3 &delta) override { center += delta; }
+  Vec3 support(const Vec3 &dir) const override;
+  ShapeKind kind() const override { return ShapeKind::Sphere; }
 };
 
 } // namespace rt

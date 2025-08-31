@@ -12,6 +12,8 @@ struct BVHNode : public Hittable
   HittablePtr left;
   HittablePtr right;
   AABB box;
+  bool left_leaf;
+  bool right_leaf;
 
   BVHNode();
   BVHNode(std::vector<HittablePtr> &objects, size_t start, size_t end);
@@ -19,6 +21,9 @@ struct BVHNode : public Hittable
   bool hit(const Ray &r, double tmin, double tmax,
            HitRecord &rec) const override;
   bool bounding_box(AABB &out) const override;
+  void query(const AABB &b, std::vector<HittablePtr> &out,
+             const Hittable *ignore) const;
+  ShapeKind kind() const override { return ShapeKind::BVH; }
 
 private:
   static int choose_axis(std::vector<HittablePtr> &objs, size_t start,
