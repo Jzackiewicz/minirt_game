@@ -102,6 +102,29 @@ void Scene::build_bvh()
   accel = std::make_shared<BVHNode>(objs, 0, objs.size());
 }
 
+bool Scene::collides(const Vec3 &point) const
+{
+  for (const auto &obj : objects)
+  {
+    if (obj->is_beam())
+      continue;
+    if (obj->is_plane())
+    {
+      auto pl = std::static_pointer_cast<Plane>(obj);
+      if (Vec3::dot(point - pl->point, pl->normal) < 0)
+        return true;
+      continue;
+    }
+    AABB box;
+    if (!obj->bounding_box(box))
+      continue;
+    if (point.x > box.min.x && point.x < box.max.x && point.y > box.min.y &&
+        point.y < box.max.y && point.z > box.min.z && point.z < box.max.z)
+      return true;
+  }
+  return false;
+}
+
 bool Scene::collides(int index) const
 {
   if (index < 0 || index >= static_cast<int>(objects.size()))

@@ -9,6 +9,7 @@
 
 namespace rt
 {
+struct Vec3;
 struct Scene
 {
   std::vector<HittablePtr> objects;
@@ -20,6 +21,7 @@ struct Scene
   void build_bvh();
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
   bool collides(int index) const;
+  bool collides(const Vec3 &point) const;
 };
 
 } // namespace rt

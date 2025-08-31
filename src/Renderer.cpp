@@ -399,7 +399,9 @@ void Renderer::render_window(std::vector<Material> &mats,
         }
         else if (focused)
         {
-          cam.move(cam.up * step);
+          Vec3 delta = cam.up * step;
+          if (!scene.collides(cam.origin + delta))
+            cam.move(delta);
         }
       }
       else if (focused && e.type == SDL_KEYDOWN &&
@@ -411,14 +413,18 @@ void Renderer::render_window(std::vector<Material> &mats,
     if (edit_mode)
     {
       double cam_speed = CAMERA_MOVE_SPEED * dt;
+      Vec3 move_delta(0, 0, 0);
       if (state[SDL_SCANCODE_W])
-        cam.move(cam.forward * cam_speed);
+        move_delta += cam.forward * cam_speed;
       if (state[SDL_SCANCODE_S])
-        cam.move(cam.forward * -cam_speed);
+        move_delta += cam.forward * -cam_speed;
       if (state[SDL_SCANCODE_A])
-        cam.move(cam.right * -cam_speed);
+        move_delta += cam.right * -cam_speed;
       if (state[SDL_SCANCODE_D])
-        cam.move(cam.right * cam_speed);
+        move_delta += cam.right * cam_speed;
+      if (move_delta.length_squared() > 0 &&
+          !scene.collides(cam.origin + move_delta))
+        cam.move(move_delta);
 
       double rot_speed = OBJECT_ROTATE_SPEED * dt;
       bool changed = false;
@@ -449,14 +455,18 @@ void Renderer::render_window(std::vector<Material> &mats,
       if (state[SDL_SCANCODE_ESCAPE])
         running = false;
       double speed = CAMERA_MOVE_SPEED * dt;
+      Vec3 move_delta(0, 0, 0);
       if (state[SDL_SCANCODE_W])
-        cam.move(cam.forward * speed);
+        move_delta += cam.forward * speed;
       if (state[SDL_SCANCODE_S])
-        cam.move(cam.forward * -speed);
+        move_delta += cam.forward * -speed;
       if (state[SDL_SCANCODE_A])
-        cam.move(cam.right * -speed);
+        move_delta += cam.right * -speed;
       if (state[SDL_SCANCODE_D])
-        cam.move(cam.right * speed);
+        move_delta += cam.right * speed;
+      if (move_delta.length_squared() > 0 &&
+          !scene.collides(cam.origin + move_delta))
+        cam.move(move_delta);
     }
 
     if (edit_mode)
