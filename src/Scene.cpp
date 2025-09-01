@@ -194,6 +194,29 @@ bool Scene::collides(int index) const
   return false;
 }
 
+Vec3 Scene::move_camera_with_collision(const Vec3 &pos, const Vec3 &delta,
+                                       const std::vector<Material> &mats) const
+{
+  if (delta.length_squared() == 0)
+    return Vec3(0, 0, 0);
+  Vec3 dir = delta.normalized();
+  double len = delta.length();
+  Ray r(pos, dir);
+  double tmin = 1e-4;
+  HitRecord rec;
+  while (hit(r, tmin, len, rec))
+  {
+    auto obj = objects[rec.object_id];
+    if (!obj->is_beam() && mats[rec.material_id].alpha >= 1.0)
+    {
+      double allowed = std::max(0.0, rec.t - 1e-4);
+      return dir * allowed;
+    }
+    tmin = rec.t + 1e-4;
+  }
+  return delta;
+}
+
 bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
   bool hit_any = false;

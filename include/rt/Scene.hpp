@@ -21,6 +21,8 @@ struct Scene
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
   bool collides(int index) const;
   Vec3 move_with_collision(int index, const Vec3 &delta);
+  Vec3 move_camera_with_collision(const Vec3 &pos, const Vec3 &delta,
+                                  const std::vector<Material> &mats) const;
 };
 
 } // namespace rt
