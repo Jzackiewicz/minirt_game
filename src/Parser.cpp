@@ -14,6 +14,9 @@
 #include <sstream>
 #include <string_view>
 #include <cstring>
+#include <filesystem>
+#include <unordered_set>
+#include <iomanip>
 
 namespace
 {
@@ -366,5 +369,125 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
 }
 
 const std::vector<Material> &Parser::get_materials() { return materials; }
+
+bool Parser::save_rt_file(const std::string &path, const Scene &scene,
+                          const Camera &cam,
+                          const std::vector<Material> &mats)
+{
+  std::ofstream out(path);
+  if (!out)
+    return false;
+
+  auto vec_to_str = [](const Vec3 &v) {
+    std::ostringstream oss;
+    oss << v.x << ',' << v.y << ',' << v.z;
+    return oss.str();
+  };
+  auto rgba_to_str = [](const Vec3 &c, double a) {
+    std::ostringstream oss;
+    int r = static_cast<int>(std::round(c.x * 255.0));
+    int g = static_cast<int>(std::round(c.y * 255.0));
+    int b = static_cast<int>(std::round(c.z * 255.0));
+    int al = static_cast<int>(std::round(a * 255.0));
+    oss << r << ',' << g << ',' << b << ',' << al;
+    return oss.str();
+  };
+
+  out << "A " << scene.ambient.intensity << ' '
+      << rgba_to_str(scene.ambient.color, 1.0) << '\n';
+
+  out << "C " << vec_to_str(cam.origin) << ' ' << vec_to_str(cam.forward) << ' '
+      << cam.fov_deg << '\n';
+
+  for (const auto &L : scene.lights)
+  {
+    if (L.attached_id != -1)
+      continue;
+    out << "L " << vec_to_str(L.position) << ' ' << L.intensity << ' '
+        << rgba_to_str(L.color, 1.0) << '\n';
+  }
+
+  std::unordered_set<int> beam_sources;
+  for (const auto &obj : scene.objects)
+  {
+    if (obj->is_beam())
+    {
+      auto bm = std::static_pointer_cast<Beam>(obj);
+      if (bm->start > 0.0)
+        continue;
+      if (auto src = bm->source.lock())
+        beam_sources.insert(src->object_id);
+      const Material &m = mats[bm->material_id];
+      out << "bm " << vec_to_str(bm->path.orig) << ' '
+          << vec_to_str(bm->path.dir) << ' '
+          << rgba_to_str(m.base_color, m.alpha) << ' '
+          << bm->radius << ' ' << bm->total_length;
+      if (auto src = bm->source.lock(); src && src->movable)
+        out << " M";
+      out << '\n';
+    }
+  }
+
+  for (const auto &obj : scene.objects)
+  {
+    if (obj->is_beam())
+      continue;
+    if (beam_sources.count(obj->object_id))
+      continue;
+    const Material &m = mats[obj->material_id];
+    std::string mirror = m.mirror ? "R" : "NR";
+    std::string move = obj->movable ? "M" : "IM";
+    switch (obj->shape_type())
+    {
+    case ShapeType::Sphere:
+    {
+      auto sp = static_cast<const Sphere *>(obj.get());
+      out << "sp " << vec_to_str(sp->center) << ' ' << sp->radius << ' '
+          << rgba_to_str(m.base_color, m.alpha) << ' ' << mirror << ' ' << move
+          << '\n';
+      break;
+    }
+    case ShapeType::Plane:
+    {
+      auto pl = static_cast<const Plane *>(obj.get());
+      out << "pl " << vec_to_str(pl->point) << ' ' << vec_to_str(pl->normal)
+          << ' ' << rgba_to_str(m.base_color, m.alpha) << ' ' << mirror << ' '
+          << move << '\n';
+      break;
+    }
+    case ShapeType::Cylinder:
+    {
+      auto cy = static_cast<const Cylinder *>(obj.get());
+      out << "cy " << vec_to_str(cy->center) << ' ' << vec_to_str(cy->axis)
+          << ' ' << (cy->radius * 2.0) << ' ' << cy->height << ' '
+          << rgba_to_str(m.base_color, m.alpha) << ' ' << mirror << ' ' << move
+          << '\n';
+      break;
+    }
+    case ShapeType::Cube:
+    {
+      auto cu = static_cast<const Cube *>(obj.get());
+      out << "cu " << vec_to_str(cu->center) << ' ' << vec_to_str(cu->axis[2])
+          << ' ' << (cu->half.x * 2.0) << ' ' << (cu->half.y * 2.0) << ' '
+          << (cu->half.z * 2.0) << ' ' << rgba_to_str(m.base_color, m.alpha)
+          << ' ' << mirror << ' ' << move << '\n';
+      break;
+    }
+    case ShapeType::Cone:
+    {
+      auto co = static_cast<const Cone *>(obj.get());
+      out << "co " << vec_to_str(co->center) << ' ' << vec_to_str(co->axis)
+          << ' ' << (co->radius * 2.0) << ' ' << co->height << ' '
+          << rgba_to_str(m.base_color, m.alpha) << ' ' << mirror << ' ' << move
+          << '\n';
+      break;
+    }
+    default:
+      break;
+    }
+  }
+
+  return true;
+}
 
 } // namespace rt

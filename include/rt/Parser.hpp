@@ -15,6 +15,9 @@ public:
                             Camera &outCamera, int width, int height);
 
   static const std::vector<Material> &get_materials();
+  static bool save_rt_file(const std::string &path, const Scene &scene,
+                           const Camera &cam,
+                           const std::vector<Material> &mats);
 
 private:
   // TO JEST KLUCZOWE: deklaracja storage'u
