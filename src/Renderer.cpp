@@ -276,11 +276,6 @@ void Renderer::render_window(std::vector<Material> &mats,
     double dt = (now - last) / 1000.0;
     last = now;
 
-    Vec3 prev_cam_origin = cam.origin;
-    Vec3 prev_cam_forward = cam.forward;
-    Vec3 prev_cam_up = cam.up;
-    Vec3 prev_cam_right = cam.right;
-    double prev_edit_dist = edit_dist;
 
     while (SDL_PollEvent(&e))
     {
@@ -318,14 +313,13 @@ void Renderer::render_window(std::vector<Material> &mats,
             Vec3 delta = desired - center;
             if (delta.length_squared() > 0)
             {
-              scene.objects[selected_obj]->translate(delta);
-              if (scene.collides(selected_obj))
-                scene.objects[selected_obj]->translate(delta * -1);
-              else
+              Vec3 applied = scene.move_with_collision(selected_obj, delta);
+              center += applied;
+              if (applied.length_squared() > 0)
               {
                 scene.update_beams(mats);
                 scene.build_bvh();
-                center = desired;
+                edit_dist = (center - cam.origin).length();
               }
             }
             edit_pos = center;
@@ -479,22 +473,18 @@ void Renderer::render_window(std::vector<Material> &mats,
       Vec3 delta = desired - edit_pos;
       if (delta.length_squared() > 0)
       {
-        scene.objects[selected_obj]->translate(delta);
-        if (scene.collides(selected_obj))
+        Vec3 applied = scene.move_with_collision(selected_obj, delta);
+        edit_pos += applied;
+        cam.origin = edit_pos - cam.forward * edit_dist;
+        if (applied.length_squared() > 0)
         {
-          scene.objects[selected_obj]->translate(delta * -1);
-          cam.origin = prev_cam_origin;
-          cam.forward = prev_cam_forward;
-          cam.up = prev_cam_up;
-          cam.right = prev_cam_right;
-          edit_dist = prev_edit_dist;
-        }
-        else
-        {
-          edit_pos = desired;
           scene.update_beams(mats);
           scene.build_bvh();
         }
+      }
+      else
+      {
+        cam.origin = edit_pos - cam.forward * edit_dist;
       }
     }
 
