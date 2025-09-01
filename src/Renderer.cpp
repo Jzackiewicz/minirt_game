@@ -270,6 +270,40 @@ void Renderer::render_window(std::vector<Material> &mats,
   Vec3 edit_pos;
   bool rotating = false;
 
+  // Attempt to translate an object while sliding along obstacles.
+  // Returns the actual movement applied after collision resolution.
+  auto slide_translate = [&](int idx, const Vec3 &delta) {
+    Vec3 moved(0.0, 0.0, 0.0);
+    if (delta.x != 0.0)
+    {
+      Vec3 step(delta.x, 0.0, 0.0);
+      scene.objects[idx]->translate(step);
+      if (scene.collides(idx))
+        scene.objects[idx]->translate(step * -1.0);
+      else
+        moved += step;
+    }
+    if (delta.y != 0.0)
+    {
+      Vec3 step(0.0, delta.y, 0.0);
+      scene.objects[idx]->translate(step);
+      if (scene.collides(idx))
+        scene.objects[idx]->translate(step * -1.0);
+      else
+        moved += step;
+    }
+    if (delta.z != 0.0)
+    {
+      Vec3 step(0.0, 0.0, delta.z);
+      scene.objects[idx]->translate(step);
+      if (scene.collides(idx))
+        scene.objects[idx]->translate(step * -1.0);
+      else
+        moved += step;
+    }
+    return moved;
+  };
+
   while (running)
   {
     Uint32 now = SDL_GetTicks();
@@ -318,14 +352,12 @@ void Renderer::render_window(std::vector<Material> &mats,
             Vec3 delta = desired - center;
             if (delta.length_squared() > 0)
             {
-              scene.objects[selected_obj]->translate(delta);
-              if (scene.collides(selected_obj))
-                scene.objects[selected_obj]->translate(delta * -1);
-              else
+              Vec3 moved = slide_translate(selected_obj, delta);
+              if (moved.length_squared() > 0)
               {
                 scene.update_beams(mats);
                 scene.build_bvh();
-                center = desired;
+                center += moved;
               }
             }
             edit_pos = center;
@@ -479,21 +511,20 @@ void Renderer::render_window(std::vector<Material> &mats,
       Vec3 delta = desired - edit_pos;
       if (delta.length_squared() > 0)
       {
-        scene.objects[selected_obj]->translate(delta);
-        if (scene.collides(selected_obj))
+        Vec3 moved = slide_translate(selected_obj, delta);
+        if (moved.length_squared() > 0)
         {
-          scene.objects[selected_obj]->translate(delta * -1);
+          edit_pos += moved;
+          scene.update_beams(mats);
+          scene.build_bvh();
+        }
+        else
+        {
           cam.origin = prev_cam_origin;
           cam.forward = prev_cam_forward;
           cam.up = prev_cam_up;
           cam.right = prev_cam_right;
           edit_dist = prev_edit_dist;
-        }
-        else
-        {
-          edit_pos = desired;
-          scene.update_beams(mats);
-          scene.build_bvh();
         }
       }
     }
