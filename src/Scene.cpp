@@ -5,6 +5,7 @@
 #include "rt/Camera.hpp"
 #include <algorithm>
 #include <limits>
+#include <cmath>
 #include <unordered_map>
 
 namespace
@@ -59,6 +60,15 @@ void Scene::update_beams(const std::vector<Material> &mats)
     bm->object_id = next_oid;
     objects.push_back(bm);
     ++next_oid;
+
+    if (i >= roots.size())
+    {
+      const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+      Vec3 col = mats[bm->material_id].color;
+      lights.emplace_back(bm->path.orig, col, 0.75,
+                          std::vector<int>{bm->object_id}, bm->object_id,
+                          bm->path.dir, cone_cos);
+    }
 
     Ray forward(bm->path.orig, bm->path.dir);
     HitRecord tmp, hit_rec;
