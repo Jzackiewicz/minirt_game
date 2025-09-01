@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
+#include <cmath>
 
 namespace
 {
@@ -24,6 +25,14 @@ void Scene::update_beams(const std::vector<Material> &mats)
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
   std::unordered_map<int, int> id_map;
+
+  lights.erase(std::remove_if(lights.begin(), lights.end(),
+                              [](const PointLight &L) {
+                                return L.attached_id == -1 &&
+                                       !L.ignore_ids.empty() &&
+                                       L.range < 1e8;
+                              }),
+               lights.end());
 
   for (auto &obj : objects)
   {
@@ -51,6 +60,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
   int next_oid = static_cast<int>(objects.size());
 
   std::vector<std::shared_ptr<Beam>> to_process = roots;
+  std::vector<int> reflectors(roots.size(), -1);
   for (size_t i = 0; i < to_process.size(); ++i)
   {
     auto bm = to_process[i];
@@ -94,9 +104,27 @@ void Scene::update_beams(const std::vector<Material> &mats)
                                                new_start, bm->total_length);
           new_bm->source = bm->source;
           to_process.push_back(new_bm);
+          reflectors.push_back(hit_rec.object_id);
         }
       }
     }
+    if (i >= roots.size())
+    {
+      Vec3 col = mats[bm->material_id].base_color;
+      double cone = std::sqrt(std::max(0.0, 1.0 - bm->radius * bm->radius));
+      std::vector<int> ignores = {bm->object_id};
+      if (reflectors[i] >= 0)
+        ignores.push_back(reflectors[i]);
+      lights.emplace_back(bm->path.orig, col, 0.75, bm->length, ignores, -1,
+                          bm->path.dir, cone);
+    }
+  }
+
+  std::unordered_map<int, double> source_range;
+  for (auto &bm : roots)
+  {
+    if (auto src = bm->source.lock())
+      source_range[src->object_id] = bm->length;
   }
 
   for (auto &L : lights)
@@ -106,7 +134,11 @@ void Scene::update_beams(const std::vector<Material> &mats)
       auto it = id_map.find(L.attached_id);
       if (it != id_map.end())
         L.attached_id = it->second;
-      if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
+      auto sr = source_range.find(L.attached_id);
+      if (sr != source_range.end())
+        L.range = sr->second;
+      if (L.attached_id >= 0 &&
+          L.attached_id < static_cast<int>(objects.size()))
       {
         Vec3 dir = objects[L.attached_id]->spot_direction();
         if (dir.length_squared() > 0)

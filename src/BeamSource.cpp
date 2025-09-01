@@ -33,7 +33,12 @@ bool BeamSource::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) con
   {
     Vec3 beam_dir = beam ? beam->path.dir : Vec3(0, 0, 1);
     Vec3 to_hit = (tmp.p - inner.center).normalized();
-    const double hole_cos = std::sqrt(1.0 - 0.25 * 0.25);
+    double ratio = 0.0;
+    if (beam && inner.radius > 0.0)
+      ratio = beam->radius / inner.radius;
+    if (ratio > 0.999)
+      ratio = 0.999;
+    const double hole_cos = std::sqrt(1.0 - ratio * ratio);
     if (Vec3::dot(beam_dir, to_hit) < hole_cos)
     {
       hit_any = true;

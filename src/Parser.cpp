@@ -167,7 +167,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_pos, p) && to_double(s_intens, inten) &&
           parse_rgba(s_rgb, rgb, a))
       {
-        outScene.lights.emplace_back(p, rgb_to_unit(rgb), inten);
+        outScene.lights.emplace_back(p, rgb_to_unit(rgb), inten, 1e9);
       }
     }
     else if (id == "sp")
@@ -326,11 +326,12 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         bm->source = src;
         outScene.objects.push_back(bm);
         outScene.objects.push_back(src);
-        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-        outScene.lights.emplace_back(
-            o, unit, 0.75,
-            std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
-            src->object_id, dir_norm, cone_cos);
+          const double cone_cos =
+              std::sqrt(std::max(0.0, 1.0 - g * g));
+          outScene.lights.emplace_back(
+              o, unit, 0.75, L,
+              std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
+              src->object_id, dir_norm, cone_cos);
       }
     }
     else if (id == "co")
