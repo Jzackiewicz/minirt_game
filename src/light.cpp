@@ -5,8 +5,8 @@ namespace rt
 {
 PointLight::PointLight(const Vec3 &p, const Vec3 &c, double i,
                        std::vector<int> ignore_ids, int attached_id,
-                       const Vec3 &dir, double cutoff)
-    : position(p), color(c), intensity(i),
+                       const Vec3 &dir, double cutoff, double range)
+    : position(p), color(c), intensity(i), range(range),
       ignore_ids(std::move(ignore_ids)), attached_id(attached_id),
       direction(dir), cutoff_cos(cutoff)
 {}
