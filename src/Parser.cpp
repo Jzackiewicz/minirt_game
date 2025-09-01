@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string_view>
 #include <cstring>
+#include <iomanip>
 
 namespace
 {
@@ -325,6 +326,133 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
 
   outCamera =
       Camera(cam_pos, cam_pos + cam_dir, fov, double(width) / double(height));
+  return true;
+}
+
+bool Parser::save_rt_file(const std::string &path, const Scene &scene,
+                          const Camera &cam,
+                          const std::vector<Material> &mats)
+{
+  std::ofstream out(path);
+  if (!out)
+    return false;
+  out << std::fixed << std::setprecision(5);
+
+  auto write_vec = [&](const Vec3 &v) { out << v.x << "," << v.y << "," << v.z; };
+
+  auto write_rgba = [&](const Vec3 &col, double alpha)
+  {
+    auto clamp01 = [](double x) { return std::clamp(x, 0.0, 1.0); };
+    int r = static_cast<int>(std::lround(clamp01(col.x) * 255.0));
+    int g = static_cast<int>(std::lround(clamp01(col.y) * 255.0));
+    int b = static_cast<int>(std::lround(clamp01(col.z) * 255.0));
+    int a = static_cast<int>(std::lround(clamp01(alpha) * 255.0));
+    out << r << "," << g << "," << b << "," << a;
+  };
+
+  // Ambient
+  out << "A " << scene.ambient.intensity << " ";
+  write_rgba(scene.ambient.color, 1.0);
+  out << "\n";
+
+  // Camera
+  out << "C ";
+  write_vec(cam.origin);
+  out << " ";
+  write_vec(cam.forward);
+  out << " " << cam.fov_deg << "\n";
+
+  // Lights
+  for (const auto &L : scene.lights)
+  {
+    out << "L ";
+    write_vec(L.position);
+    out << " " << L.intensity << " ";
+    write_rgba(L.color, 1.0);
+    out << "\n";
+  }
+
+  // Objects
+  for (const auto &obj : scene.objects)
+  {
+    const Material &m = mats[obj->material_id];
+    std::string mirror = m.mirror ? "R" : "NR";
+    std::string move = obj->movable ? "M" : "IM";
+    switch (obj->shape_type())
+    {
+    case ShapeType::Sphere:
+    {
+      const Sphere *s = static_cast<const Sphere *>(obj.get());
+      out << "sp ";
+      write_vec(s->center);
+      out << " " << s->radius << " ";
+      write_rgba(m.base_color, m.alpha);
+      out << " " << mirror << " " << move << "\n";
+      break;
+    }
+    case ShapeType::Plane:
+    {
+      const Plane *pl = static_cast<const Plane *>(obj.get());
+      out << "pl ";
+      write_vec(pl->point);
+      out << " ";
+      write_vec(pl->normal);
+      out << " ";
+      write_rgba(m.base_color, m.alpha);
+      out << " " << mirror << " " << move << "\n";
+      break;
+    }
+    case ShapeType::Cylinder:
+    {
+      const Cylinder *cy = static_cast<const Cylinder *>(obj.get());
+      out << "cy ";
+      write_vec(cy->center);
+      out << " ";
+      write_vec(cy->axis);
+      out << " " << cy->radius * 2.0 << " " << cy->height << " ";
+      write_rgba(m.base_color, m.alpha);
+      out << " " << mirror << " " << move << "\n";
+      break;
+    }
+    case ShapeType::Cone:
+    {
+      const Cone *co = static_cast<const Cone *>(obj.get());
+      out << "co ";
+      write_vec(co->center);
+      out << " ";
+      write_vec(co->axis);
+      out << " " << co->radius * 2.0 << " " << co->height << " ";
+      write_rgba(m.base_color, m.alpha);
+      out << " " << mirror << " " << move << "\n";
+      break;
+    }
+    case ShapeType::Cube:
+    {
+      const Cube *cu = static_cast<const Cube *>(obj.get());
+      out << "cu ";
+      write_vec(cu->center);
+      out << " " << cu->half * 2.0 << " ";
+      write_rgba(m.base_color, m.alpha);
+      out << " " << mirror << " " << move << "\n";
+      break;
+    }
+    case ShapeType::Beam:
+    {
+      const Beam *bm = static_cast<const Beam *>(obj.get());
+      out << "bm ";
+      write_vec(bm->path.orig);
+      out << " ";
+      write_vec(bm->path.dir);
+      out << " ";
+      write_rgba(m.base_color, m.alpha);
+      out << " " << bm->radius << " " << bm->length << "\n";
+      break;
+    }
+    default:
+      break;
+    }
+  }
+
   return true;
 }
 

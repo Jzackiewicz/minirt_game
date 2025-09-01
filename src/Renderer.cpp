@@ -1,6 +1,7 @@
 #include "rt/Renderer.hpp"
 #include "rt/Config.hpp"
 #include "rt/AABB.hpp"
+#include "rt/Parser.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -11,6 +12,7 @@
 #include <string>
 #include <random>
 #include <thread>
+#include <filesystem>
 
 namespace rt
 {
@@ -203,7 +205,8 @@ void Renderer::render_ppm(const std::string &path,
 }
 
 void Renderer::render_window(std::vector<Material> &mats,
-                             const RenderSettings &rset)
+                             const RenderSettings &rset,
+                             const std::string &scene_path)
 {
   const int W = rset.width;
   const int H = rset.height;
@@ -215,6 +218,12 @@ void Renderer::render_window(std::vector<Material> &mats,
                     : (std::thread::hardware_concurrency()
                            ? (int)std::thread::hardware_concurrency()
                            : 8);
+
+  std::filesystem::path base(scene_path);
+  std::filesystem::path dir = base.parent_path();
+  std::string stem = base.stem().string();
+  std::string ext = base.extension().string();
+  int save_id = 0;
 
   if (SDL_Init(SDL_INIT_VIDEO) != 0)
   {
@@ -395,6 +404,17 @@ void Renderer::render_window(std::vector<Material> &mats,
         {
           scene.move_camera(cam, cam.up * step, mats);
         }
+      }
+      else if (focused && e.type == SDL_KEYDOWN &&
+               e.key.keysym.scancode == SDL_SCANCODE_C)
+      {
+        ++save_id;
+        std::filesystem::path outp =
+            dir / (stem + "_" + std::to_string(save_id) + ext);
+        if (Parser::save_rt_file(outp.string(), scene, cam, mats))
+          std::cout << "Saved scene to " << outp.string() << "\n";
+        else
+          std::cerr << "Failed to save scene to " << outp.string() << "\n";
       }
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
