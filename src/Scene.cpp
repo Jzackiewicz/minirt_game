@@ -4,6 +4,7 @@
 #include "rt/Collision.hpp"
 #include "rt/Camera.hpp"
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <unordered_map>
 
@@ -20,6 +21,25 @@ namespace rt
 {
 void Scene::update_beams(const std::vector<Material> &mats)
 {
+  std::vector<PointLight> base_lights;
+  base_lights.reserve(lights.size());
+  for (const auto &L : lights)
+  {
+    bool drop = false;
+    if (L.attached_id >= 0)
+    {
+      for (const auto &o : objects)
+        if (o->object_id == L.attached_id && o->is_beam())
+        {
+          drop = true;
+          break;
+        }
+    }
+    if (!drop)
+      base_lights.push_back(L);
+  }
+  lights = std::move(base_lights);
+
   std::vector<std::shared_ptr<Beam>> roots;
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
@@ -97,6 +117,16 @@ void Scene::update_beams(const std::vector<Material> &mats)
         }
       }
     }
+
+    if (i >= roots.size())
+    {
+      double cone_cos =
+          std::sqrt(std::max(0.0, 1.0 - bm->radius * bm->radius));
+      lights.emplace_back(
+          bm->path.orig, mats[bm->material_id].color, 0.75,
+          std::vector<int>{bm->object_id}, bm->object_id, bm->path.dir,
+          cone_cos, bm->length);
+    }
   }
 
   for (auto &L : lights)
@@ -118,6 +148,26 @@ void Scene::update_beams(const std::vector<Material> &mats)
       auto it = id_map.find(ign);
       if (it != id_map.end())
         ign = it->second;
+    }
+
+    if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()) &&
+        objects[L.attached_id]->is_beam())
+    {
+      auto bm = std::static_pointer_cast<Beam>(objects[L.attached_id]);
+      L.range = bm->length;
+    }
+    else
+    {
+      for (int ign : L.ignore_ids)
+      {
+        if (ign >= 0 && ign < static_cast<int>(objects.size()) &&
+            objects[ign]->is_beam())
+        {
+          auto bm = std::static_pointer_cast<Beam>(objects[ign]);
+          L.range = bm->length;
+          break;
+        }
+      }
     }
   }
 }

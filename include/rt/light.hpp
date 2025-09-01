@@ -10,6 +10,7 @@ struct PointLight
   Vec3 position;
   Vec3 color;
   double intensity;
+  double range;
   std::vector<int> ignore_ids;
   int attached_id;
   Vec3 direction;
@@ -17,7 +18,8 @@ struct PointLight
 
   PointLight(const Vec3 &p, const Vec3 &c, double i,
              std::vector<int> ignore_ids = {}, int attached_id = -1,
-             const Vec3 &dir = Vec3(0, 0, 0), double cutoff_cos = -1.0);
+             const Vec3 &dir = Vec3(0, 0, 0), double cutoff_cos = -1.0,
+             double range = 1e9);
 };
 
 struct Ambient
