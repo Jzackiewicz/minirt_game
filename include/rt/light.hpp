@@ -10,12 +10,13 @@ struct PointLight
   Vec3 position;
   Vec3 color;
   double intensity;
+  double range;
   std::vector<int> ignore_ids;
   int attached_id;
   Vec3 direction;
   double cutoff_cos;
 
-  PointLight(const Vec3 &p, const Vec3 &c, double i,
+  PointLight(const Vec3 &p, const Vec3 &c, double i, double r = -1.0,
              std::vector<int> ignore_ids = {}, int attached_id = -1,
              const Vec3 &dir = Vec3(0, 0, 0), double cutoff_cos = -1.0);
 };
