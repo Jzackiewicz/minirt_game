@@ -309,17 +309,19 @@ void Renderer::render_window(std::vector<Material> &mats,
           {
             Vec3 center = (box.min + box.max) * 0.5;
             edit_dist = (center - cam.origin).length();
+            edit_dist = std::clamp(edit_dist, 0.1, MAX_INTERACT_DISTANCE);
             Vec3 desired = cam.origin + cam.forward * edit_dist;
             Vec3 delta = desired - center;
             if (delta.length_squared() > 0)
             {
-              Vec3 applied = scene.move_with_collision(selected_obj, delta);
+              Vec3 applied = scene.move_with_collision(selected_obj, delta, cam);
               center += applied;
               if (applied.length_squared() > 0)
               {
                 scene.update_beams(mats);
                 scene.build_bvh();
                 edit_dist = (center - cam.origin).length();
+                edit_dist = std::clamp(edit_dist, 0.1, MAX_INTERACT_DISTANCE);
               }
             }
             edit_pos = center;
@@ -390,6 +392,8 @@ void Renderer::render_window(std::vector<Material> &mats,
           edit_dist += step;
           if (edit_dist < 0.1)
             edit_dist = 0.1;
+          if (edit_dist > MAX_INTERACT_DISTANCE)
+            edit_dist = MAX_INTERACT_DISTANCE;
         }
         else if (focused)
         {
@@ -473,8 +477,11 @@ void Renderer::render_window(std::vector<Material> &mats,
       Vec3 delta = desired - edit_pos;
       if (delta.length_squared() > 0)
       {
-        Vec3 applied = scene.move_with_collision(selected_obj, delta);
+        Vec3 applied = scene.move_with_collision(selected_obj, delta, cam);
         edit_pos += applied;
+        edit_dist =
+            std::clamp(Vec3::dot(edit_pos - cam.origin, cam.forward), 0.1,
+                       MAX_INTERACT_DISTANCE);
         cam.origin = edit_pos - cam.forward * edit_dist;
         if (applied.length_squared() > 0)
         {
@@ -492,7 +499,7 @@ void Renderer::render_window(std::vector<Material> &mats,
     {
       Ray center_ray = cam.ray_through(0.5, 0.5);
       HitRecord hrec;
-      if (scene.hit(center_ray, 1e-4, 1e9, hrec) &&
+      if (scene.hit(center_ray, 1e-4, MAX_INTERACT_DISTANCE, hrec) &&
           scene.objects[hrec.object_id]->movable)
       {
         if (hover_mat != hrec.material_id)

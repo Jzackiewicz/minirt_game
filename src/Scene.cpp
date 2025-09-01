@@ -104,7 +104,7 @@ void Scene::build_bvh()
   accel = std::make_shared<BVHNode>(objs, 0, objs.size());
 }
 
-Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
+Vec3 Scene::move_with_collision(int index, const Vec3 &delta, const Camera &cam)
 {
   if (index < 0 || index >= static_cast<int>(objects.size()))
     return Vec3(0, 0, 0);
@@ -112,8 +112,16 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
   if (!obj || obj->is_beam())
     return Vec3(0, 0, 0);
 
+  auto cam_overlap = [&]() {
+    AABB box;
+    return obj->bounding_box(box) &&
+           cam.origin.x >= box.min.x && cam.origin.x <= box.max.x &&
+           cam.origin.y >= box.min.y && cam.origin.y <= box.max.y &&
+           cam.origin.z >= box.min.z && cam.origin.z <= box.max.z;
+  };
+
   obj->translate(delta);
-  if (!collides(index))
+  if (!collides(index) && !cam_overlap())
     return delta;
   obj->translate(delta * -1);
 
@@ -125,7 +133,7 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
     if (ax.length_squared() == 0)
       continue;
     obj->translate(ax);
-    if (collides(index))
+    if (collides(index) || cam_overlap())
       obj->translate(ax * -1);
     else
       moved += ax;
