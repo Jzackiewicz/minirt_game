@@ -98,6 +98,15 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   return sum;
 }
 
+static double bounding_radius(const HittablePtr &obj)
+{
+  AABB box;
+  if (!obj || !obj->bounding_box(box))
+    return 0.0;
+  Vec3 half = (box.max - box.min) * 0.5;
+  return half.length();
+}
+
 static const char *hud_chars = "EDITSPCAORM";
 static const uint8_t hud_font[][5] = {
     {0b11111, 0b10000, 0b11100, 0b10000, 0b11111}, // E
@@ -309,17 +318,23 @@ void Renderer::render_window(std::vector<Material> &mats,
           {
             Vec3 center = (box.min + box.max) * 0.5;
             edit_dist = (center - cam.origin).length();
+            double min_dist =
+                bounding_radius(scene.objects[selected_obj]) + OBJECT_CAMERA_MARGIN;
+            edit_dist = std::clamp(edit_dist, min_dist, MAX_INTERACT_DISTANCE);
             Vec3 desired = cam.origin + cam.forward * edit_dist;
             Vec3 delta = desired - center;
             if (delta.length_squared() > 0)
             {
-              Vec3 applied = scene.move_with_collision(selected_obj, delta);
+              Vec3 applied = scene.move_with_collision(selected_obj, delta, cam);
               center += applied;
               if (applied.length_squared() > 0)
               {
                 scene.update_beams(mats);
                 scene.build_bvh();
                 edit_dist = (center - cam.origin).length();
+                min_dist = bounding_radius(scene.objects[selected_obj]) +
+                           OBJECT_CAMERA_MARGIN;
+                edit_dist = std::clamp(edit_dist, min_dist, MAX_INTERACT_DISTANCE);
               }
             }
             edit_pos = center;
@@ -374,6 +389,16 @@ void Renderer::render_window(std::vector<Material> &mats,
           {
             scene.update_beams(mats);
             scene.build_bvh();
+            AABB box;
+            if (scene.objects[selected_obj]->bounding_box(box))
+              edit_pos = (box.min + box.max) * 0.5;
+            double min_dist =
+                bounding_radius(scene.objects[selected_obj]) + OBJECT_CAMERA_MARGIN;
+            if (edit_dist < min_dist)
+            {
+              edit_dist = min_dist;
+              cam.origin = edit_pos - cam.forward * edit_dist;
+            }
           }
         }
         else
@@ -388,8 +413,12 @@ void Renderer::render_window(std::vector<Material> &mats,
         if (edit_mode)
         {
           edit_dist += step;
-          if (edit_dist < 0.1)
-            edit_dist = 0.1;
+          double min_dist =
+              bounding_radius(scene.objects[selected_obj]) + OBJECT_CAMERA_MARGIN;
+          if (edit_dist < min_dist)
+            edit_dist = min_dist;
+          if (edit_dist > MAX_INTERACT_DISTANCE)
+            edit_dist = MAX_INTERACT_DISTANCE;
         }
         else if (focused)
         {
@@ -446,6 +475,16 @@ void Renderer::render_window(std::vector<Material> &mats,
       {
         scene.update_beams(mats);
         scene.build_bvh();
+        AABB box;
+        if (scene.objects[selected_obj]->bounding_box(box))
+          edit_pos = (box.min + box.max) * 0.5;
+        double min_dist =
+            bounding_radius(scene.objects[selected_obj]) + OBJECT_CAMERA_MARGIN;
+        if (edit_dist < min_dist)
+        {
+          edit_dist = min_dist;
+          cam.origin = edit_pos - cam.forward * edit_dist;
+        }
       }
     }
     else if (focused)
@@ -473,26 +512,26 @@ void Renderer::render_window(std::vector<Material> &mats,
       Vec3 delta = desired - edit_pos;
       if (delta.length_squared() > 0)
       {
-        Vec3 applied = scene.move_with_collision(selected_obj, delta);
+        Vec3 applied = scene.move_with_collision(selected_obj, delta, cam);
         edit_pos += applied;
-        cam.origin = edit_pos - cam.forward * edit_dist;
         if (applied.length_squared() > 0)
         {
           scene.update_beams(mats);
           scene.build_bvh();
         }
       }
-      else
-      {
-        cam.origin = edit_pos - cam.forward * edit_dist;
-      }
+      double min_dist =
+          bounding_radius(scene.objects[selected_obj]) + OBJECT_CAMERA_MARGIN;
+      edit_dist = std::clamp(Vec3::dot(edit_pos - cam.origin, cam.forward),
+                             min_dist, MAX_INTERACT_DISTANCE);
+      cam.origin = edit_pos - cam.forward * edit_dist;
     }
 
     if (!edit_mode)
     {
       Ray center_ray = cam.ray_through(0.5, 0.5);
       HitRecord hrec;
-      if (scene.hit(center_ray, 1e-4, 1e9, hrec) &&
+      if (scene.hit(center_ray, 1e-4, MAX_INTERACT_DISTANCE, hrec) &&
           scene.objects[hrec.object_id]->movable)
       {
         if (hover_mat != hrec.material_id)
