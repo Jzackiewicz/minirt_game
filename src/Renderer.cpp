@@ -1,6 +1,7 @@
 #include "rt/Renderer.hpp"
 #include "rt/Config.hpp"
 #include "rt/AABB.hpp"
+#include "rt/Parser.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -11,6 +12,7 @@
 #include <string>
 #include <random>
 #include <thread>
+#include <filesystem>
 
 namespace rt
 {
@@ -139,7 +141,20 @@ static void draw_text(SDL_Renderer *ren, const std::string &txt, int x, int y,
   }
 }
 
-Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
+Renderer::Renderer(Scene &s, Camera &c, const std::string &scene_path)
+    : scene(s), cam(c)
+{
+  namespace fs = std::filesystem;
+  fs::path p(scene_path);
+  p.replace_extension("");
+  base_path = p.string();
+}
+
+void Renderer::save_scene(const std::vector<Material> &mats)
+{
+  std::string filename = base_path + "_" + std::to_string(++save_counter) + ".rt";
+  Parser::write_rt_file(filename, scene, cam, mats);
+}
 
 void Renderer::render_ppm(const std::string &path,
                           const std::vector<Material> &mats,
@@ -396,6 +411,9 @@ void Renderer::render_window(std::vector<Material> &mats,
           scene.move_camera(cam, cam.up * step, mats);
         }
       }
+      else if (focused && e.type == SDL_KEYDOWN &&
+               e.key.keysym.scancode == SDL_SCANCODE_C)
+        save_scene(mats);
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
         running = false;

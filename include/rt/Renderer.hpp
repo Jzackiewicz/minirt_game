@@ -19,7 +19,7 @@ struct RenderSettings
 class Renderer
 {
 public:
-  Renderer(Scene &s, Camera &c);
+  Renderer(Scene &s, Camera &c, const std::string &scene_path);
   void render_ppm(const std::string &path, const std::vector<Material> &mats,
                   const RenderSettings &rset);
   void render_window(std::vector<Material> &mats,
@@ -28,6 +28,9 @@ public:
 private:
   Scene &scene;
   Camera &cam;
+  std::string base_path;
+  int save_counter = 0;
+  void save_scene(const std::vector<Material> &mats);
 };
 
 } // namespace rt

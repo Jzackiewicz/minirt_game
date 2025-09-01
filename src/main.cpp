@@ -61,7 +61,7 @@ int main(int argc, char **argv)
   rset.threads = threads;
   rset.downscale = downscale;
 
-  rt::Renderer renderer(scene, cam);
+  rt::Renderer renderer(scene, cam, scene_path);
   renderer.render_window(mats, rset);
 
   return 0;

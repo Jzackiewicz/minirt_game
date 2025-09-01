@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string_view>
 #include <cstring>
+#include <iomanip>
 
 namespace
 {
@@ -329,5 +330,115 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
 }
 
 const std::vector<Material> &Parser::get_materials() { return materials; }
+
+bool Parser::write_rt_file(const std::string &path, const Scene &scene,
+                           const Camera &cam,
+                           const std::vector<Material> &mats)
+{
+  std::ofstream out(path);
+  if (!out)
+    return false;
+
+  auto vec_to_str = [](const Vec3 &v)
+  {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(5) << v.x << "," << v.y << "," << v.z;
+    return oss.str();
+  };
+
+  auto color_to_str = [](const Material &m)
+  {
+    auto clamp255 = [](double x)
+    { return std::max(0, std::min(255, static_cast<int>(std::round(x)))); };
+    int r = clamp255(m.base_color.x * 255.0);
+    int g = clamp255(m.base_color.y * 255.0);
+    int b = clamp255(m.base_color.z * 255.0);
+    int a = clamp255(m.alpha * 255.0);
+    std::ostringstream oss;
+    oss << r << "," << g << "," << b << "," << a;
+    return oss.str();
+  };
+
+  // Ambient
+  int ar = static_cast<int>(std::round(scene.ambient.color.x * 255.0));
+  int ag = static_cast<int>(std::round(scene.ambient.color.y * 255.0));
+  int ab = static_cast<int>(std::round(scene.ambient.color.z * 255.0));
+  out << "A " << scene.ambient.intensity << " " << ar << "," << ag << "," << ab
+      << ",255\n";
+
+  // Camera
+  out << "C " << vec_to_str(cam.origin) << " " << vec_to_str(cam.forward)
+      << " " << cam.fov_deg << "\n";
+
+  // Lights
+  for (const auto &L : scene.lights)
+  {
+    int lr = static_cast<int>(std::round(L.color.x * 255.0));
+    int lg = static_cast<int>(std::round(L.color.y * 255.0));
+    int lb = static_cast<int>(std::round(L.color.z * 255.0));
+    out << "L " << vec_to_str(L.position) << " " << L.intensity << " " << lr
+        << "," << lg << "," << lb << ",255\n";
+  }
+
+  // Objects
+  for (const auto &obj : scene.objects)
+  {
+    const Material &m = mats[obj->material_id];
+    std::string mirror = m.mirror ? "R" : "NR";
+    std::string mov = obj->movable ? "M" : "IM";
+    switch (obj->shape_type())
+    {
+    case ShapeType::Sphere:
+    {
+      const Sphere *sp = static_cast<const Sphere *>(obj.get());
+      out << "sp " << vec_to_str(sp->center) << " " << sp->radius << " "
+          << color_to_str(m) << " " << mirror << " " << mov << "\n";
+      break;
+    }
+    case ShapeType::Plane:
+    {
+      const Plane *pl = static_cast<const Plane *>(obj.get());
+      out << "pl " << vec_to_str(pl->point) << " " << vec_to_str(pl->normal)
+          << " " << color_to_str(m) << " " << mirror << " " << mov << "\n";
+      break;
+    }
+    case ShapeType::Cylinder:
+    {
+      const Cylinder *cy = static_cast<const Cylinder *>(obj.get());
+      out << "cy " << vec_to_str(cy->center) << " " << vec_to_str(cy->axis)
+          << " " << cy->radius * 2.0 << " " << cy->height << " "
+          << color_to_str(m) << " " << mirror << " " << mov << "\n";
+      break;
+    }
+    case ShapeType::Cube:
+    {
+      const Cube *cu = static_cast<const Cube *>(obj.get());
+      out << "cu " << vec_to_str(cu->center) << " " << cu->half * 2.0 << " "
+          << color_to_str(m) << " " << mirror << " " << mov << "\n";
+      break;
+    }
+    case ShapeType::Cone:
+    {
+      const Cone *co = static_cast<const Cone *>(obj.get());
+      out << "co " << vec_to_str(co->center) << " " << vec_to_str(co->axis)
+          << " " << co->radius * 2.0 << " " << co->height << " "
+          << color_to_str(m) << " " << mirror << " " << mov << "\n";
+      break;
+    }
+    case ShapeType::Beam:
+    {
+      const Beam *bm = static_cast<const Beam *>(obj.get());
+      out << "bm " << vec_to_str(bm->path.orig) << " "
+          << vec_to_str(bm->path.dir) << " " << color_to_str(m) << " "
+          << bm->radius << " " << bm->length << "\n";
+      break;
+    }
+    default:
+      break;
+    }
+  }
+
+  return true;
+}
 
 } // namespace rt

@@ -16,6 +16,10 @@ public:
 
   static const std::vector<Material> &get_materials();
 
+  static bool write_rt_file(const std::string &path, const Scene &scene,
+                            const Camera &cam,
+                            const std::vector<Material> &mats);
+
 private:
   // TO JEST KLUCZOWE: deklaracja storage'u
   static std::vector<Material> materials;
