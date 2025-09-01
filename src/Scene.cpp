@@ -4,11 +4,14 @@
 #include "rt/Collision.hpp"
 #include "rt/Camera.hpp"
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <unordered_map>
 
 namespace
 {
+constexpr int REFLECTION_LIGHT = -2;
+
 inline rt::Vec3 reflect(const rt::Vec3 &v, const rt::Vec3 &n)
 {
   return v - n * (2.0 * rt::Vec3::dot(v, n));
@@ -24,6 +27,12 @@ void Scene::update_beams(const std::vector<Material> &mats)
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
   std::unordered_map<int, int> id_map;
+
+  // Remove lights created for reflected beams from previous updates.
+  lights.erase(std::remove_if(lights.begin(), lights.end(),
+                              [](const PointLight &L)
+                              { return L.attached_id == REFLECTION_LIGHT; }),
+               lights.end());
 
   for (auto &obj : objects)
   {
@@ -119,6 +128,20 @@ void Scene::update_beams(const std::vector<Material> &mats)
       if (it != id_map.end())
         ign = it->second;
     }
+  }
+
+  const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+  for (const auto &obj : objects)
+  {
+    if (!obj->is_beam())
+      continue;
+    auto bm = std::static_pointer_cast<Beam>(obj);
+    if (bm->start <= 0.0)
+      continue;
+    Vec3 col = mats[bm->material_id].color;
+    lights.emplace_back(bm->path.orig, col, 0.75, bm->length,
+                        std::vector<int>{bm->object_id}, REFLECTION_LIGHT,
+                        bm->path.dir, cone_cos);
   }
 }
 

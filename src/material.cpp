@@ -24,7 +24,11 @@ Vec3 phong(const Material &m, const Ambient &ambient,
            col.z * ambient.color.z * ambient.intensity);
   for (const auto &L : lights)
   {
-    Vec3 ldir = (L.position - p).normalized();
+    Vec3 to_light = L.position - p;
+    double dist = to_light.length();
+    if (L.range > 0.0 && dist > L.range)
+      continue;
+    Vec3 ldir = to_light / dist;
     if (L.cutoff_cos > -1.0)
     {
       Vec3 spot_dir = (p - L.position).normalized();
