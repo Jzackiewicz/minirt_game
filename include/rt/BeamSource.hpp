@@ -1,6 +1,7 @@
 #pragma once
 #include "Beam.hpp"
 #include "Sphere.hpp"
+#include "light.hpp"
 #include <memory>
 
 namespace rt
@@ -10,6 +11,7 @@ struct BeamSource : public Sphere
   Sphere mid;
   Sphere inner;
   std::shared_ptr<Beam> beam;
+  PointLight *light = nullptr;
   BeamSource(const Vec3 &c, const Vec3 &dir, const std::shared_ptr<Beam> &bm,
              int oid, int mat_big, int mat_mid, int mat_small);
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const override;

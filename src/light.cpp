@@ -2,8 +2,8 @@
 
 namespace rt
 {
-PointLight::PointLight(const Vec3 &p, const Vec3 &c, double i)
-    : position(p), color(c), intensity(i)
+PointLight::PointLight(const Vec3 &p, const Vec3 &c, double i, int ignore)
+    : position(p), color(c), intensity(i), ignore_id(ignore)
 {
 }
 

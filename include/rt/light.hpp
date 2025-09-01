@@ -9,8 +9,9 @@ struct PointLight
   Vec3 position;
   Vec3 color;
   double intensity;
+  int ignore_id;
 
-  PointLight(const Vec3 &p, const Vec3 &c, double i);
+  PointLight(const Vec3 &p, const Vec3 &c, double i, int ignore = -1);
 };
 
 struct Ambient

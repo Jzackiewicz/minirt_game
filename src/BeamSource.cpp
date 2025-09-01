@@ -47,6 +47,8 @@ void BeamSource::translate(const Vec3 &delta)
   inner.translate(delta);
   if (beam)
     beam->path.orig += delta;
+  if (light)
+    light->position += delta;
 }
 
 void BeamSource::rotate(const Vec3 &ax, double angle)
