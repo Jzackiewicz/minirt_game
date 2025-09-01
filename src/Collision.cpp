@@ -26,7 +26,8 @@ static Vec3 support(const Cube &c, const Vec3 &dir)
   for (int i = 0; i < 3; ++i)
   {
     double sign = Vec3::dot(c.axis[i], dir) > 0 ? 1.0 : -1.0;
-    res += c.axis[i] * (c.half * sign);
+    double extent = (i == 0 ? c.half.x : (i == 1 ? c.half.y : c.half.z));
+    res += c.axis[i] * (extent * sign);
   }
   return res;
 }
@@ -79,22 +80,26 @@ static bool sat_cube_cube(const Cube &a, const Cube &b)
   Vec3 tVec = b.center - a.center;
   double t[3] = {Vec3::dot(tVec, a.axis[0]), Vec3::dot(tVec, a.axis[1]),
                  Vec3::dot(tVec, a.axis[2])};
-
   double ra, rb;
+  double a_half[3] = {a.half.x, a.half.y, a.half.z};
+  double b_half[3] = {b.half.x, b.half.y, b.half.z};
 
   for (int i = 0; i < 3; ++i)
   {
-    ra = a.half;
-    rb = b.half * (absR[i][0] + absR[i][1] + absR[i][2]);
+    ra = a_half[i];
+    rb = b_half[0] * absR[i][0] + b_half[1] * absR[i][1] +
+         b_half[2] * absR[i][2];
     if (std::fabs(t[i]) > ra + rb)
       return false;
   }
 
   for (int i = 0; i < 3; ++i)
   {
-    ra = a.half * (absR[0][i] + absR[1][i] + absR[2][i]);
-    rb = b.half;
-    double tval = std::fabs(t[0] * R[0][i] + t[1] * R[1][i] + t[2] * R[2][i]);
+    ra = a_half[0] * absR[0][i] + a_half[1] * absR[1][i] +
+         a_half[2] * absR[2][i];
+    rb = b_half[i];
+    double tval = std::fabs(t[0] * R[0][i] + t[1] * R[1][i] +
+                            t[2] * R[2][i]);
     if (tval > ra + rb)
       return false;
   }
@@ -107,8 +112,8 @@ static bool sat_cube_cube(const Cube &a, const Cube &b)
     {
       int j1 = (j + 1) % 3;
       int j2 = (j + 2) % 3;
-      ra = a.half * (absR[i1][j] + absR[i2][j]);
-      rb = b.half * (absR[i][j1] + absR[i][j2]);
+      ra = a_half[i1] * absR[i2][j] + a_half[i2] * absR[i1][j];
+      rb = b_half[j1] * absR[i][j2] + b_half[j2] * absR[i][j1];
       double tval =
           std::fabs(t[i2] * R[i1][j] - t[i1] * R[i2][j]);
       if (tval > ra + rb)
@@ -290,9 +295,9 @@ bool precise_collision(const HittablePtr &a, const HittablePtr &b)
     {
       const Cube *c = static_cast<const Cube *>(other.get());
       double dist = Vec3::dot(c->center - pl->point, pl->normal);
-      double r = std::fabs(Vec3::dot(c->axis[0], pl->normal)) * c->half +
-                 std::fabs(Vec3::dot(c->axis[1], pl->normal)) * c->half +
-                 std::fabs(Vec3::dot(c->axis[2], pl->normal)) * c->half;
+      double r = std::fabs(Vec3::dot(c->axis[0], pl->normal)) * c->half.x +
+                 std::fabs(Vec3::dot(c->axis[1], pl->normal)) * c->half.y +
+                 std::fabs(Vec3::dot(c->axis[2], pl->normal)) * c->half.z;
       return std::fabs(dist) <= r;
     }
     case ShapeType::Cylinder:

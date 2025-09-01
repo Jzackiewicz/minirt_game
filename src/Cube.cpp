@@ -4,11 +4,14 @@
 
 namespace rt
 {
-Cube::Cube(const Vec3 &c, double a, int oid, int mid) : center(c), half(a / 2.0)
+Cube::Cube(const Vec3 &c, const Vec3 &orientation, double L, double W,
+           double H, int oid, int mid)
+    : center(c), half(L / 2.0, W / 2.0, H / 2.0)
 {
-  axis[0] = Vec3(1, 0, 0);
-  axis[1] = Vec3(0, 1, 0);
-  axis[2] = Vec3(0, 0, 1);
+  axis[2] = orientation.normalized();
+  Vec3 up = std::fabs(axis[2].y) > 0.999 ? Vec3(1, 0, 0) : Vec3(0, 1, 0);
+  axis[0] = Vec3::cross(up, axis[2]).normalized();
+  axis[1] = Vec3::cross(axis[2], axis[0]);
   object_id = oid;
   material_id = mid;
 }
@@ -20,6 +23,7 @@ bool Cube::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
                     Vec3::dot(oc, axis[2])};
   double dir[3] = {Vec3::dot(r.dir, axis[0]), Vec3::dot(r.dir, axis[1]),
                    Vec3::dot(r.dir, axis[2])};
+  double half_arr[3] = {half.x, half.y, half.z};
 
   double tmin_local = tmin;
   double tmax_local = tmax;
@@ -27,8 +31,8 @@ bool Cube::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
   for (int i = 0; i < 3; ++i)
   {
     double invD = 1.0 / dir[i];
-    double t0 = (-half - orig[i]) * invD;
-    double t1 = (half - orig[i]) * invD;
+    double t0 = (-half_arr[i] - orig[i]) * invD;
+    double t1 = (half_arr[i] - orig[i]) * invD;
     Vec3 n0 = i == 0 ? Vec3(-1, 0, 0)
                      : (i == 1 ? Vec3(0, -1, 0) : Vec3(0, 0, -1));
     Vec3 n1 = i == 0 ? Vec3(1, 0, 0)
@@ -63,9 +67,9 @@ bool Cube::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 
 bool Cube::bounding_box(AABB &out) const
 {
-  Vec3 u = axis[0] * half;
-  Vec3 v = axis[1] * half;
-  Vec3 w = axis[2] * half;
+  Vec3 u = axis[0] * half.x;
+  Vec3 v = axis[1] * half.y;
+  Vec3 w = axis[2] * half.z;
   Vec3 corners[8] = {center - u - v - w, center - u - v + w,
                      center - u + v - w, center - u + v + w,
                      center + u - v - w, center + u - v + w,

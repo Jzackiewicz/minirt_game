@@ -248,20 +248,22 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     }
     else if (id == "cu")
     {
-      std::string s_pos, s_a, s_rgb;
-      iss >> s_pos >> s_a >> s_rgb;
+      std::string s_pos, s_orient, s_L, s_W, s_H, s_rgb;
+      iss >> s_pos >> s_orient >> s_L >> s_W >> s_H >> s_rgb;
       std::string s_mirror;
       if (!(iss >> s_mirror))
         s_mirror = "NR";
       std::string s_move;
       if (!(iss >> s_move))
         s_move = "IM";
-      Vec3 c, rgb;
-      double a = 1.0;
+      Vec3 c, orient, rgb;
+      double L = 1.0, W = 1.0, H = 1.0;
       double alpha = 255;
-      if (parse_triple(s_pos, c) && to_double(s_a, a) && parse_rgba(s_rgb, rgb, alpha))
+      if (parse_triple(s_pos, c) && parse_triple(s_orient, orient) &&
+          to_double(s_L, L) && to_double(s_W, W) && to_double(s_H, H) &&
+          parse_rgba(s_rgb, rgb, alpha))
       {
-        auto cu = std::make_shared<Cube>(c, a, oid++, mid);
+        auto cu = std::make_shared<Cube>(c, orient, L, W, H, oid++, mid);
         cu->movable = (s_move == "M");
         materials.emplace_back();
         materials.back().color = rgb_to_unit(rgb);
