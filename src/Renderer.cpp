@@ -309,6 +309,8 @@ void Renderer::render_window(std::vector<Material> &mats,
           {
             Vec3 center = (box.min + box.max) * 0.5;
             edit_dist = (center - cam.origin).length();
+            if (edit_dist > MAX_INTERACT_DISTANCE)
+              edit_dist = MAX_INTERACT_DISTANCE;
             Vec3 desired = cam.origin + cam.forward * edit_dist;
             Vec3 delta = desired - center;
             if (delta.length_squared() > 0)
@@ -320,6 +322,8 @@ void Renderer::render_window(std::vector<Material> &mats,
                 scene.update_beams(mats);
                 scene.build_bvh();
                 edit_dist = (center - cam.origin).length();
+                if (edit_dist > MAX_INTERACT_DISTANCE)
+                  edit_dist = MAX_INTERACT_DISTANCE;
               }
             }
             edit_pos = center;
@@ -387,9 +391,7 @@ void Renderer::render_window(std::vector<Material> &mats,
         double step = e.wheel.y * SCROLL_STEP;
         if (edit_mode)
         {
-          edit_dist += step;
-          if (edit_dist < 0.1)
-            edit_dist = 0.1;
+          edit_dist = std::clamp(edit_dist + step, 0.1, MAX_INTERACT_DISTANCE);
         }
         else if (focused)
         {
@@ -469,6 +471,9 @@ void Renderer::render_window(std::vector<Material> &mats,
 
     if (edit_mode)
     {
+      Vec3 prev_pos = edit_pos;
+      Vec3 prev_cam = cam.origin;
+      double prev_dist = (prev_pos - prev_cam).length();
       Vec3 desired = cam.origin + cam.forward * edit_dist;
       Vec3 delta = desired - edit_pos;
       if (delta.length_squared() > 0)
@@ -476,7 +481,25 @@ void Renderer::render_window(std::vector<Material> &mats,
         Vec3 applied = scene.move_with_collision(selected_obj, delta);
         edit_pos += applied;
         cam.origin = edit_pos - cam.forward * edit_dist;
-        if (applied.length_squared() > 0)
+        bool revert = false;
+        AABB box;
+        if (scene.objects[selected_obj]->bounding_box(box))
+        {
+          if (cam.origin.x >= box.min.x && cam.origin.x <= box.max.x &&
+              cam.origin.y >= box.min.y && cam.origin.y <= box.max.y &&
+              cam.origin.z >= box.min.z && cam.origin.z <= box.max.z)
+          {
+            revert = true;
+          }
+        }
+        if (revert)
+        {
+          scene.objects[selected_obj]->translate(applied * -1.0);
+          edit_pos = prev_pos;
+          edit_dist = prev_dist;
+          cam.origin = prev_cam;
+        }
+        else if (applied.length_squared() > 0)
         {
           scene.update_beams(mats);
           scene.build_bvh();
@@ -492,7 +515,7 @@ void Renderer::render_window(std::vector<Material> &mats,
     {
       Ray center_ray = cam.ray_through(0.5, 0.5);
       HitRecord hrec;
-      if (scene.hit(center_ray, 1e-4, 1e9, hrec) &&
+      if (scene.hit(center_ray, 1e-4, MAX_INTERACT_DISTANCE, hrec) &&
           scene.objects[hrec.object_id]->movable)
       {
         if (hover_mat != hrec.material_id)
