@@ -5,7 +5,7 @@
 namespace rt
 {
 Vec3 phong(const Material &m, const Ambient &ambient,
-           const std::vector<PointLight> &lights, const Vec3 &p, const Vec3 &n,
+           const std::deque<PointLight> &lights, const Vec3 &p, const Vec3 &n,
            const Vec3 &eye)
 {
   Vec3 base = m.base_color;

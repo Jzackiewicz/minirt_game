@@ -299,15 +299,15 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         auto bm = std::make_shared<Beam>(o, dir, g, L, oid++, beam_mat);
 
         materials.emplace_back();
-        materials.back().color = unit;
-        materials.back().base_color = unit;
-        materials.back().alpha = 0.33;
+        materials.back().color = Vec3(1.0, 1.0, 1.0);
+        materials.back().base_color = materials.back().color;
+        materials.back().alpha = 0.25;
         int big_mat = mid++;
 
         materials.emplace_back();
-        materials.back().color = unit;
-        materials.back().base_color = unit;
-        materials.back().alpha = 0.67;
+        materials.back().color = (Vec3(1.0, 1.0, 1.0) + unit) * 0.5;
+        materials.back().base_color = materials.back().color;
+        materials.back().alpha = 0.5;
         int mid_mat = mid++;
 
         materials.emplace_back();
@@ -316,7 +316,12 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = 1.0;
         int small_mat = mid++;
 
-        auto src = std::make_shared<BeamSource>(o, dir, bm, oid++, big_mat, mid_mat, small_mat);
+        Vec3 light_pos = o + dir.normalized() * (0.6 + 1e-3);
+        outScene.lights.emplace_back(light_pos, unit, 0.8);
+        PointLight *lt = &outScene.lights.back();
+
+        auto src = std::make_shared<BeamSource>(o, dir, bm, oid++, big_mat,
+                                                mid_mat, small_mat, lt);
         src->movable = (s_move == "M");
         bm->source = src;
         outScene.objects.push_back(bm);
