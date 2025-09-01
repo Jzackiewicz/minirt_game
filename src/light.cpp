@@ -2,8 +2,9 @@
 
 namespace rt
 {
-PointLight::PointLight(const Vec3 &p, const Vec3 &c, double i)
-    : position(p), color(c), intensity(i)
+PointLight::PointLight(const Vec3 &p, const Vec3 &c, double i,
+                       const Hittable *ig1, const Hittable *ig2)
+    : position(p), color(c), intensity(i), ignore1(ig1), ignore2(ig2)
 {
 }
 

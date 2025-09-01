@@ -322,6 +322,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         bm->source = src;
         outScene.objects.push_back(bm);
         outScene.objects.push_back(src);
+        outScene.lights.emplace_back(o, unit, 0.75, bm.get(), src.get());
       }
     }
     else if (id == "co")

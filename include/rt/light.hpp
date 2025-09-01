@@ -4,13 +4,19 @@
 
 namespace rt
 {
+struct Hittable;
+
 struct PointLight
 {
   Vec3 position;
   Vec3 color;
   double intensity;
+  const Hittable *ignore1;
+  const Hittable *ignore2;
 
-  PointLight(const Vec3 &p, const Vec3 &c, double i);
+  PointLight(const Vec3 &p, const Vec3 &c, double i,
+             const Hittable *ig1 = nullptr,
+             const Hittable *ig2 = nullptr);
 };
 
 struct Ambient

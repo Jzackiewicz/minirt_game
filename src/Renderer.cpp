@@ -25,6 +25,8 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
   {
     if (obj->is_beam())
       continue;
+    if (obj.get() == L.ignore1 || obj.get() == L.ignore2)
+      continue;
     if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
     {
       return true;
@@ -62,6 +64,10 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
            col.z * scene.ambient.color.z * scene.ambient.intensity);
   for (const auto &L : scene.lights)
   {
+    int id1 = L.ignore1 ? L.ignore1->object_id : -1;
+    int id2 = L.ignore2 ? L.ignore2->object_id : -1;
+    if (rec.object_id == id1 || rec.object_id == id2)
+      continue;
     if (in_shadow(scene, rec.p, L))
       continue;
     Vec3 ldir = (L.position - rec.p).normalized();
