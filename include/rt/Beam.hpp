@@ -1,6 +1,7 @@
 #pragma once
 #include "Hittable.hpp"
 #include "Ray.hpp"
+#include <memory>
 
 namespace rt
 {
@@ -11,6 +12,7 @@ struct Beam : public Hittable
   double length;
   double start;
   double total_length;
+  std::weak_ptr<Hittable> source;
   Beam(const Vec3 &origin, const Vec3 &dir, double radius, double length,
        int oid, int mid, double start = 0.0, double total = -1.0);
 

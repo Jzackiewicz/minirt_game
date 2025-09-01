@@ -1,5 +1,6 @@
 #include "rt/Parser.hpp"
 #include "rt/Beam.hpp"
+#include "rt/BeamSource.hpp"
 #include "rt/Cube.hpp"
 #include "rt/Cone.hpp"
 #include "rt/Cylinder.hpp"
@@ -278,21 +279,48 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     {
       std::string s_pos, s_dir, s_rgb, s_g, s_L;
       iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
+      std::string s_move;
+      if (!(iss >> s_move))
+        s_move = "IM";
       Vec3 o, dir, rgb;
       double g = 0.1, L = 1.0;
       double a = 255;
       if (parse_triple(s_pos, o) && parse_triple(s_dir, dir) &&
           parse_rgba(s_rgb, rgb, a) && to_double(s_g, g) && to_double(s_L, L))
       {
-        auto bm = std::make_shared<Beam>(o, dir, g, L, oid++, mid);
-        materials.emplace_back();
         Vec3 unit = rgb_to_unit(rgb);
+        materials.emplace_back();
         materials.back().color = unit;
         materials.back().base_color = unit;
         materials.back().alpha = alpha_to_unit(a);
         materials.back().random_alpha = true;
+        int beam_mat = mid++;
+
+        auto bm = std::make_shared<Beam>(o, dir, g, L, oid++, beam_mat);
+
+        materials.emplace_back();
+        materials.back().color = unit;
+        materials.back().base_color = unit;
+        materials.back().alpha = 0.33;
+        int big_mat = mid++;
+
+        materials.emplace_back();
+        materials.back().color = unit;
+        materials.back().base_color = unit;
+        materials.back().alpha = 0.67;
+        int mid_mat = mid++;
+
+        materials.emplace_back();
+        materials.back().color = unit;
+        materials.back().base_color = unit;
+        materials.back().alpha = 1.0;
+        int small_mat = mid++;
+
+        auto src = std::make_shared<BeamSource>(o, dir, bm, oid++, big_mat, mid_mat, small_mat);
+        src->movable = (s_move == "M");
+        bm->source = src;
         outScene.objects.push_back(bm);
-        ++mid;
+        outScene.objects.push_back(src);
       }
     }
     else if (id == "co")
