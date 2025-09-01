@@ -23,7 +23,7 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
   HitRecord tmp;
   for (const auto &obj : scene.objects)
   {
-    if (obj->is_beam() || obj->object_id == L.ignore_id)
+    if (obj->is_beam())
       continue;
     if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
     {

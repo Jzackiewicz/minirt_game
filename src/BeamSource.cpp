@@ -5,17 +5,11 @@ namespace rt
 {
 BeamSource::BeamSource(const Vec3 &c, const Vec3 &dir,
                        const std::shared_ptr<Beam> &bm, int oid,
-                       int mat_big, int mat_mid, int mat_small,
-                       PointLight *lt)
+                       int mat_big, int mat_mid, int mat_small)
     : Sphere(c, 0.6, oid, mat_big),
       mid(c, 0.6 * 0.67, oid, mat_mid),
-      inner(c, 0.6 * 0.33, oid, mat_small), beam(bm), light(lt)
+      inner(c, 0.6 * 0.33, oid, mat_small), beam(bm)
 {
-  if (light)
-  {
-    light->position = c + dir.normalized() * 0.6;
-    light->ignore_id = oid;
-  }
 }
 
 bool BeamSource::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
@@ -53,8 +47,6 @@ void BeamSource::translate(const Vec3 &delta)
   inner.translate(delta);
   if (beam)
     beam->path.orig += delta;
-  if (light)
-    light->position += delta;
 }
 
 void BeamSource::rotate(const Vec3 &ax, double angle)
@@ -66,8 +58,6 @@ void BeamSource::rotate(const Vec3 &ax, double angle)
   };
   if (beam)
     beam->path.dir = rotate_vec(beam->path.dir, ax, angle).normalized();
-  if (light)
-    light->position = center + beam->path.dir.normalized() * 0.6;
 }
 
 } // namespace rt

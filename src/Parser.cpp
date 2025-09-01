@@ -316,12 +316,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = 1.0;
         int small_mat = mid++;
 
-        Vec3 light_pos = o + dir.normalized() * (0.6 + 1e-3);
-        outScene.lights.emplace_back(light_pos, unit, 0.8);
-        PointLight *lt = &outScene.lights.back();
-
         auto src = std::make_shared<BeamSource>(o, dir, bm, oid++, big_mat,
-                                                mid_mat, small_mat, lt);
+                                                mid_mat, small_mat);
         src->movable = (s_move == "M");
         bm->source = src;
         outScene.objects.push_back(bm);

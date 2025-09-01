@@ -4,7 +4,6 @@
 #include "Hittable.hpp"
 #include "light.hpp"
 #include "material.hpp"
-#include <deque>
 #include <memory>
 #include <vector>
 
@@ -14,7 +13,7 @@ struct Camera;
 struct Scene
 {
   std::vector<HittablePtr> objects;
-  std::deque<PointLight> lights;
+  std::vector<PointLight> lights;
   Ambient ambient{Vec3(1, 1, 1), 0.0};
   std::shared_ptr<Hittable> accel;
 
