@@ -114,10 +114,12 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta, const Camera &cam)
 
   auto cam_overlap = [&]() {
     AABB box;
-    return obj->bounding_box(box) &&
-           cam.origin.x >= box.min.x && cam.origin.x <= box.max.x &&
-           cam.origin.y >= box.min.y && cam.origin.y <= box.max.y &&
-           cam.origin.z >= box.min.z && cam.origin.z <= box.max.z;
+    if (!obj->bounding_box(box))
+      return false;
+    Vec3 center = (box.min + box.max) * 0.5;
+    Vec3 half = (box.max - box.min) * 0.5;
+    double radius = half.length();
+    return (cam.origin - center).length() < radius;
   };
 
   obj->translate(delta);
