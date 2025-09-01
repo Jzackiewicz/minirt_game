@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
+#include <cmath>
 
 namespace
 {
@@ -24,6 +25,11 @@ void Scene::update_beams(const std::vector<Material> &mats)
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
   std::unordered_map<int, int> id_map;
+  std::unordered_map<int, std::pair<Vec3, double>> src_light_info;
+
+  for (const auto &L : lights)
+    if (L.attached_id >= 0)
+      src_light_info[L.attached_id] = {L.color, L.intensity};
 
   for (auto &obj : objects)
   {
@@ -94,6 +100,35 @@ void Scene::update_beams(const std::vector<Material> &mats)
                                                new_start, bm->total_length);
           new_bm->source = bm->source;
           to_process.push_back(new_bm);
+        }
+      }
+    }
+
+    if (auto src = bm->source.lock())
+    {
+      auto it_info = src_light_info.find(src->object_id);
+      if (it_info != src_light_info.end())
+      {
+        double cutoff = 1.0;
+        if (bm->length > bm->radius)
+          cutoff =
+              std::sqrt(1.0 - (bm->radius / bm->length) * (bm->radius / bm->length));
+        if (i < roots.size())
+        {
+          for (auto &L : lights)
+            if (L.attached_id == src->object_id)
+            {
+              L.range = bm->length;
+              L.cutoff_cos = cutoff;
+              break;
+            }
+        }
+        else
+        {
+          lights.emplace_back(bm->path.orig, it_info->second.first,
+                              it_info->second.second, bm->length,
+                              std::vector<int>{bm->object_id}, -1, bm->path.dir,
+                              cutoff);
         }
       }
     }

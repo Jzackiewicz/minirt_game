@@ -18,11 +18,11 @@
 namespace rt
 {
 
-static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
+static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L,
+                      double max_dist)
 {
   Vec3 dir = (L.position - p).normalized();
   Ray shadow_ray(p + dir * 1e-4, dir);
-  double dist_to_light = (L.position - p).length();
   HitRecord tmp;
   for (const auto &obj : scene.objects)
   {
@@ -31,7 +31,7 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
     if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), obj->object_id) !=
         L.ignore_ids.end())
       continue;
-    if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
+    if (obj->hit(shadow_ray, 1e-4, max_dist - 1e-4, tmp))
     {
       return true;
     }
@@ -72,6 +72,9 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
         L.ignore_ids.end())
       continue;
     Vec3 to_light = L.position - rec.p;
+    double light_dist = to_light.length();
+    if (L.range > 0.0 && light_dist > L.range)
+      continue;
     Vec3 ldir = to_light.normalized();
     if (L.cutoff_cos > -1.0)
     {
@@ -79,16 +82,20 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
       if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
         continue;
     }
-    if (in_shadow(scene, rec.p, L))
+    if (in_shadow(scene, rec.p, L, light_dist))
       continue;
+    double att = 1.0;
+    if (L.range > 0.0)
+      att = std::max(0.0, 1.0 - light_dist / L.range);
     double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
     Vec3 h = (ldir + eye).normalized();
     double spec =
         std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
         m.specular_k;
-    sum += Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
-                col.y * L.color.y * L.intensity * diff + L.color.y * spec,
-                col.z * L.color.z * L.intensity * diff + L.color.z * spec);
+    sum += (Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
+                 col.y * L.color.y * L.intensity * diff + L.color.y * spec,
+                 col.z * L.color.z * L.intensity * diff + L.color.z * spec) *
+            att);
   }
   if (m.mirror)
   {
