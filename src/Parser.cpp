@@ -1,6 +1,7 @@
 #include "rt/Parser.hpp"
 #include "rt/Beam.hpp"
 #include "rt/BeamSource.hpp"
+#include "rt/HoledSphere.hpp"
 #include "rt/Cube.hpp"
 #include "rt/Cone.hpp"
 #include "rt/Cylinder.hpp"
@@ -317,11 +318,16 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         int small_mat = mid++;
 
         auto src = std::make_shared<BeamSource>(o, dir, bm, oid++, big_mat,
-                                                mid_mat, small_mat);
+                                                mid_mat);
         src->movable = (s_move == "M");
+        auto inner = std::make_shared<HoledSphere>(
+            o, 0.6 * 0.33, oid++, small_mat, dir, (0.6 * 0.33) / 4.0);
+        inner->movable = (s_move == "M");
+        src->inner = inner;
         bm->source = src;
         outScene.objects.push_back(bm);
         outScene.objects.push_back(src);
+        outScene.objects.push_back(inner);
         outScene.lights.emplace_back(
             o, unit, 0.75,
             std::vector<int>{bm->object_id, src->object_id},
