@@ -45,6 +45,7 @@ struct Hittable
   virtual bool bounding_box(AABB &out) const = 0;
   virtual ShapeType shape_type() const { return ShapeType::Generic; }
   virtual bool is_beam() const { return false; }
+  virtual bool is_beam_source() const { return false; }
   virtual bool is_plane() const { return false; }
   virtual bool is_bvh() const { return false; }
   // default translation does nothing

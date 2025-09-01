@@ -17,5 +17,6 @@ struct BeamSource : public Sphere
   void translate(const Vec3 &delta) override;
   void rotate(const Vec3 &axis, double angle) override;
   Vec3 spot_direction() const override;
+  bool is_beam_source() const override { return true; }
 };
 } // namespace rt

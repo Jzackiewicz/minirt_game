@@ -14,6 +14,10 @@ public:
   static bool parse_rt_file(const std::string &path, Scene &outScene,
                             Camera &outCamera, int width, int height);
 
+  static bool write_rt_file(const std::string &path, const Scene &scene,
+                            const Camera &cam,
+                            const std::vector<Material> &mats);
+
   static const std::vector<Material> &get_materials();
 
 private:

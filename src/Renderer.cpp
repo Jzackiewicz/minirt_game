@@ -1,12 +1,14 @@
 #include "rt/Renderer.hpp"
 #include "rt/Config.hpp"
 #include "rt/AABB.hpp"
+#include "rt/Parser.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <cctype>
 #include <cstring>
 #include <string>
 #include <random>
@@ -14,6 +16,30 @@
 
 namespace rt
 {
+
+static std::string next_save_path(const std::string &path)
+{
+  size_t slash = path.find_last_of("/\\");
+  std::string dir = (slash == std::string::npos) ? "" : path.substr(0, slash + 1);
+  std::string file = (slash == std::string::npos) ? path : path.substr(slash + 1);
+  size_t dot = file.find_last_of('.');
+  std::string name = (dot == std::string::npos) ? file : file.substr(0, dot);
+  std::string ext = (dot == std::string::npos) ? "" : file.substr(dot);
+  int id = 0;
+  size_t us = name.find_last_of('_');
+  if (us != std::string::npos)
+  {
+    std::string num = name.substr(us + 1);
+    if (!num.empty() &&
+        std::all_of(num.begin(), num.end(), [](unsigned char ch) { return std::isdigit(ch); }))
+    {
+      id = std::stoi(num);
+      name = name.substr(0, us);
+    }
+  }
+  ++id;
+  return dir + name + "_" + std::to_string(id) + ext;
+}
 
 static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
 {
@@ -216,7 +242,8 @@ void Renderer::render_ppm(const std::string &path,
 }
 
 void Renderer::render_window(std::vector<Material> &mats,
-                             const RenderSettings &rset)
+                             const RenderSettings &rset,
+                             const std::string &scene_path)
 {
   const int W = rset.width;
   const int H = rset.height;
@@ -282,6 +309,7 @@ void Renderer::render_window(std::vector<Material> &mats,
   double edit_dist = 0.0;
   Vec3 edit_pos;
   bool rotating = false;
+  std::string current_path = scene_path;
 
   while (running)
   {
@@ -412,6 +440,16 @@ void Renderer::render_window(std::vector<Material> &mats,
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
         running = false;
+      else if (focused && e.type == SDL_KEYDOWN &&
+               e.key.keysym.scancode == SDL_SCANCODE_C)
+      {
+        std::string next = next_save_path(current_path);
+        if (Parser::write_rt_file(next, scene, cam, mats))
+        {
+          current_path = next;
+          std::cout << "Saved map to: " << next << "\n";
+        }
+      }
     }
 
     const Uint8 *state = SDL_GetKeyboardState(nullptr);
