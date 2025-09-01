@@ -61,6 +61,9 @@ void Scene::update_beams(const std::vector<Material> &mats)
     {
       if (other.get() == bm.get())
         continue;
+      if (auto src = bm->source.lock())
+        if (other.get() == src.get())
+          continue;
       if (other->hit(forward, 1e-4, closest, tmp))
       {
         closest = tmp.t;
@@ -82,6 +85,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
           auto new_bm = std::make_shared<Beam>(refl_orig, refl_dir, bm->radius,
                                                new_len, 0, bm->material_id,
                                                new_start, bm->total_length);
+          new_bm->source = bm->source;
           to_process.push_back(new_bm);
         }
       }
