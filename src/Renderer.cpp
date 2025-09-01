@@ -1,6 +1,7 @@
 #include "rt/Renderer.hpp"
 #include "rt/Config.hpp"
 #include "rt/AABB.hpp"
+#include "rt/Parser.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -11,6 +12,8 @@
 #include <string>
 #include <random>
 #include <thread>
+#include <filesystem>
+#include <cctype>
 
 namespace rt
 {
@@ -152,6 +155,40 @@ static void draw_text(SDL_Renderer *ren, const std::string &txt, int x, int y,
   }
 }
 
+static std::string next_save_path(const std::string &orig)
+{
+  namespace fs = std::filesystem;
+  fs::path p(orig);
+  fs::path dir = p.parent_path();
+  std::string stem = p.stem().string();
+  int base_id = 0;
+  auto pos = stem.find_last_of('_');
+  if (pos != std::string::npos)
+  {
+    bool num = true;
+    for (size_t i = pos + 1; i < stem.size(); ++i)
+      if (!std::isdigit(static_cast<unsigned char>(stem[i])))
+      {
+        num = false;
+        break;
+      }
+    if (num)
+    {
+      base_id = std::atoi(stem.c_str() + pos + 1);
+      stem = stem.substr(0, pos);
+    }
+  }
+  int idx = base_id + 1;
+  fs::path ext = p.extension();
+  for (;; ++idx)
+  {
+    fs::path candidate = dir / (stem + "_" + std::to_string(idx) + ext.string());
+    std::error_code ec;
+    if (!fs::exists(candidate, ec))
+      return candidate.string();
+  }
+}
+
 Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
 
 void Renderer::render_ppm(const std::string &path,
@@ -216,7 +253,8 @@ void Renderer::render_ppm(const std::string &path,
 }
 
 void Renderer::render_window(std::vector<Material> &mats,
-                             const RenderSettings &rset)
+                             const RenderSettings &rset,
+                             const std::string &scene_path)
 {
   const int W = rset.width;
   const int H = rset.height;
@@ -408,6 +446,17 @@ void Renderer::render_window(std::vector<Material> &mats,
         {
           scene.move_camera(cam, cam.up * step, mats);
         }
+      }
+      else if (focused && e.type == SDL_KEYDOWN &&
+               e.key.keysym.scancode == SDL_SCANCODE_C)
+      {
+        scene.update_beams(mats);
+        scene.build_bvh();
+        std::string save = next_save_path(scene_path);
+        if (Parser::save_rt_file(save, scene, cam, mats))
+          std::cout << "Saved scene to: " << save << "\n";
+        else
+          std::cerr << "Failed to save scene to: " << save << "\n";
       }
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
