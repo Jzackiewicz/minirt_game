@@ -13,6 +13,8 @@
 #include <random>
 #include <thread>
 #include <filesystem>
+#include <chrono>
+#include <ctime>
 
 namespace rt
 {
@@ -223,7 +225,6 @@ void Renderer::render_window(std::vector<Material> &mats,
   std::filesystem::path dir = base.parent_path();
   std::string stem = base.stem().string();
   std::string ext = base.extension().string();
-  int save_id = 0;
 
   if (SDL_Init(SDL_INIT_VIDEO) != 0)
   {
@@ -408,13 +409,24 @@ void Renderer::render_window(std::vector<Material> &mats,
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_C)
       {
-        ++save_id;
-        std::filesystem::path outp =
-            dir / (stem + "_" + std::to_string(save_id) + ext);
-        if (Parser::save_rt_file(outp.string(), scene, cam, mats))
-          std::cout << "Saved scene to " << outp.string() << "\n";
-        else
-          std::cerr << "Failed to save scene to " << outp.string() << "\n";
+        auto now = std::chrono::system_clock::now();
+        std::time_t tt = std::chrono::system_clock::to_time_t(now);
+        std::tm tm;
+#if defined(_WIN32)
+        localtime_s(&tm, &tt);
+#else
+        localtime_r(&tt, &tm);
+#endif
+        char buf[32];
+        if (std::strftime(buf, sizeof(buf), "%Y%m%d_%H%M%S", &tm))
+        {
+          std::filesystem::path outp =
+              dir / (stem + "_" + std::string(buf) + ext);
+          if (Parser::save_rt_file(outp.string(), scene, cam, mats))
+            std::cout << "Saved scene to " << outp.string() << "\n";
+          else
+            std::cerr << "Failed to save scene to " << outp.string() << "\n";
+        }
       }
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)

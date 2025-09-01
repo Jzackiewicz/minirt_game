@@ -439,13 +439,15 @@ bool Parser::save_rt_file(const std::string &path, const Scene &scene,
     case ShapeType::Beam:
     {
       const Beam *bm = static_cast<const Beam *>(obj.get());
+      if (bm->start > 0.0)
+        continue;
       out << "bm ";
       write_vec(bm->path.orig);
       out << " ";
       write_vec(bm->path.dir);
       out << " ";
       write_rgba(m.base_color, m.alpha);
-      out << " " << bm->radius << " " << bm->length << "\n";
+      out << " " << bm->radius << " " << bm->total_length << "\n";
       break;
     }
     default:
