@@ -12,7 +12,10 @@ BeamSource::BeamSource(const Vec3 &c, const Vec3 &dir,
       inner(c, 0.6 * 0.33, oid, mat_small), beam(bm), light(lt)
 {
   if (light)
+  {
     light->position = c + dir.normalized() * 0.6;
+    light->ignore_id = oid;
+  }
 }
 
 bool BeamSource::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
