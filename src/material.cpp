@@ -25,6 +25,12 @@ Vec3 phong(const Material &m, const Ambient &ambient,
   for (const auto &L : lights)
   {
     Vec3 ldir = (L.position - p).normalized();
+    if (L.cutoff_cos > -1.0)
+    {
+      Vec3 spot_dir = (p - L.position).normalized();
+      if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
+        continue;
+    }
     double diff = std::max(0.0, Vec3::dot(n, ldir));
     Vec3 h = (ldir + eye).normalized();
     double spec =

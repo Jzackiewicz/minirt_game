@@ -7,8 +7,8 @@ BeamSource::BeamSource(const Vec3 &c, const Vec3 &dir,
                        const std::shared_ptr<Beam> &bm, int oid,
                        int mat_big, int mat_mid, int mat_small)
     : Sphere(c, 0.6, oid, mat_big),
-      mid(c, 0.6 * 0.67, oid, mat_mid),
-      inner(c, 0.6 * 0.33, oid, mat_small), beam(bm)
+      mid(c, 0.6 * 0.67, -oid - 1, mat_mid),
+      inner(c, 0.6 * 0.33, -oid - 2, mat_small), beam(bm)
 {
 }
 
@@ -31,12 +31,16 @@ bool BeamSource::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) con
   }
   if (inner.hit(r, tmin, closest, tmp))
   {
-    hit_any = true;
-    closest = tmp.t;
-    rec = tmp;
+    Vec3 beam_dir = beam ? beam->path.dir : Vec3(0, 0, 1);
+    Vec3 to_hit = (tmp.p - inner.center).normalized();
+    const double hole_cos = std::sqrt(1.0 - 0.25 * 0.25);
+    if (Vec3::dot(beam_dir, to_hit) < hole_cos)
+    {
+      hit_any = true;
+      closest = tmp.t;
+      rec = tmp;
+    }
   }
-  if (hit_any)
-    rec.object_id = object_id;
   return hit_any;
 }
 
@@ -58,6 +62,11 @@ void BeamSource::rotate(const Vec3 &ax, double angle)
   };
   if (beam)
     beam->path.dir = rotate_vec(beam->path.dir, ax, angle).normalized();
+}
+
+Vec3 BeamSource::spot_direction() const
+{
+  return beam ? beam->path.dir : Vec3(0, 0, 1);
 }
 
 } // namespace rt
