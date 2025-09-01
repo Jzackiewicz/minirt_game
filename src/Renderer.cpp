@@ -634,6 +634,10 @@ void Renderer::render_window(std::vector<Material> &mats,
       }
     }
     SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
+    int cx = W / 2;
+    int cy = H / 2;
+    SDL_RenderDrawLine(ren, cx - 10, cy, cx + 10, cy);
+    SDL_RenderDrawLine(ren, cx, cy - 10, cx, cy + 10);
     draw_text(ren, edit_mode ? "EDIT" : "SPECTATOR", 5, 5, 2);
     SDL_RenderPresent(ren);
   }
