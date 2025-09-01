@@ -52,7 +52,6 @@ int main(int argc, char **argv)
     return 2;
   }
   auto mats = rt::Parser::get_materials();
-  scene.update_beams(mats);
   scene.build_bvh();
 
   rt::RenderSettings rset;
@@ -62,7 +61,7 @@ int main(int argc, char **argv)
   rset.downscale = downscale;
 
   rt::Renderer renderer(scene, cam);
-  renderer.render_window(mats, rset);
+  renderer.render_window(mats, rset, scene_path);
 
   return 0;
 }
