@@ -2,6 +2,7 @@
 #include "rt/Beam.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Collision.hpp"
+#include "rt/Camera.hpp"
 #include <algorithm>
 #include <limits>
 
@@ -128,6 +129,52 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
       obj->translate(ax * -1);
     else
       moved += ax;
+  }
+  return moved;
+}
+
+Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
+                        const std::vector<Material> &mats) const
+{
+  auto blocked = [&](const Vec3 &start, const Vec3 &d) {
+    double len = d.length();
+    if (len <= 0.0)
+      return false;
+    Ray r(start, d / len);
+    HitRecord tmp;
+    for (const auto &obj : objects)
+    {
+      if (obj->is_beam())
+        continue;
+      const Material &mat = mats[obj->material_id];
+      if (mat.alpha < 1.0)
+        continue;
+      if (obj->hit(r, 1e-4, len, tmp))
+        return true;
+    }
+    return false;
+  };
+
+  Vec3 start = cam.origin;
+  if (!blocked(start, delta))
+  {
+    cam.move(delta);
+    return delta;
+  }
+
+  Vec3 moved(0, 0, 0);
+  Vec3 axes[3] = {Vec3(delta.x, 0, 0), Vec3(0, delta.y, 0),
+                  Vec3(0, 0, delta.z)};
+  for (const Vec3 &ax : axes)
+  {
+    if (ax.length_squared() == 0)
+      continue;
+    if (!blocked(start, ax))
+    {
+      cam.move(ax);
+      start += ax;
+      moved += ax;
+    }
   }
   return moved;
 }
