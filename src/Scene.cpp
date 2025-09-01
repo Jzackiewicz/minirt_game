@@ -128,6 +128,15 @@ void Scene::update_beams(const std::vector<Material> &mats)
       if (it != id_map.end())
         ign = it->second;
     }
+    for (int ign : L.ignore_ids)
+    {
+      if (ign >= 0 && ign < static_cast<int>(objects.size()) &&
+          objects[ign]->is_beam())
+      {
+        L.range = std::static_pointer_cast<Beam>(objects[ign])->length;
+        break;
+      }
+    }
   }
 
   const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
@@ -139,7 +148,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
     if (bm->start <= 0.0)
       continue;
     Vec3 col = mats[bm->material_id].color;
-    lights.emplace_back(bm->path.orig, col, 0.75,
+    lights.emplace_back(bm->path.orig, col, 0.75, bm->length,
                         std::vector<int>{bm->object_id}, REFLECTION_LIGHT,
                         bm->path.dir, cone_cos);
   }

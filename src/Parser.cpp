@@ -325,7 +325,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         outScene.objects.push_back(src);
         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
         outScene.lights.emplace_back(
-            o, unit, 0.75,
+            o, unit, 0.75, bm->length,
             std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
             src->object_id, dir_norm, cone_cos);
       }

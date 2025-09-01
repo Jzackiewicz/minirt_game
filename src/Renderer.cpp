@@ -69,6 +69,9 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
         L.ignore_ids.end())
       continue;
     Vec3 to_light = L.position - rec.p;
+    double dist2 = to_light.length_squared();
+    if (L.range > 0.0 && dist2 > L.range * L.range)
+      continue;
     Vec3 ldir = to_light.normalized();
     if (L.cutoff_cos > -1.0)
     {
