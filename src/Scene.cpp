@@ -3,8 +3,10 @@
 #include "rt/Plane.hpp"
 #include "rt/Collision.hpp"
 #include "rt/Camera.hpp"
+#include "rt/Config.hpp"
 #include <algorithm>
 #include <limits>
+#include <cmath>
 
 namespace
 {
@@ -118,7 +120,7 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta, const Camera &cam)
       return false;
     Vec3 center = (box.min + box.max) * 0.5;
     Vec3 half = (box.max - box.min) * 0.5;
-    double radius = half.length();
+    double radius = half.length() + CAMERA_OBJECT_MARGIN;
     return (cam.origin - center).length() < radius;
   };
 
@@ -150,8 +152,8 @@ Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
     double len = d.length();
     if (len <= 0.0)
       return false;
-    Ray r(start, d / len);
-    HitRecord tmp;
+    Vec3 dir = d / len;
+    Ray r(start, dir);
     for (const auto &obj : objects)
     {
       if (obj->is_beam())
@@ -159,8 +161,31 @@ Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
       const Material &mat = mats[obj->material_id];
       if (mat.alpha < 1.0)
         continue;
-      if (obj->hit(r, 1e-4, len, tmp))
+      if (obj->is_plane())
+      {
+        HitRecord tmp;
+        if (obj->hit(r, 1e-4, len, tmp))
+          return true;
+        continue;
+      }
+      AABB box;
+      if (!obj->bounding_box(box))
+        continue;
+      Vec3 center = (box.min + box.max) * 0.5;
+      Vec3 oc = start - center;
+      double radius = ((box.max - box.min) * 0.5).length() +
+                      CAMERA_OBJECT_MARGIN;
+      double b = Vec3::dot(oc, dir);
+      double c = oc.length_squared() - radius * radius;
+      if (c <= 0.0)
         return true;
+      double disc = b * b - c;
+      if (disc >= 0.0)
+      {
+        double t = -b - std::sqrt(disc);
+        if (t >= 0.0 && t <= len)
+          return true;
+      }
     }
     return false;
   };

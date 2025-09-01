@@ -318,7 +318,8 @@ void Renderer::render_window(std::vector<Material> &mats,
           {
             Vec3 center = (box.min + box.max) * 0.5;
             edit_dist = (center - cam.origin).length();
-            double min_dist = bounding_radius(scene.objects[selected_obj]);
+            double min_dist = bounding_radius(scene.objects[selected_obj]) +
+                              CAMERA_OBJECT_MARGIN;
             edit_dist = std::clamp(edit_dist, min_dist, MAX_INTERACT_DISTANCE);
             Vec3 desired = cam.origin + cam.forward * edit_dist;
             Vec3 delta = desired - center;
@@ -331,8 +332,10 @@ void Renderer::render_window(std::vector<Material> &mats,
                 scene.update_beams(mats);
                 scene.build_bvh();
                 edit_dist = (center - cam.origin).length();
-                min_dist = bounding_radius(scene.objects[selected_obj]);
-                edit_dist = std::clamp(edit_dist, min_dist, MAX_INTERACT_DISTANCE);
+                min_dist = bounding_radius(scene.objects[selected_obj]) +
+                           CAMERA_OBJECT_MARGIN;
+                edit_dist =
+                    std::clamp(edit_dist, min_dist, MAX_INTERACT_DISTANCE);
               }
             }
             edit_pos = center;
@@ -390,7 +393,8 @@ void Renderer::render_window(std::vector<Material> &mats,
             AABB box;
             if (scene.objects[selected_obj]->bounding_box(box))
               edit_pos = (box.min + box.max) * 0.5;
-            double min_dist = bounding_radius(scene.objects[selected_obj]);
+            double min_dist = bounding_radius(scene.objects[selected_obj]) +
+                              CAMERA_OBJECT_MARGIN;
             if (edit_dist < min_dist)
             {
               edit_dist = min_dist;
@@ -410,7 +414,8 @@ void Renderer::render_window(std::vector<Material> &mats,
         if (edit_mode)
         {
           edit_dist += step;
-          double min_dist = bounding_radius(scene.objects[selected_obj]);
+          double min_dist = bounding_radius(scene.objects[selected_obj]) +
+                            CAMERA_OBJECT_MARGIN;
           if (edit_dist < min_dist)
             edit_dist = min_dist;
           if (edit_dist > MAX_INTERACT_DISTANCE)
@@ -474,7 +479,8 @@ void Renderer::render_window(std::vector<Material> &mats,
         AABB box;
         if (scene.objects[selected_obj]->bounding_box(box))
           edit_pos = (box.min + box.max) * 0.5;
-        double min_dist = bounding_radius(scene.objects[selected_obj]);
+        double min_dist = bounding_radius(scene.objects[selected_obj]) +
+                          CAMERA_OBJECT_MARGIN;
         if (edit_dist < min_dist)
         {
           edit_dist = min_dist;
@@ -515,7 +521,8 @@ void Renderer::render_window(std::vector<Material> &mats,
           scene.build_bvh();
         }
       }
-      double min_dist = bounding_radius(scene.objects[selected_obj]);
+      double min_dist = bounding_radius(scene.objects[selected_obj]) +
+                        CAMERA_OBJECT_MARGIN;
       edit_dist = std::clamp(Vec3::dot(edit_pos - cam.origin, cam.forward),
                              min_dist, MAX_INTERACT_DISTANCE);
       cam.origin = edit_pos - cam.forward * edit_dist;
