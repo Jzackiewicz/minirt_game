@@ -2,6 +2,7 @@
 #pragma once
 #include "BVH.hpp"
 #include "Hittable.hpp"
+#include "Camera.hpp"
 #include "light.hpp"
 #include "material.hpp"
 #include <memory>
@@ -21,6 +22,8 @@ struct Scene
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
   bool collides(int index) const;
   Vec3 move_with_collision(int index, const Vec3 &delta);
+  Vec3 move_camera(Camera &cam, const Vec3 &delta,
+                   const std::vector<Material> &mats);
 };
 
 } // namespace rt

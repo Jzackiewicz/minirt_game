@@ -2,6 +2,8 @@
 #include "rt/Beam.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Collision.hpp"
+#include "rt/Sphere.hpp"
+#include "rt/material.hpp"
 #include <algorithm>
 #include <limits>
 
@@ -10,6 +12,48 @@ namespace
 inline rt::Vec3 reflect(const rt::Vec3 &v, const rt::Vec3 &n)
 {
   return v - n * (2.0 * rt::Vec3::dot(v, n));
+}
+
+constexpr double CAMERA_RADIUS = 0.25;
+
+static bool camera_collides(const rt::Scene &scene,
+                            const rt::HittablePtr &cam_obj,
+                            const std::vector<rt::Material> &mats)
+{
+  rt::AABB box;
+  std::vector<rt::HittablePtr> candidates;
+  if (cam_obj->bounding_box(box) && scene.accel && scene.accel->is_bvh())
+  {
+    static_cast<const rt::BVHNode *>(scene.accel.get())->query(box, candidates);
+  }
+  else
+  {
+    for (auto &o : scene.objects)
+      if (!o->is_plane())
+        candidates.push_back(o);
+  }
+
+  for (auto &cand : candidates)
+  {
+    if (cand->is_beam())
+      continue;
+    if (mats[cand->material_id].alpha < 1.0)
+      continue;
+    if (rt::precise_collision(cam_obj, cand))
+      return true;
+  }
+
+  for (auto &o : scene.objects)
+  {
+    if (!o->is_plane())
+      continue;
+    if (mats[o->material_id].alpha < 1.0)
+      continue;
+    if (rt::precise_collision(cam_obj, o))
+      return true;
+  }
+
+  return false;
 }
 
 } // namespace
@@ -128,6 +172,36 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
       obj->translate(ax * -1);
     else
       moved += ax;
+  }
+  return moved;
+}
+
+Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
+                        const std::vector<Material> &mats)
+{
+  auto cam_obj = std::make_shared<Sphere>(cam.origin, CAMERA_RADIUS, -1, 0);
+  cam_obj->translate(delta);
+  if (!camera_collides(*this, cam_obj, mats))
+  {
+    cam.move(delta);
+    return delta;
+  }
+  cam_obj->translate(delta * -1);
+  Vec3 moved(0, 0, 0);
+  Vec3 axes[3] = {Vec3(delta.x, 0, 0), Vec3(0, delta.y, 0),
+                  Vec3(0, 0, delta.z)};
+  for (const Vec3 &ax : axes)
+  {
+    if (ax.length_squared() == 0)
+      continue;
+    cam_obj->translate(ax);
+    if (camera_collides(*this, cam_obj, mats))
+      cam_obj->translate(ax * -1);
+    else
+    {
+      cam.move(ax);
+      moved += ax;
+    }
   }
   return moved;
 }

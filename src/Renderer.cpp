@@ -393,7 +393,7 @@ void Renderer::render_window(std::vector<Material> &mats,
         }
         else if (focused)
         {
-          cam.move(cam.up * step);
+          scene.move_camera(cam, cam.up * step, mats);
         }
       }
       else if (focused && e.type == SDL_KEYDOWN &&
@@ -412,17 +412,17 @@ void Renderer::render_window(std::vector<Material> &mats,
     {
       double cam_speed = CAMERA_MOVE_SPEED * dt;
       if (state[SDL_SCANCODE_W])
-        cam.move(forward_xz * cam_speed);
+        scene.move_camera(cam, forward_xz * cam_speed, mats);
       if (state[SDL_SCANCODE_S])
-        cam.move(forward_xz * -cam_speed);
+        scene.move_camera(cam, forward_xz * -cam_speed, mats);
       if (state[SDL_SCANCODE_A])
-        cam.move(right_xz * -cam_speed);
+        scene.move_camera(cam, right_xz * -cam_speed, mats);
       if (state[SDL_SCANCODE_D])
-        cam.move(right_xz * cam_speed);
+        scene.move_camera(cam, right_xz * cam_speed, mats);
       if (state[SDL_SCANCODE_SPACE])
-        cam.move(Vec3(0, 1, 0) * cam_speed);
+        scene.move_camera(cam, Vec3(0, 1, 0) * cam_speed, mats);
       if (state[SDL_SCANCODE_LCTRL])
-        cam.move(Vec3(0, -1, 0) * cam_speed);
+        scene.move_camera(cam, Vec3(0, -1, 0) * cam_speed, mats);
 
       double rot_speed = OBJECT_ROTATE_SPEED * dt;
       bool changed = false;
@@ -454,17 +454,17 @@ void Renderer::render_window(std::vector<Material> &mats,
         running = false;
       double speed = CAMERA_MOVE_SPEED * dt;
       if (state[SDL_SCANCODE_W])
-        cam.move(forward_xz * speed);
+        scene.move_camera(cam, forward_xz * speed, mats);
       if (state[SDL_SCANCODE_S])
-        cam.move(forward_xz * -speed);
+        scene.move_camera(cam, forward_xz * -speed, mats);
       if (state[SDL_SCANCODE_A])
-        cam.move(right_xz * -speed);
+        scene.move_camera(cam, right_xz * -speed, mats);
       if (state[SDL_SCANCODE_D])
-        cam.move(right_xz * speed);
+        scene.move_camera(cam, right_xz * speed, mats);
       if (state[SDL_SCANCODE_SPACE])
-        cam.move(Vec3(0, 1, 0) * speed);
+        scene.move_camera(cam, Vec3(0, 1, 0) * speed, mats);
       if (state[SDL_SCANCODE_LCTRL])
-        cam.move(Vec3(0, -1, 0) * speed);
+        scene.move_camera(cam, Vec3(0, -1, 0) * speed, mats);
     }
 
     if (edit_mode)
