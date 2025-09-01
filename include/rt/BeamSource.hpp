@@ -16,5 +16,6 @@ struct BeamSource : public Sphere
   bool bounding_box(AABB &out) const override { return Sphere::bounding_box(out); }
   void translate(const Vec3 &delta) override;
   void rotate(const Vec3 &axis, double angle) override;
+  Vec3 spot_direction() const override;
 };
 } // namespace rt
