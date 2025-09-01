@@ -20,6 +20,7 @@ struct Scene
   void build_bvh();
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
   bool collides(int index) const;
+  Vec3 move_with_collision(int index, const Vec3 &delta);
 };
 
 } // namespace rt
