@@ -111,6 +111,22 @@ void Scene::update_beams(const std::vector<Material> &mats)
         Vec3 dir = objects[L.attached_id]->spot_direction();
         if (dir.length_squared() > 0)
           L.direction = dir.normalized();
+        for (const auto &obj : objects)
+        {
+          if (!obj->is_beam())
+            continue;
+          auto bm = std::static_pointer_cast<Beam>(obj);
+          if (auto src = bm->source.lock())
+          {
+            if (src->object_id == L.attached_id && bm->start <= 0.0)
+            {
+              L.range = bm->length;
+              L.girth = bm->radius * 1.1;
+              L.direction = bm->path.dir.normalized();
+              break;
+            }
+          }
+        }
       }
     }
     for (int &ign : L.ignore_ids)
