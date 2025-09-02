@@ -114,46 +114,6 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   return sum;
 }
 
-static const char *hud_chars = "EDITSPCAORM";
-static const uint8_t hud_font[][5] = {
-    {0b11111, 0b10000, 0b11100, 0b10000, 0b11111}, // E
-    {0b11110, 0b10001, 0b10001, 0b10001, 0b11110}, // D
-    {0b11111, 0b00100, 0b00100, 0b00100, 0b11111}, // I
-    {0b11111, 0b00100, 0b00100, 0b00100, 0b00100}, // T
-    {0b01111, 0b10000, 0b01110, 0b00001, 0b11110}, // S
-    {0b11110, 0b10001, 0b11110, 0b10000, 0b10000}, // P
-    {0b01110, 0b10001, 0b10000, 0b10001, 0b01110}, // C
-    {0b01110, 0b10001, 0b11111, 0b10001, 0b10001}, // A
-    {0b01110, 0b10001, 0b10001, 0b10001, 0b01110}, // O
-    {0b11110, 0b10001, 0b11110, 0b10100, 0b10010}, // R
-    {0b10001, 0b11011, 0b10101, 0b10001, 0b10001}  // M
-};
-
-static void draw_char(SDL_Renderer *ren, char c, int x, int y, int scale)
-{
-  const char *p = std::strchr(hud_chars, c);
-  if (!p)
-    return;
-  size_t idx = p - hud_chars;
-  for (int i = 0; i < 5; ++i)
-    for (int j = 0; j < 7; ++j)
-      if (hud_font[idx][i] & (1 << j))
-      {
-        SDL_Rect r{x + i * scale, y + j * scale, scale, scale};
-        SDL_RenderFillRect(ren, &r);
-      }
-}
-
-static void draw_text(SDL_Renderer *ren, const std::string &txt, int x, int y,
-                      int scale)
-{
-  for (size_t i = 0; i < txt.size(); ++i)
-  {
-    if (txt[i] == ' ')
-      continue;
-    draw_char(ren, txt[i], x + static_cast<int>(i) * (6 * scale), y, scale);
-  }
-}
 
 static std::string next_save_path(const std::string &orig)
 {
@@ -629,6 +589,7 @@ void Renderer::render_window(std::vector<Material> &mats,
     }
 
     SDL_UpdateTexture(tex, nullptr, pixels.data(), RW * 3);
+    SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
     SDL_RenderClear(ren);
     SDL_RenderCopy(ren, tex, nullptr, nullptr);
     if (edit_mode)
@@ -695,12 +656,6 @@ void Renderer::render_window(std::vector<Material> &mats,
         }
       }
     }
-    SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
-    int cx = W / 2;
-    int cy = H / 2;
-    SDL_RenderDrawLine(ren, cx - 10, cy, cx + 10, cy);
-    SDL_RenderDrawLine(ren, cx, cy - 10, cx, cy + 10);
-    draw_text(ren, edit_mode ? "EDIT" : "SPECTATOR", 5, 5, 2);
     SDL_RenderPresent(ren);
   }
 
