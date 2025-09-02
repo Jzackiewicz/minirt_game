@@ -326,11 +326,17 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         bm->source = src;
         outScene.objects.push_back(bm);
         outScene.objects.push_back(src);
-        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+        double light_radius = g * 1.1;
+        double cone_cos = -1.0;
+        if (light_radius < L && L > 0.0)
+        {
+          double ratio = light_radius / L;
+          cone_cos = std::sqrt(std::max(0.0, 1.0 - ratio * ratio));
+        }
         outScene.lights.emplace_back(
             o, unit, 0.75,
             std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
-            src->object_id, dir_norm, cone_cos);
+            src->object_id, dir_norm, cone_cos, L);
       }
     }
     else if (id == "co")

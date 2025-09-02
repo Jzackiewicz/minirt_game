@@ -1,11 +1,13 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
+#include "rt/BeamSource.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Collision.hpp"
 #include "rt/Camera.hpp"
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
+#include <cmath>
 
 namespace
 {
@@ -24,6 +26,11 @@ void Scene::update_beams(const std::vector<Material> &mats)
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
   std::unordered_map<int, int> id_map;
+
+  std::vector<PointLight> base_lights;
+  for (auto &L : lights)
+    if (L.attached_id < 0)
+      base_lights.push_back(L);
 
   for (auto &obj : objects)
   {
@@ -99,26 +106,40 @@ void Scene::update_beams(const std::vector<Material> &mats)
     }
   }
 
+  lights = std::move(base_lights);
   for (auto &L : lights)
-  {
-    if (L.attached_id >= 0)
-    {
-      auto it = id_map.find(L.attached_id);
-      if (it != id_map.end())
-        L.attached_id = it->second;
-      if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
-      {
-        Vec3 dir = objects[L.attached_id]->spot_direction();
-        if (dir.length_squared() > 0)
-          L.direction = dir.normalized();
-      }
-    }
     for (int &ign : L.ignore_ids)
     {
       auto it = id_map.find(ign);
       if (it != id_map.end())
         ign = it->second;
     }
+
+  for (auto &obj : objects)
+  {
+    if (!obj->is_beam())
+      continue;
+    auto bm = std::static_pointer_cast<Beam>(obj);
+    Vec3 color = mats[bm->material_id].color;
+    double light_radius = bm->radius * 1.1;
+    double cone_cos = -1.0;
+    if (light_radius < bm->length && bm->length > 0.0)
+    {
+      double ratio = light_radius / bm->length;
+      cone_cos = std::sqrt(std::max(0.0, 1.0 - ratio * ratio));
+    }
+    std::vector<int> ignore{bm->object_id};
+    int attached_id = -1;
+    if (auto src = bm->source.lock())
+    {
+      ignore.push_back(src->object_id);
+      auto bs = std::static_pointer_cast<BeamSource>(src);
+      ignore.push_back(bs->mid.object_id);
+      if (bm->start <= 0.0)
+        attached_id = bs->object_id;
+    }
+    lights.emplace_back(bm->path.orig, color, 0.75, ignore, attached_id,
+                        bm->path.dir, cone_cos, bm->length);
   }
 }
 

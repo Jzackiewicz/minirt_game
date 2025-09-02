@@ -44,6 +44,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                       std::uniform_real_distribution<double> &dist,
                       int depth = 0)
 {
+  (void)dist;
   if (depth > 10)
     return Vec3(0.0, 0.0, 0.0);
   HitRecord rec;
@@ -72,7 +73,10 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
         L.ignore_ids.end())
       continue;
     Vec3 to_light = L.position - rec.p;
-    Vec3 ldir = to_light.normalized();
+    double dist_to_light = to_light.length();
+    if (L.range > 0.0 && dist_to_light > L.range)
+      continue;
+    Vec3 ldir = to_light / dist_to_light;
     if (L.cutoff_cos > -1.0)
     {
       Vec3 spot_dir = (rec.p - L.position).normalized();
@@ -81,11 +85,13 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     }
     if (in_shadow(scene, rec.p, L))
       continue;
-    double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
+    double atten = (L.range > 0.0 && L.range > 1e-9) ?
+                   std::max(0.0, 1.0 - dist_to_light / L.range) : 1.0;
+    double diff = std::max(0.0, Vec3::dot(rec.normal, ldir)) * atten;
     Vec3 h = (ldir + eye).normalized();
     double spec =
         std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
-        m.specular_k;
+        m.specular_k * atten;
     sum += Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
                 col.y * L.color.y * L.intensity * diff + L.color.y * spec,
                 col.z * L.color.z * L.intensity * diff + L.color.z * spec);
@@ -102,8 +108,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   if (m.random_alpha)
   {
     double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-    double rand = (1.0 - tpos) * std::pow(dist(rng), tpos);
-    alpha *= rand;
+    alpha *= std::max(0.0, 1.0 - tpos);
   }
   if (alpha < 1.0)
   {
