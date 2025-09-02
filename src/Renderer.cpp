@@ -2,6 +2,7 @@
 #include "rt/Config.hpp"
 #include "rt/AABB.hpp"
 #include "rt/Parser.hpp"
+#include "rt/Beam.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -14,6 +15,7 @@
 #include <thread>
 #include <filesystem>
 #include <cctype>
+#include <memory>
 
 namespace rt
 {
@@ -37,6 +39,55 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
     }
   }
   return false;
+}
+
+static void apply_beam_lighting(const Scene &scene,
+                                const std::vector<Material> &mats,
+                                const Vec3 &p, const Vec3 &n, Vec3 &sum)
+{
+  for (const auto &obj : scene.objects)
+  {
+    if (!obj->is_beam())
+      continue;
+    auto bm = std::static_pointer_cast<Beam>(obj);
+    Vec3 w = p - bm->path.orig;
+    double proj = Vec3::dot(w, bm->path.dir);
+    if (proj < 0.0 || proj > bm->length)
+      continue;
+    Vec3 closest = bm->path.at(proj);
+    Vec3 diff = p - closest;
+    double rad = bm->radius * 1.1; // light slightly girthier than beam
+    double dist2 = diff.length_squared();
+    if (dist2 > rad * rad)
+      continue;
+    double ratio = (bm->start + proj) / bm->total_length;
+    double intensity = std::max(0.0, 1.0 - ratio);
+    Vec3 ldir = diff.normalized();
+    double diff_light = std::max(0.0, Vec3::dot(n, ldir));
+    if (diff_light <= 0.0)
+      continue;
+    // shadow check towards beam
+    Ray shadow_ray(p + ldir * 1e-4, ldir);
+    double dist_to_light = std::sqrt(dist2);
+    HitRecord tmp;
+    bool blocked = false;
+    for (const auto &other : scene.objects)
+    {
+      if (other->is_beam())
+        continue;
+      if (other->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
+      {
+        blocked = true;
+        break;
+      }
+    }
+    if (blocked)
+      continue;
+    const Material &bm_mat = mats[bm->material_id];
+    sum += Vec3(bm_mat.color.x * intensity * diff_light,
+                bm_mat.color.y * intensity * diff_light,
+                bm_mat.color.z * intensity * diff_light);
+  }
 }
 
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
@@ -90,6 +141,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                 col.y * L.color.y * L.intensity * diff + L.color.y * spec,
                 col.z * L.color.z * L.intensity * diff + L.color.z * spec);
   }
+  apply_beam_lighting(scene, mats, rec.p, rec.normal, sum);
   if (m.mirror)
   {
     Vec3 refl_dir = r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
