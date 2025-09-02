@@ -8,7 +8,8 @@ namespace rt
 struct Beam : public Hittable
 {
   Ray path;
-  double radius;
+  double radius;       // visual beam radius
+  double light_radius; // slightly larger radius for light effect
   double length;
   double start;
   double total_length;

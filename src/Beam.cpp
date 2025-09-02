@@ -6,7 +6,8 @@ namespace rt
 {
 Beam::Beam(const Vec3 &origin, const Vec3 &dir, double r, double len, int oid,
            int mid, double s, double total)
-    : path(origin, dir.normalized()), radius(r), length(len), start(s),
+    : path(origin, dir.normalized()), radius(r),
+      light_radius(r * 1.1), length(len), start(s),
       total_length(total < 0 ? len : total)
 {
   object_id = oid;
@@ -46,8 +47,10 @@ bool Beam::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
   Vec3 pb = path.at(tc);
   Vec3 diff = pr - pb;
   double dist2 = diff.length_squared();
-  if (dist2 > radius * radius)
+  if (dist2 > light_radius * light_radius)
     return false;
+  double dist_len = std::sqrt(dist2);
+  rec.beam_radial = dist_len / light_radius;
 
   Vec3 outward;
   if (dist2 > 1e-12)
@@ -79,7 +82,7 @@ bool Beam::bounding_box(AABB &out) const
            std::min(start.z, end.z));
   Vec3 max(std::max(start.x, end.x), std::max(start.y, end.y),
            std::max(start.z, end.z));
-  Vec3 ex(radius, radius, radius);
+  Vec3 ex(light_radius, light_radius, light_radius);
   out = AABB(min - ex, max + ex);
   return true;
 }

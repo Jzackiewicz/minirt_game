@@ -44,6 +44,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                       std::uniform_real_distribution<double> &dist,
                       int depth = 0)
 {
+  (void)dist;
   if (depth > 10)
     return Vec3(0.0, 0.0, 0.0);
   HitRecord rec;
@@ -102,8 +103,8 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   if (m.random_alpha)
   {
     double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-    double rand = (1.0 - tpos) * std::pow(dist(rng), tpos);
-    alpha *= rand;
+    double radial = std::clamp(rec.beam_radial, 0.0, 1.0);
+    alpha *= (1.0 - tpos) * (1.0 - radial);
   }
   if (alpha < 1.0)
   {

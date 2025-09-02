@@ -31,6 +31,7 @@ struct HitRecord
   int material_id;
   bool front_face;
   double beam_ratio = 0.0;
+  double beam_radial = 0.0;
   void set_face_normal(const Ray &r, const Vec3 &outward_normal);
 };
 
