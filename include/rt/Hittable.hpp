@@ -56,6 +56,8 @@ struct Hittable
     (void)angle;
   }
   virtual Vec3 spot_direction() const { return Vec3(0, 0, 0); }
+  virtual double spot_range() const { return -1.0; }
+  virtual double spot_girth() const { return -1.0; }
 };
 
 using HittablePtr = std::shared_ptr<Hittable>;

@@ -111,6 +111,12 @@ void Scene::update_beams(const std::vector<Material> &mats)
         Vec3 dir = objects[L.attached_id]->spot_direction();
         if (dir.length_squared() > 0)
           L.direction = dir.normalized();
+        double r = objects[L.attached_id]->spot_range();
+        if (r > 0.0)
+          L.range = r;
+        double g = objects[L.attached_id]->spot_girth();
+        if (g > 0.0)
+          L.girth = g * 1.1;
       }
     }
     for (int &ign : L.ignore_ids)

@@ -69,4 +69,8 @@ Vec3 BeamSource::spot_direction() const
   return beam ? beam->path.dir : Vec3(0, 0, 1);
 }
 
+double BeamSource::spot_range() const { return beam ? beam->length : -1.0; }
+
+double BeamSource::spot_girth() const { return beam ? beam->radius : -1.0; }
+
 } // namespace rt

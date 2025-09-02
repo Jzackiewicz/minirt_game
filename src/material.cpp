@@ -24,10 +24,23 @@ Vec3 phong(const Material &m, const Ambient &ambient,
            col.z * ambient.color.z * ambient.intensity);
   for (const auto &L : lights)
   {
-    Vec3 ldir = (L.position - p).normalized();
-    if (L.cutoff_cos > -1.0)
+    Vec3 from_light = p - L.position;
+    double dist_to_light = from_light.length();
+    if (L.range > 0.0 && dist_to_light > L.range)
+      continue;
+    Vec3 ldir = (from_light * -1.0).normalized();
+    if (L.girth > 0.0 && L.direction.length_squared() > 0.0)
     {
-      Vec3 spot_dir = (p - L.position).normalized();
+      double along = Vec3::dot(from_light, L.direction);
+      if (along < 0.0 || (L.range > 0.0 && along > L.range))
+        continue;
+      Vec3 radial = from_light - L.direction * along;
+      if (radial.length_squared() > L.girth * L.girth)
+        continue;
+    }
+    else if (L.cutoff_cos > -1.0)
+    {
+      Vec3 spot_dir = from_light.normalized();
       if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
         continue;
     }
@@ -35,9 +48,12 @@ Vec3 phong(const Material &m, const Ambient &ambient,
     Vec3 h = (ldir + eye).normalized();
     double spec =
         std::pow(std::max(0.0, Vec3::dot(n, h)), m.specular_exp) * m.specular_k;
-    c += Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
-              col.y * L.color.y * L.intensity * diff + L.color.y * spec,
-              col.z * L.color.z * L.intensity * diff + L.color.z * spec);
+    double intensity = L.intensity;
+    if (L.range > 0.0)
+      intensity *= std::max(0.0, 1.0 - dist_to_light / L.range);
+    c += Vec3(col.x * L.color.x * intensity * diff + L.color.x * spec,
+              col.y * L.color.y * intensity * diff + L.color.y * spec,
+              col.z * L.color.z * intensity * diff + L.color.z * spec);
   }
   return c;
 }
