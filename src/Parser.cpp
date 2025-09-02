@@ -296,11 +296,19 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().color = unit;
         materials.back().base_color = unit;
         materials.back().alpha = alpha_to_unit(a);
-        materials.back().random_alpha = true;
         int beam_mat = mid++;
+
+        materials.emplace_back();
+        materials.back().color = unit;
+        materials.back().base_color = unit;
+        materials.back().alpha = alpha_to_unit(a);
+        materials.back().random_alpha = true;
+        int light_mat = mid++;
 
         Vec3 dir_norm = dir.normalized();
         auto bm = std::make_shared<Beam>(o, dir_norm, g, L, oid++, beam_mat);
+        auto light_bm =
+            std::make_shared<Beam>(o, dir_norm, g * 1.2, L, oid++, light_mat);
 
         materials.emplace_back();
         materials.back().color = Vec3(1.0, 1.0, 1.0);
@@ -320,16 +328,20 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = 1.0;
         int small_mat = mid++;
 
-        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, oid++,
-                                                big_mat, mid_mat, small_mat);
+        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, light_bm,
+                                                oid++, big_mat, mid_mat,
+                                                small_mat);
         src->movable = (s_move == "M");
         bm->source = src;
+        light_bm->source = src;
         outScene.objects.push_back(bm);
+        outScene.objects.push_back(light_bm);
         outScene.objects.push_back(src);
-        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+        const double cone_cos = std::cos(std::atan((g * 1.2) / L));
         outScene.lights.emplace_back(
             o, unit, 0.75,
-            std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
+            std::vector<int>{bm->object_id, light_bm->object_id, src->object_id,
+                             src->mid.object_id},
             src->object_id, dir_norm, cone_cos);
       }
     }

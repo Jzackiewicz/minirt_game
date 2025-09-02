@@ -102,8 +102,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   if (m.random_alpha)
   {
     double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-    double rand = (1.0 - tpos) * std::pow(dist(rng), tpos);
-    alpha *= rand;
+    alpha *= (1.0 - tpos);
   }
   if (alpha < 1.0)
   {
