@@ -72,7 +72,10 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
         L.ignore_ids.end())
       continue;
     Vec3 to_light = L.position - rec.p;
-    Vec3 ldir = to_light.normalized();
+    double dist_to_light = to_light.length();
+    if (L.range > 0.0 && dist_to_light > L.range)
+      continue;
+    Vec3 ldir = to_light / dist_to_light;
     if (L.cutoff_cos > -1.0)
     {
       Vec3 spot_dir = (rec.p - L.position).normalized();
@@ -82,13 +85,16 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     if (in_shadow(scene, rec.p, L))
       continue;
     double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
+    double att = 1.0;
+    if (L.range > 0.0)
+      att = std::max(0.0, 1.0 - dist_to_light / L.range);
     Vec3 h = (ldir + eye).normalized();
     double spec =
         std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
         m.specular_k;
-    sum += Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
-                col.y * L.color.y * L.intensity * diff + L.color.y * spec,
-                col.z * L.color.z * L.intensity * diff + L.color.z * spec);
+    sum += Vec3(col.x * L.color.x * L.intensity * diff * att + L.color.x * spec * att,
+                col.y * L.color.y * L.intensity * diff * att + L.color.y * spec * att,
+                col.z * L.color.z * L.intensity * diff * att + L.color.z * spec * att);
   }
   if (m.mirror)
   {

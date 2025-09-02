@@ -3,9 +3,11 @@
 #include "rt/Plane.hpp"
 #include "rt/Collision.hpp"
 #include "rt/Camera.hpp"
+#include "rt/BeamSource.hpp"
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
+#include <cmath>
 
 namespace
 {
@@ -111,6 +113,17 @@ void Scene::update_beams(const std::vector<Material> &mats)
         Vec3 dir = objects[L.attached_id]->spot_direction();
         if (dir.length_squared() > 0)
           L.direction = dir.normalized();
+        auto src = std::dynamic_pointer_cast<BeamSource>(objects[L.attached_id]);
+        if (src && src->beam)
+        {
+          L.range = src->beam->length;
+          double girth = src->beam->radius * 1.1;
+          if (L.range > 1e-9)
+          {
+            double half_ang = std::atan(girth / L.range);
+            L.cutoff_cos = std::cos(half_ang);
+          }
+        }
       }
     }
     for (int &ign : L.ignore_ids)
