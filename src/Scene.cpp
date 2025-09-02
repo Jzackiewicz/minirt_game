@@ -1,10 +1,13 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
+#include "rt/BeamSource.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Collision.hpp"
 #include "rt/Camera.hpp"
 #include <algorithm>
+#include <cmath>
 #include <limits>
+#include <unordered_map>
 
 namespace
 {
@@ -22,6 +25,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
   std::vector<std::shared_ptr<Beam>> roots;
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
+  std::unordered_map<int, int> id_map;
 
   for (auto &obj : objects)
   {
@@ -40,7 +44,10 @@ void Scene::update_beams(const std::vector<Material> &mats)
   }
 
   for (size_t i = 0; i < non_beams.size(); ++i)
+  {
+    id_map[non_beams[i]->object_id] = static_cast<int>(i);
     non_beams[i]->object_id = static_cast<int>(i);
+  }
 
   objects = std::move(non_beams);
   int next_oid = static_cast<int>(objects.size());
@@ -49,6 +56,8 @@ void Scene::update_beams(const std::vector<Material> &mats)
   for (size_t i = 0; i < to_process.size(); ++i)
   {
     auto bm = to_process[i];
+    if (i < roots.size())
+      id_map[bm->object_id] = next_oid;
     bm->object_id = next_oid;
     objects.push_back(bm);
     ++next_oid;
@@ -91,6 +100,33 @@ void Scene::update_beams(const std::vector<Material> &mats)
       }
     }
   }
+
+  for (auto &L : lights)
+  {
+    if (L.attached_id >= 0)
+    {
+      auto it = id_map.find(L.attached_id);
+      if (it != id_map.end())
+        L.attached_id = it->second;
+    }
+    for (int &ign : L.ignore_ids)
+    {
+      auto it = id_map.find(ign);
+      if (it != id_map.end())
+        ign = it->second;
+    }
+    if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
+    {
+      auto src = std::static_pointer_cast<BeamSource>(objects[L.attached_id]);
+      if (src && src->beam)
+      {
+        L.direction = src->beam->path.dir;
+        L.range = src->beam->length;
+        double ang = std::atan((src->beam->radius * 1.05) / src->beam->length);
+        L.cos_girth = std::cos(ang);
+      }
+    }
+  }
 }
 
 void Scene::build_bvh()
@@ -116,10 +152,18 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
   if (!obj || obj->is_beam())
     return Vec3(0, 0, 0);
 
+  auto move_lights = [&](const Vec3 &d) {
+    for (auto &L : lights)
+      if (L.attached_id == obj->object_id)
+        L.position += d;
+  };
+
   obj->translate(delta);
+  move_lights(delta);
   if (!collides(index))
     return delta;
   obj->translate(delta * -1);
+  move_lights(delta * -1);
 
   Vec3 moved(0, 0, 0);
   Vec3 axes[3] = {Vec3(delta.x, 0, 0), Vec3(0, delta.y, 0),
@@ -129,10 +173,16 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
     if (ax.length_squared() == 0)
       continue;
     obj->translate(ax);
+    move_lights(ax);
     if (collides(index))
+    {
       obj->translate(ax * -1);
+      move_lights(ax * -1);
+    }
     else
+    {
       moved += ax;
+    }
   }
   return moved;
 }

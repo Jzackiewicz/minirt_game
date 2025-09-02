@@ -20,6 +20,8 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
   Vec3 dir = (L.position - p).normalized();
   Ray shadow_ray(p + dir * 1e-4, dir);
   double dist_to_light = (L.position - p).length();
+  if (L.range > 0.0)
+    dist_to_light = std::min(dist_to_light, L.range);
   HitRecord tmp;
   for (const auto &obj : scene.objects)
   {
@@ -27,6 +29,9 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
       continue;
     if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
     {
+      if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), tmp.object_id) !=
+          L.ignore_ids.end())
+        continue;
       return true;
     }
   }
@@ -62,17 +67,36 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
            col.z * scene.ambient.color.z * scene.ambient.intensity);
   for (const auto &L : scene.lights)
   {
+    if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), rec.object_id) !=
+        L.ignore_ids.end())
+      continue;
+    Vec3 to_p = rec.p - L.position;
+    double dist_to_light = to_p.length();
+    if (L.range > 0.0 && dist_to_light > L.range)
+      continue;
+    if (dist_to_light < 1e-6)
+      continue;
+    if (L.cos_girth > -1.0 && L.direction.length_squared() > 0.0)
+    {
+      if (Vec3::dot(L.direction, to_p / dist_to_light) < L.cos_girth)
+        continue;
+    }
     if (in_shadow(scene, rec.p, L))
       continue;
-    Vec3 ldir = (L.position - rec.p).normalized();
+    Vec3 ldir = (L.position - rec.p) / dist_to_light;
     double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
     Vec3 h = (ldir + eye).normalized();
     double spec =
         std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
         m.specular_k;
-    sum += Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
-                col.y * L.color.y * L.intensity * diff + L.color.y * spec,
-                col.z * L.color.z * L.intensity * diff + L.color.z * spec);
+    double atten = (L.range > 0.0) ? std::max(0.0, 1.0 - dist_to_light / L.range)
+                                   : 1.0;
+    sum += Vec3(col.x * L.color.x * L.intensity * diff * atten +
+                    L.color.x * spec * atten,
+                col.y * L.color.y * L.intensity * diff * atten +
+                    L.color.y * spec * atten,
+                col.z * L.color.z * L.intensity * diff * atten +
+                    L.color.z * spec * atten);
   }
   if (m.mirror)
   {

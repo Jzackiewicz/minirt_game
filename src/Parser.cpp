@@ -310,18 +310,17 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = 0.5;
         int mid_mat = mid++;
 
-        materials.emplace_back();
-        materials.back().color = unit;
-        materials.back().base_color = unit;
-        materials.back().alpha = 1.0;
-        int small_mat = mid++;
-
-        auto src = std::make_shared<BeamSource>(o, dir, bm, oid++, big_mat,
-                                                mid_mat, small_mat);
+        auto src =
+            std::make_shared<BeamSource>(o, bm, oid++, big_mat, mid_mat);
         src->movable = (s_move == "M");
         bm->source = src;
         outScene.objects.push_back(bm);
         outScene.objects.push_back(src);
+
+        double angle = std::atan((g * 1.05) / L);
+        outScene.lights.emplace_back(
+            o, unit, 0.75, bm->path.dir, L, std::cos(angle),
+            std::vector<int>{bm->object_id, src->object_id}, src->object_id);
       }
     }
     else if (id == "co")
