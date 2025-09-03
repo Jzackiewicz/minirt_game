@@ -20,6 +20,30 @@ namespace rt
 
 static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
 {
+  if (L.is_beam)
+  {
+    Vec3 w = p - L.position;
+    double t = Vec3::dot(w, L.direction);
+    if (t < 0.0 || t > L.length)
+      return true;
+    Vec3 perp = w - L.direction * t;
+    if (perp.length_squared() > L.girth * L.girth)
+      return true;
+    Ray shadow_ray(L.position + L.direction * 1e-4, L.direction);
+    HitRecord tmp;
+    for (const auto &obj : scene.objects)
+    {
+      if (obj->is_beam())
+        continue;
+      if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                    obj->object_id) != L.ignore_ids.end())
+        continue;
+      if (obj->hit(shadow_ray, 1e-4, t - 1e-4, tmp))
+        return true;
+    }
+    return false;
+  }
+
   Vec3 dir = (L.position - p).normalized();
   Ray shadow_ray(p + dir * 1e-4, dir);
   double dist_to_light = (L.position - p).length();
@@ -71,8 +95,20 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), rec.object_id) !=
         L.ignore_ids.end())
       continue;
-    Vec3 to_light = L.position - rec.p;
-    Vec3 ldir = to_light.normalized();
+    Vec3 ldir;
+    double intensity = L.intensity;
+    if (L.is_beam)
+    {
+      ldir = (L.direction * -1.0).normalized();
+      Vec3 w = rec.p - L.position;
+      double t = Vec3::dot(w, L.direction);
+      intensity *= std::max(0.0, 1.0 - (L.start + t) / L.total_length);
+    }
+    else
+    {
+      Vec3 to_light = L.position - rec.p;
+      ldir = to_light.normalized();
+    }
     if (L.cutoff_cos > -1.0)
     {
       Vec3 spot_dir = (rec.p - L.position).normalized();
@@ -86,9 +122,9 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     double spec =
         std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
         m.specular_k;
-    sum += Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
-                col.y * L.color.y * L.intensity * diff + L.color.y * spec,
-                col.z * L.color.z * L.intensity * diff + L.color.z * spec);
+    sum += Vec3(col.x * L.color.x * intensity * diff + L.color.x * spec,
+                col.y * L.color.y * intensity * diff + L.color.y * spec,
+                col.z * L.color.z * intensity * diff + L.color.z * spec);
   }
   if (m.mirror)
   {

@@ -1,11 +1,9 @@
 #include "rt/Scene.hpp"
-#include "rt/Beam.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Collision.hpp"
 #include "rt/Camera.hpp"
 #include <algorithm>
 #include <limits>
-#include <unordered_map>
 
 namespace
 {
@@ -20,57 +18,44 @@ namespace rt
 {
 void Scene::update_beams(const std::vector<Material> &mats)
 {
-  std::vector<std::shared_ptr<Beam>> roots;
-  std::vector<HittablePtr> non_beams;
-  non_beams.reserve(objects.size());
-  std::unordered_map<int, int> id_map;
-
-  for (auto &obj : objects)
+  for (auto &L : lights)
   {
-    if (obj->is_beam())
+    if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
     {
-      auto bm = std::static_pointer_cast<Beam>(obj);
-      if (bm->start <= 0.0)
-      {
-        bm->start = 0.0;
-        bm->length = bm->total_length;
-        roots.push_back(bm);
-      }
-      continue;
+      Vec3 dir = objects[L.attached_id]->spot_direction();
+      if (dir.length_squared() > 0)
+        L.direction = dir.normalized();
     }
-    non_beams.push_back(obj);
   }
 
-  for (size_t i = 0; i < non_beams.size(); ++i)
+  std::vector<PointLight> roots;
+  std::vector<PointLight> others;
+  for (auto &L : lights)
   {
-    id_map[non_beams[i]->object_id] = static_cast<int>(i);
-    non_beams[i]->object_id = static_cast<int>(i);
+    if (L.is_beam)
+    {
+      if (L.start <= 0.0)
+      {
+        L.start = 0.0;
+        L.length = L.total_length;
+        roots.push_back(L);
+      }
+    }
+    else
+      others.push_back(L);
   }
+  lights = others;
 
-  objects = std::move(non_beams);
-  int next_oid = static_cast<int>(objects.size());
-
-  std::vector<std::shared_ptr<Beam>> to_process = roots;
+  std::vector<PointLight> to_process = roots;
   for (size_t i = 0; i < to_process.size(); ++i)
   {
-    auto bm = to_process[i];
-    if (i < roots.size())
-      id_map[bm->object_id] = next_oid;
-    bm->object_id = next_oid;
-    objects.push_back(bm);
-    ++next_oid;
-
-    Ray forward(bm->path.orig, bm->path.dir);
+    PointLight B = to_process[i];
+    Ray forward(B.position, B.direction);
     HitRecord tmp, hit_rec;
     bool hit_any = false;
-    double closest = bm->length;
+    double closest = B.length;
     for (auto &other : objects)
     {
-      if (other.get() == bm.get())
-        continue;
-      if (auto src = bm->source.lock())
-        if (other.get() == src.get())
-          continue;
       if (other->hit(forward, 1e-4, closest, tmp))
       {
         closest = tmp.t;
@@ -80,45 +65,23 @@ void Scene::update_beams(const std::vector<Material> &mats)
     }
     if (hit_any)
     {
-      bm->length = closest;
+      B.length = closest;
       if (mats[hit_rec.material_id].mirror)
       {
-        double new_start = bm->start + closest;
-        double new_len = bm->total_length - new_start;
+        double new_start = B.start + closest;
+        double new_len = B.total_length - new_start;
         if (new_len > 1e-4)
         {
           Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
           Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
-          auto new_bm = std::make_shared<Beam>(refl_orig, refl_dir, bm->radius,
-                                               new_len, 0, bm->material_id,
-                                               new_start, bm->total_length);
-          new_bm->source = bm->source;
-          to_process.push_back(new_bm);
+          PointLight newB(refl_orig, B.color, B.intensity, {}, -1, refl_dir,
+                          -1.0, B.girth, new_len, B.total_length, new_start,
+                          true);
+          to_process.push_back(newB);
         }
       }
     }
-  }
-
-  for (auto &L : lights)
-  {
-    if (L.attached_id >= 0)
-    {
-      auto it = id_map.find(L.attached_id);
-      if (it != id_map.end())
-        L.attached_id = it->second;
-      if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
-      {
-        Vec3 dir = objects[L.attached_id]->spot_direction();
-        if (dir.length_squared() > 0)
-          L.direction = dir.normalized();
-      }
-    }
-    for (int &ign : L.ignore_ids)
-    {
-      auto it = id_map.find(ign);
-      if (it != id_map.end())
-        ign = it->second;
-    }
+    lights.push_back(B);
   }
 }
 

@@ -16,8 +16,7 @@ enum class ShapeType
   Cylinder,
   Cone,
   Plane,
-  BVH,
-  Beam
+  BVH
 };
 
 struct Material;
