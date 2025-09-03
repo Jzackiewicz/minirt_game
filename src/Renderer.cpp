@@ -375,12 +375,12 @@ void Renderer::render_window(std::vector<Material> &mats,
         {
           double sens = MOUSE_SENSITIVITY;
           bool changed = false;
-          double roll = -e.motion.xrel * sens;
-          if (roll != 0.0)
+          double yaw = -e.motion.xrel * sens;
+          if (yaw != 0.0)
           {
-            scene.objects[selected_obj]->rotate(cam.forward, roll);
+            scene.objects[selected_obj]->rotate(cam.up, yaw);
             if (scene.collides(selected_obj))
-              scene.objects[selected_obj]->rotate(cam.forward, -roll);
+              scene.objects[selected_obj]->rotate(cam.up, -yaw);
             else
               changed = true;
           }
@@ -462,17 +462,17 @@ void Renderer::render_window(std::vector<Material> &mats,
       bool changed = false;
       if (state[SDL_SCANCODE_Q])
       {
-        scene.objects[selected_obj]->rotate(cam.up, -rot_speed);
+        scene.objects[selected_obj]->rotate(cam.forward, -rot_speed);
         if (scene.collides(selected_obj))
-          scene.objects[selected_obj]->rotate(cam.up, rot_speed);
+          scene.objects[selected_obj]->rotate(cam.forward, rot_speed);
         else
           changed = true;
       }
       if (state[SDL_SCANCODE_E])
       {
-        scene.objects[selected_obj]->rotate(cam.up, rot_speed);
+        scene.objects[selected_obj]->rotate(cam.forward, rot_speed);
         if (scene.collides(selected_obj))
-          scene.objects[selected_obj]->rotate(cam.up, -rot_speed);
+          scene.objects[selected_obj]->rotate(cam.forward, -rot_speed);
         else
           changed = true;
       }
