@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
+#include <cmath>
 
 namespace
 {
@@ -20,6 +21,11 @@ namespace rt
 {
 void Scene::update_beams(const std::vector<Material> &mats)
 {
+  lights.erase(std::remove_if(lights.begin(), lights.end(),
+                              [](const PointLight &L) {
+                                return L.attached_id == -2;
+                              }),
+                lights.end());
   std::vector<std::shared_ptr<Beam>> roots;
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
@@ -94,6 +100,28 @@ void Scene::update_beams(const std::vector<Material> &mats)
                                                new_start, bm->total_length);
           new_bm->source = bm->source;
           to_process.push_back(new_bm);
+
+          Vec3 lcol(1.0, 1.0, 1.0);
+          double linten = 1.0;
+          if (auto src = bm->source.lock())
+          {
+            for (const auto &L : lights)
+            {
+              if (L.attached_id == src->object_id)
+              {
+                lcol = L.color;
+                linten = L.intensity;
+                break;
+              }
+            }
+          }
+          double cone_cos =
+              new_len > 0.0 ? new_len / std::sqrt(new_len * new_len +
+                                                   bm->radius * bm->radius)
+                            : 1.0;
+          lights.emplace_back(refl_orig, lcol, linten, new_len,
+                              std::vector<int>{hit_rec.object_id}, -2,
+                              refl_dir, cone_cos);
         }
       }
     }

@@ -24,7 +24,11 @@ Vec3 phong(const Material &m, const Ambient &ambient,
            col.z * ambient.color.z * ambient.intensity);
   for (const auto &L : lights)
   {
-    Vec3 ldir = (L.position - p).normalized();
+    Vec3 to_light = L.position - p;
+    double dist = to_light.length();
+    if (L.range > 0.0 && dist > L.range)
+      continue;
+    Vec3 ldir = to_light.normalized();
     if (L.cutoff_cos > -1.0)
     {
       Vec3 spot_dir = (p - L.position).normalized();
@@ -35,9 +39,11 @@ Vec3 phong(const Material &m, const Ambient &ambient,
     Vec3 h = (ldir + eye).normalized();
     double spec =
         std::pow(std::max(0.0, Vec3::dot(n, h)), m.specular_exp) * m.specular_k;
+    double atten = (L.range > 0.0) ? std::max(0.0, 1.0 - dist / L.range) : 1.0;
     c += Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
               col.y * L.color.y * L.intensity * diff + L.color.y * spec,
-              col.z * L.color.z * L.intensity * diff + L.color.z * spec);
+              col.z * L.color.z * L.intensity * diff + L.color.z * spec) *
+         atten;
   }
   return c;
 }

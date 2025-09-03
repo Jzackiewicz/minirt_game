@@ -23,6 +23,8 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
   Vec3 dir = (L.position - p).normalized();
   Ray shadow_ray(p + dir * 1e-4, dir);
   double dist_to_light = (L.position - p).length();
+  if (L.range > 0.0 && dist_to_light > L.range)
+    dist_to_light = L.range;
   HitRecord tmp;
   for (const auto &obj : scene.objects)
   {
@@ -72,6 +74,9 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
         L.ignore_ids.end())
       continue;
     Vec3 to_light = L.position - rec.p;
+    double dist_to_light = to_light.length();
+    if (L.range > 0.0 && dist_to_light > L.range)
+      continue;
     Vec3 ldir = to_light.normalized();
     if (L.cutoff_cos > -1.0)
     {
@@ -86,9 +91,13 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     double spec =
         std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
         m.specular_k;
-    sum += Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
-                col.y * L.color.y * L.intensity * diff + L.color.y * spec,
-                col.z * L.color.z * L.intensity * diff + L.color.z * spec);
+    double atten =
+        (L.range > 0.0) ? std::max(0.0, 1.0 - dist_to_light / L.range) : 1.0;
+    sum +=
+        Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
+             col.y * L.color.y * L.intensity * diff + L.color.y * spec,
+             col.z * L.color.z * L.intensity * diff + L.color.z * spec) *
+        atten;
   }
   if (m.mirror)
   {
