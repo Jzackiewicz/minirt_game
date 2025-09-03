@@ -138,16 +138,21 @@ void Scene::update_beams(const std::vector<Material> &mats)
                         bm->path.dir, cone_cos, bm->length);
   }
 
+  std::unordered_map<int, int> obj_lookup;
+  for (size_t i = 0; i < objects.size(); ++i)
+    obj_lookup[objects[i]->object_id] = static_cast<int>(i);
+
   for (auto &L : lights)
   {
     if (L.attached_id >= 0)
     {
       auto it = id_map.find(L.attached_id);
-      if (it != id_map.end())
+      if (it != id_map.end() && obj_lookup.find(L.attached_id) == obj_lookup.end())
         L.attached_id = it->second;
-      if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
+      auto obj_it = obj_lookup.find(L.attached_id);
+      if (obj_it != obj_lookup.end())
       {
-        Vec3 dir = objects[L.attached_id]->spot_direction();
+        Vec3 dir = objects[obj_it->second]->spot_direction();
         if (dir.length_squared() > 0)
           L.direction = dir.normalized();
       }
@@ -155,7 +160,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
     for (int &ign : L.ignore_ids)
     {
       auto it = id_map.find(ign);
-      if (it != id_map.end())
+      if (it != id_map.end() && obj_lookup.find(ign) == obj_lookup.end())
         ign = it->second;
     }
   }
