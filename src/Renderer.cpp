@@ -18,18 +18,21 @@
 namespace rt
 {
 
-static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
+static bool in_shadow(const Scene &scene, const HitRecord &src,
+                      const PointLight &L)
 {
-  Vec3 to_light = L.position - p;
+  Vec3 to_light = L.position - src.p;
   double dist_to_light = to_light.length();
   if (L.range > 0.0 && dist_to_light > L.range)
     return false;
   Vec3 dir = to_light.normalized();
-  Ray shadow_ray(p + dir * 1e-4, dir);
+  Ray shadow_ray(src.p + src.normal * 1e-4, dir);
   HitRecord tmp;
   for (const auto &obj : scene.objects)
   {
     if (obj->is_beam())
+      continue;
+    if (obj->object_id == src.object_id)
       continue;
     if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), obj->object_id) !=
         L.ignore_ids.end())
@@ -85,7 +88,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
       if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
         continue;
     }
-    if (in_shadow(scene, rec.p, L))
+    if (in_shadow(scene, rec, L))
       continue;
     double atten = 1.0;
     if (L.range > 0.0)
