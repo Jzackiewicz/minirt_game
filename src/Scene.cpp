@@ -117,7 +117,17 @@ void Scene::update_beams(const std::vector<Material> &mats)
 
           Vec3 light_col = mats[bm->material_id].base_color;
           const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-          lights.emplace_back(refl_orig, light_col, 0.75,
+          double base_intensity = 0.75;
+          if (auto src_obj = bm->source.lock())
+          {
+            auto itL = std::find_if(
+                lights.begin(), lights.end(),
+                [&](const PointLight &pl) { return pl.attached_id == src_obj->object_id; });
+            if (itL != lights.end())
+              base_intensity = itL->intensity;
+          }
+          double frac = new_len / bm->total_length;
+          lights.emplace_back(refl_orig, light_col, base_intensity * frac,
                               std::vector<int>{new_bm->object_id, hit_rec.object_id},
                               new_bm->object_id, refl_dir, cone_cos, new_len);
         }
