@@ -63,7 +63,9 @@ void Scene::update_beams(const std::vector<Material> &mats)
 
   for (size_t i = 0; i < non_beams.size(); ++i)
   {
-    id_map[non_beams[i]->object_id] = static_cast<int>(i);
+    int old_id = non_beams[i]->object_id;
+    if (old_id != static_cast<int>(i))
+      id_map[old_id] = static_cast<int>(i);
     non_beams[i]->object_id = static_cast<int>(i);
   }
 
@@ -81,7 +83,11 @@ void Scene::update_beams(const std::vector<Material> &mats)
   {
     auto bm = to_process[i];
     if (i < roots.size())
-      id_map[bm->object_id] = next_oid;
+    {
+      int old_id = bm->object_id;
+      if (old_id != next_oid)
+        id_map[old_id] = next_oid;
+    }
     bm->object_id = next_oid;
     objects.push_back(bm);
     ++next_oid;
