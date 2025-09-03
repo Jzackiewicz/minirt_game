@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
+#include <cmath>
 
 namespace
 {
@@ -20,6 +21,25 @@ namespace rt
 {
 void Scene::update_beams(const std::vector<Material> &mats)
 {
+  std::vector<PointLight> static_lights;
+  static_lights.reserve(lights.size());
+  for (const auto &L : lights)
+  {
+    bool keep = true;
+    if (L.attached_id >= 0)
+    {
+      auto it = std::find_if(objects.begin(), objects.end(),
+                             [&](const HittablePtr &o) {
+                               return o->object_id == L.attached_id;
+                             });
+      if (it != objects.end() && (*it)->is_beam())
+        keep = false;
+    }
+    if (keep)
+      static_lights.push_back(L);
+  }
+  lights = std::move(static_lights);
+
   std::vector<std::shared_ptr<Beam>> roots;
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
@@ -94,6 +114,12 @@ void Scene::update_beams(const std::vector<Material> &mats)
                                                new_start, bm->total_length);
           new_bm->source = bm->source;
           to_process.push_back(new_bm);
+
+          Vec3 light_col = mats[bm->material_id].base_color;
+          const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+          lights.emplace_back(refl_orig, light_col, 0.75,
+                              std::vector<int>{new_bm->object_id, hit_rec.object_id},
+                              new_bm->object_id, refl_dir, cone_cos, new_len);
         }
       }
     }

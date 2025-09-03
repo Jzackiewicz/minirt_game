@@ -20,6 +20,7 @@ struct Beam : public Hittable
   bool bounding_box(AABB &out) const override;
   bool is_beam() const override;
   ShapeType shape_type() const override { return ShapeType::Beam; }
+  Vec3 spot_direction() const override { return path.dir; }
 };
 
 } // namespace rt
