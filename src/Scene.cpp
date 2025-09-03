@@ -63,8 +63,11 @@ void Scene::update_beams(const std::vector<Material> &mats)
 
   for (size_t i = 0; i < non_beams.size(); ++i)
   {
-    id_map[non_beams[i]->object_id] = static_cast<int>(i);
-    non_beams[i]->object_id = static_cast<int>(i);
+    int old_id = non_beams[i]->object_id;
+    int new_id = static_cast<int>(i);
+    id_map[old_id] = new_id;
+    id_map[new_id] = new_id;
+    non_beams[i]->object_id = new_id;
   }
 
   objects = std::move(non_beams);
