@@ -1,5 +1,6 @@
 #include "rt/BeamSource.hpp"
 #include <cmath>
+#include <algorithm>
 
 namespace rt
 {
@@ -33,7 +34,8 @@ bool BeamSource::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) con
   {
     Vec3 beam_dir = beam ? beam->path.dir : Vec3(0, 0, 1);
     Vec3 to_hit = (tmp.p - inner.center).normalized();
-    const double hole_cos = std::sqrt(1.0 - 0.25 * 0.25);
+    double hole = beam ? std::min(beam->radius / inner.radius, 1.0) : 0.25;
+    const double hole_cos = std::sqrt(1.0 - hole * hole);
     if (Vec3::dot(beam_dir, to_hit) < hole_cos)
     {
       hit_any = true;
