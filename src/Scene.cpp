@@ -77,7 +77,6 @@ void Scene::update_beams(const std::vector<Material> &mats)
     int hit_id;
   };
   std::vector<PendingLight> pending_lights;
-  const double base_intensity = 0.75;
   for (size_t i = 0; i < to_process.size(); ++i)
   {
     auto bm = to_process[i];
@@ -116,9 +115,9 @@ void Scene::update_beams(const std::vector<Material> &mats)
         {
           Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
           Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
-          auto new_bm = std::make_shared<Beam>(refl_orig, refl_dir, bm->radius,
-                                               new_len, 0, bm->material_id,
-                                               new_start, bm->total_length);
+          auto new_bm = std::make_shared<Beam>(
+              refl_orig, refl_dir, bm->radius, new_len, bm->light_intensity, 0,
+              bm->material_id, new_start, bm->total_length);
           new_bm->source = bm->source;
           to_process.push_back(new_bm);
           pending_lights.push_back({new_bm, hit_rec.object_id});
@@ -134,7 +133,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
     const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
     double remain = bm->total_length - bm->start;
     double ratio = (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
-    lights.emplace_back(bm->path.orig, light_col, base_intensity * ratio,
+    lights.emplace_back(bm->path.orig, light_col, bm->light_intensity * ratio,
                         std::vector<int>{bm->object_id, pl.hit_id}, bm->object_id,
                         bm->path.dir, cone_cos, bm->length);
   }
