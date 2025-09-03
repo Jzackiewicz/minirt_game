@@ -39,6 +39,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
       static_lights.push_back(L);
   }
   lights = std::move(static_lights);
+  const size_t static_count = lights.size();
 
   std::vector<std::shared_ptr<Beam>> roots;
   std::vector<HittablePtr> non_beams;
@@ -137,26 +138,29 @@ void Scene::update_beams(const std::vector<Material> &mats)
                         std::vector<int>{bm->object_id, pl.hit_id}, bm->object_id,
                         bm->path.dir, cone_cos, bm->length);
   }
-
-  for (auto &L : lights)
+  for (size_t li = 0; li < lights.size(); ++li)
   {
-    if (L.attached_id >= 0)
+    auto &L = lights[li];
+    if (li < static_count)
     {
-      auto it = id_map.find(L.attached_id);
-      if (it != id_map.end())
-        L.attached_id = it->second;
-      if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
+      if (L.attached_id >= 0)
       {
-        Vec3 dir = objects[L.attached_id]->spot_direction();
-        if (dir.length_squared() > 0)
-          L.direction = dir.normalized();
+        auto it = id_map.find(L.attached_id);
+        if (it != id_map.end())
+          L.attached_id = it->second;
+      }
+      for (int &ign : L.ignore_ids)
+      {
+        auto it = id_map.find(ign);
+        if (it != id_map.end())
+          ign = it->second;
       }
     }
-    for (int &ign : L.ignore_ids)
+    if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
     {
-      auto it = id_map.find(ign);
-      if (it != id_map.end())
-        ign = it->second;
+      Vec3 dir = objects[L.attached_id]->spot_direction();
+      if (dir.length_squared() > 0)
+        L.direction = dir.normalized();
     }
   }
 }
