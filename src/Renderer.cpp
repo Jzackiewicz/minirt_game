@@ -26,7 +26,7 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
   HitRecord tmp;
   for (const auto &obj : scene.objects)
   {
-    if (obj->is_beam())
+    if (obj->is_light())
       continue;
     if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), obj->object_id) !=
         L.ignore_ids.end())
@@ -79,6 +79,9 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
       if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
         continue;
     }
+    double along = Vec3::dot(rec.p - L.position, L.direction);
+    if (L.length > 0.0 && (along < 0.0 || along > L.length))
+      continue;
     if (in_shadow(scene, rec.p, L))
       continue;
     double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
@@ -86,9 +89,12 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     double spec =
         std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
         m.specular_k;
-    sum += Vec3(col.x * L.color.x * L.intensity * diff + L.color.x * spec,
-                col.y * L.color.y * L.intensity * diff + L.color.y * spec,
-                col.z * L.color.z * L.intensity * diff + L.color.z * spec);
+    double atten = 1.0;
+    if (L.length > 0.0)
+      atten = std::max(0.0, 1.0 - along / L.length);
+    sum += Vec3(col.x * L.color.x * L.intensity * diff * atten + L.color.x * spec * atten,
+                col.y * L.color.y * L.intensity * diff * atten + L.color.y * spec * atten,
+                col.z * L.color.z * L.intensity * diff * atten + L.color.z * spec * atten);
   }
   if (m.mirror)
   {
@@ -328,7 +334,7 @@ void Renderer::render_window(std::vector<Material> &mats,
               center += applied;
               if (applied.length_squared() > 0)
               {
-                scene.update_beams(mats);
+                scene.update_lights(mats);
                 scene.build_bvh();
                 edit_dist = (center - cam.origin).length();
               }
@@ -383,7 +389,7 @@ void Renderer::render_window(std::vector<Material> &mats,
           }
           if (changed)
           {
-            scene.update_beams(mats);
+            scene.update_lights(mats);
             scene.build_bvh();
           }
         }
@@ -410,7 +416,7 @@ void Renderer::render_window(std::vector<Material> &mats,
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_C)
       {
-        scene.update_beams(mats);
+        scene.update_lights(mats);
         scene.build_bvh();
         std::string save = next_save_path(scene_path);
         if (Parser::save_rt_file(save, scene, cam, mats))
@@ -466,7 +472,7 @@ void Renderer::render_window(std::vector<Material> &mats,
       }
       if (changed)
       {
-        scene.update_beams(mats);
+        scene.update_lights(mats);
         scene.build_bvh();
       }
     }
@@ -500,7 +506,7 @@ void Renderer::render_window(std::vector<Material> &mats,
         cam.origin = edit_pos - cam.forward * edit_dist;
         if (applied.length_squared() > 0)
         {
-          scene.update_beams(mats);
+          scene.update_lights(mats);
           scene.build_bvh();
         }
       }
@@ -617,7 +623,7 @@ void Renderer::render_window(std::vector<Material> &mats,
       for (size_t i = 0; i < scene.objects.size(); ++i)
       {
         auto &obj = scene.objects[i];
-        if (obj->is_beam() || obj->is_plane())
+        if (obj->is_light() || obj->is_plane())
           continue;
         AABB box;
         if (!obj->bounding_box(box))

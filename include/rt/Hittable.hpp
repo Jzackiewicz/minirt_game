@@ -16,8 +16,7 @@ enum class ShapeType
   Cylinder,
   Cone,
   Plane,
-  BVH,
-  Beam
+  BVH
 };
 
 struct Material;
@@ -44,7 +43,7 @@ struct Hittable
                    HitRecord &rec) const = 0;
   virtual bool bounding_box(AABB &out) const = 0;
   virtual ShapeType shape_type() const { return ShapeType::Generic; }
-  virtual bool is_beam() const { return false; }
+  virtual bool is_light() const { return false; }
   virtual bool is_plane() const { return false; }
   virtual bool is_bvh() const { return false; }
   // default translation does nothing

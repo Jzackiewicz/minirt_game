@@ -52,7 +52,7 @@ int main(int argc, char **argv)
     return 2;
   }
   auto mats = rt::Parser::get_materials();
-  scene.update_beams(mats);
+  scene.update_lights(mats);
   scene.build_bvh();
 
   rt::RenderSettings rset;
