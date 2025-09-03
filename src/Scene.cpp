@@ -130,7 +130,12 @@ void Scene::update_beams(const std::vector<Material> &mats)
   {
     auto bm = pl.beam;
     Vec3 light_col = mats[bm->material_id].base_color;
-    const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+    double cone_cos = -1.0;
+    if (bm->length > 1e-9)
+    {
+      double spot_ratio = std::clamp(bm->radius / bm->length, 0.0, 1.0);
+      cone_cos = std::sqrt(std::max(0.0, 1.0 - spot_ratio * spot_ratio));
+    }
     double remain = bm->total_length - bm->start;
     double ratio = (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
     lights.emplace_back(bm->path.orig, light_col, bm->light_intensity * ratio,
