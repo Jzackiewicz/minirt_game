@@ -1,6 +1,4 @@
 #include "rt/Parser.hpp"
-#include "rt/Beam.hpp"
-#include "rt/BeamSource.hpp"
 #include "rt/Cube.hpp"
 #include "rt/Cone.hpp"
 #include "rt/Cylinder.hpp"
@@ -15,7 +13,6 @@
 #include <string_view>
 #include <cstring>
 #include <filesystem>
-#include <unordered_set>
 #include <iomanip>
 
 namespace
@@ -291,46 +288,12 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (parse_triple(s_pos, o) && parse_triple(s_dir, dir) &&
           parse_rgba(s_rgb, rgb, a) && to_double(s_g, g) && to_double(s_L, L))
       {
-        Vec3 unit = rgb_to_unit(rgb);
-        materials.emplace_back();
-        materials.back().color = unit;
-        materials.back().base_color = unit;
-        materials.back().alpha = alpha_to_unit(a);
-        materials.back().random_alpha = true;
-        int beam_mat = mid++;
-
         Vec3 dir_norm = dir.normalized();
-        auto bm = std::make_shared<Beam>(o, dir_norm, g, L, oid++, beam_mat);
-
-        materials.emplace_back();
-        materials.back().color = Vec3(1.0, 1.0, 1.0);
-        materials.back().base_color = materials.back().color;
-        materials.back().alpha = 0.25;
-        int big_mat = mid++;
-
-        materials.emplace_back();
-        materials.back().color = (Vec3(1.0, 1.0, 1.0) + unit) * 0.5;
-        materials.back().base_color = materials.back().color;
-        materials.back().alpha = 0.5;
-        int mid_mat = mid++;
-
-        materials.emplace_back();
-        materials.back().color = unit;
-        materials.back().base_color = unit;
-        materials.back().alpha = 1.0;
-        int small_mat = mid++;
-
-        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, oid++,
-                                                big_mat, mid_mat, small_mat);
-        src->movable = (s_move == "M");
-        bm->source = src;
-        outScene.objects.push_back(bm);
-        outScene.objects.push_back(src);
-        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-        outScene.lights.emplace_back(
-            o, unit, 0.75,
-            std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
-            src->object_id, dir_norm, cone_cos);
+        Vec3 unit = rgb_to_unit(rgb);
+        double inten = alpha_to_unit(a);
+        bool movable = (s_move == "M");
+        outScene.lights.emplace_back(o, unit, inten, {}, -1, dir_norm, -1.0, g,
+                                     L, movable);
       }
     }
     else if (id == "co")
@@ -403,36 +366,25 @@ bool Parser::save_rt_file(const std::string &path, const Scene &scene,
   {
     if (L.attached_id != -1)
       continue;
-    out << "L " << vec_to_str(L.position) << ' ' << L.intensity << ' '
-        << rgba_to_str(L.color, 1.0) << '\n';
-  }
-
-  std::unordered_set<int> beam_sources;
-  for (const auto &obj : scene.objects)
-  {
-    if (obj->is_beam())
+    if (L.girth >= 0.0 && L.length >= 0.0)
     {
-      auto bm = std::static_pointer_cast<Beam>(obj);
-      if (bm->start > 0.0)
-        continue;
-      if (auto src = bm->source.lock())
-        beam_sources.insert(src->object_id);
-      const Material &m = mats[bm->material_id];
-      out << "bm " << vec_to_str(bm->path.orig) << ' '
-          << vec_to_str(bm->path.dir) << ' '
-          << rgba_to_str(m.base_color, m.alpha) << ' '
-          << bm->radius << ' ' << bm->total_length;
-      if (auto src = bm->source.lock(); src && src->movable)
-        out << " M";
+      out << "bm " << vec_to_str(L.position) << ' '
+          << vec_to_str(L.direction) << ' '
+          << rgba_to_str(L.color, L.intensity) << ' '
+          << L.girth << ' ' << L.length;
+      out << (L.movable ? " M" : " IM");
       out << '\n';
+    }
+    else
+    {
+      out << "L " << vec_to_str(L.position) << ' ' << L.intensity << ' '
+          << rgba_to_str(L.color, 1.0) << '\n';
     }
   }
 
   for (const auto &obj : scene.objects)
   {
     if (obj->is_beam())
-      continue;
-    if (beam_sources.count(obj->object_id))
       continue;
     const Material &m = mats[obj->material_id];
     std::string mirror = m.mirror ? "R" : "NR";
