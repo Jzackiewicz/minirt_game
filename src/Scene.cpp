@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
+#include <cmath>
 
 namespace
 {
@@ -20,6 +21,25 @@ namespace rt
 {
 void Scene::update_beams(const std::vector<Material> &mats)
 {
+  std::vector<PointLight> static_lights;
+  static_lights.reserve(lights.size());
+  for (const auto &L : lights)
+  {
+    bool keep = true;
+    if (L.attached_id >= 0)
+    {
+      auto it = std::find_if(objects.begin(), objects.end(),
+                             [&](const HittablePtr &o) {
+                               return o->object_id == L.attached_id;
+                             });
+      if (it != objects.end() && (*it)->is_beam())
+        keep = false;
+    }
+    if (keep)
+      static_lights.push_back(L);
+  }
+  lights = std::move(static_lights);
+
   std::vector<std::shared_ptr<Beam>> roots;
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
@@ -93,7 +113,16 @@ void Scene::update_beams(const std::vector<Material> &mats)
                                                new_len, 0, bm->material_id,
                                                new_start, bm->total_length);
           new_bm->source = bm->source;
+          new_bm->intensity = bm->intensity;
           to_process.push_back(new_bm);
+
+          Vec3 light_col = mats[bm->material_id].base_color;
+          const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+          double start_ratio = new_start / bm->total_length;
+          double new_inten = bm->intensity * std::max(0.0, 1.0 - start_ratio);
+          lights.emplace_back(refl_orig, light_col, new_inten,
+                              std::vector<int>{new_bm->object_id, hit_rec.object_id},
+                              new_bm->object_id, refl_dir, cone_cos, new_len);
         }
       }
     }
@@ -118,6 +147,20 @@ void Scene::update_beams(const std::vector<Material> &mats)
       auto it = id_map.find(ign);
       if (it != id_map.end())
         ign = it->second;
+    }
+  }
+
+  for (auto &bm : roots)
+  {
+    if (auto src = bm->source.lock())
+    {
+      for (auto &L : lights)
+        if (L.attached_id == src->object_id)
+        {
+          L.range = bm->length;
+          L.intensity = bm->intensity;
+          break;
+        }
     }
   }
 }
