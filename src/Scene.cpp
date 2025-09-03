@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
+#include <cmath>
 
 namespace
 {
@@ -20,10 +21,16 @@ namespace rt
 {
 void Scene::update_beams(const std::vector<Material> &mats)
 {
+  lights.erase(std::remove_if(lights.begin(), lights.end(),
+                              [](const PointLight &L) {
+                                return L.attached_id == -2;
+                              }),
+               lights.end());
   std::vector<std::shared_ptr<Beam>> roots;
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
   std::unordered_map<int, int> id_map;
+  std::unordered_map<int, Beam *> root_map;
 
   for (auto &obj : objects)
   {
@@ -97,6 +104,20 @@ void Scene::update_beams(const std::vector<Material> &mats)
         }
       }
     }
+
+    if (bm->start <= 0.0)
+    {
+      if (auto src = bm->source.lock())
+        root_map[src->object_id] = bm.get();
+    }
+    else if (bm->length > 1e-4)
+    {
+      Vec3 col = mats[bm->material_id].base_color;
+      const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+      lights.emplace_back(bm->path.orig, col, 0.75, bm->length,
+                          std::vector<int>{bm->object_id}, -2, bm->path.dir,
+                          cone_cos);
+    }
   }
 
   for (auto &L : lights)
@@ -118,6 +139,14 @@ void Scene::update_beams(const std::vector<Material> &mats)
       auto it = id_map.find(ign);
       if (it != id_map.end())
         ign = it->second;
+    }
+    auto itb = root_map.find(L.attached_id);
+    if (itb != root_map.end())
+    {
+      Beam *bm = itb->second;
+      L.position = bm->path.orig;
+      L.direction = bm->path.dir;
+      L.range = bm->length;
     }
   }
 }
