@@ -126,39 +126,43 @@ void Scene::update_beams(const std::vector<Material> &mats)
     }
   }
 
-  for (const auto &pl : pending_lights)
-  {
-    auto bm = pl.beam;
-    Vec3 light_col = mats[bm->material_id].base_color;
-    const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-    double remain = bm->total_length - bm->start;
-    double ratio = (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
-    lights.emplace_back(bm->path.orig, light_col, bm->light_intensity * ratio,
-                        std::vector<int>{bm->object_id, pl.hit_id}, bm->object_id,
-                        bm->path.dir, cone_cos, bm->length);
-  }
-
-  for (auto &L : lights)
-  {
-    if (L.attached_id >= 0)
+    // Remap existing lights to new object IDs.
+    for (auto &L : lights)
     {
-      auto it = id_map.find(L.attached_id);
-      if (it != id_map.end())
-        L.attached_id = it->second;
-      if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
+      if (L.attached_id >= 0)
       {
-        Vec3 dir = objects[L.attached_id]->spot_direction();
-        if (dir.length_squared() > 0)
-          L.direction = dir.normalized();
+        auto it = id_map.find(L.attached_id);
+        if (it != id_map.end())
+          L.attached_id = it->second;
+        if (L.attached_id >= 0 &&
+            L.attached_id < static_cast<int>(objects.size()))
+        {
+          Vec3 dir = objects[L.attached_id]->spot_direction();
+          if (dir.length_squared() > 0)
+            L.direction = dir.normalized();
+        }
+      }
+      for (int &ign : L.ignore_ids)
+      {
+        auto it = id_map.find(ign);
+        if (it != id_map.end())
+          ign = it->second;
       }
     }
-    for (int &ign : L.ignore_ids)
+
+    // Add light sources for reflected beams.
+    for (const auto &pl : pending_lights)
     {
-      auto it = id_map.find(ign);
-      if (it != id_map.end())
-        ign = it->second;
+      auto bm = pl.beam;
+      Vec3 light_col = mats[bm->material_id].base_color;
+      const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+      double remain = bm->total_length - bm->start;
+      double ratio = (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
+      lights.emplace_back(bm->path.orig, light_col,
+                          bm->light_intensity * ratio,
+                          std::vector<int>{bm->object_id, pl.hit_id},
+                          bm->object_id, bm->path.dir, cone_cos, bm->length);
     }
-  }
 }
 
 void Scene::build_bvh()
