@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
+#include <cmath>
 
 namespace
 {
@@ -93,9 +94,21 @@ void Scene::update_beams(const std::vector<Material> &mats)
                                                new_len, 0, bm->material_id,
                                                new_start, bm->total_length);
           new_bm->source = bm->source;
+          new_bm->ignore_object_id = hit_rec.object_id;
           to_process.push_back(new_bm);
         }
       }
+    }
+
+    if (i >= roots.size())
+    {
+      const Material &mat = mats[bm->material_id];
+      const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+      std::vector<int> ign = {bm->object_id};
+      if (bm->ignore_object_id >= 0)
+        ign.push_back(bm->ignore_object_id);
+      lights.emplace_back(bm->path.orig, mat.base_color, 0.75, ign,
+                          bm->object_id, bm->path.dir, cone_cos, bm->length);
     }
   }
 
@@ -108,9 +121,20 @@ void Scene::update_beams(const std::vector<Material> &mats)
         L.attached_id = it->second;
       if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
       {
-        Vec3 dir = objects[L.attached_id]->spot_direction();
+        auto obj = objects[L.attached_id];
+        Vec3 dir = obj->spot_direction();
         if (dir.length_squared() > 0)
           L.direction = dir.normalized();
+        if (obj->is_beam())
+        {
+          auto bm = std::static_pointer_cast<Beam>(obj);
+          L.position = bm->path.orig;
+          L.range = bm->length;
+          if (bm->ignore_object_id >= 0 &&
+              std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                        bm->ignore_object_id) == L.ignore_ids.end())
+            L.ignore_ids.push_back(bm->ignore_object_id);
+        }
       }
     }
     for (int &ign : L.ignore_ids)
