@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
+#include <cmath>
 
 namespace
 {
@@ -20,6 +21,25 @@ namespace rt
 {
 void Scene::update_beams(const std::vector<Material> &mats)
 {
+  std::vector<PointLight> static_lights;
+  static_lights.reserve(lights.size());
+  for (const auto &L : lights)
+  {
+    bool keep = true;
+    if (L.attached_id >= 0)
+    {
+      auto it = std::find_if(objects.begin(), objects.end(),
+                             [&](const HittablePtr &o) {
+                               return o->object_id == L.attached_id;
+                             });
+      if (it != objects.end() && (*it)->is_beam())
+        keep = false;
+    }
+    if (keep)
+      static_lights.push_back(L);
+  }
+  lights = std::move(static_lights);
+
   std::vector<std::shared_ptr<Beam>> roots;
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
@@ -51,6 +71,12 @@ void Scene::update_beams(const std::vector<Material> &mats)
   int next_oid = static_cast<int>(objects.size());
 
   std::vector<std::shared_ptr<Beam>> to_process = roots;
+  struct PendingLight
+  {
+    std::shared_ptr<Beam> beam;
+    int hit_id;
+  };
+  std::vector<PendingLight> pending_lights;
   for (size_t i = 0; i < to_process.size(); ++i)
   {
     auto bm = to_process[i];
@@ -89,14 +115,27 @@ void Scene::update_beams(const std::vector<Material> &mats)
         {
           Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
           Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
-          auto new_bm = std::make_shared<Beam>(refl_orig, refl_dir, bm->radius,
-                                               new_len, 0, bm->material_id,
-                                               new_start, bm->total_length);
+          auto new_bm = std::make_shared<Beam>(
+              refl_orig, refl_dir, bm->radius, new_len, bm->light_intensity, 0,
+              bm->material_id, new_start, bm->total_length);
           new_bm->source = bm->source;
           to_process.push_back(new_bm);
+          pending_lights.push_back({new_bm, hit_rec.object_id});
         }
       }
     }
+  }
+
+  for (const auto &pl : pending_lights)
+  {
+    auto bm = pl.beam;
+    Vec3 light_col = mats[bm->material_id].base_color;
+    const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+    double remain = bm->total_length - bm->start;
+    double ratio = (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
+    lights.emplace_back(bm->path.orig, light_col, bm->light_intensity * ratio,
+                        std::vector<int>{bm->object_id, pl.hit_id}, bm->object_id,
+                        bm->path.dir, cone_cos, bm->length);
   }
 
   for (auto &L : lights)
