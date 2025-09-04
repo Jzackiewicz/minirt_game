@@ -29,8 +29,6 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
   HitRecord tmp;
   for (const auto &obj : scene.objects)
   {
-    if (obj->is_beam())
-      continue;
     if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), obj->object_id) !=
         L.ignore_ids.end())
       continue;
@@ -111,12 +109,6 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
   }
   double alpha = m.alpha;
-  if (m.random_alpha)
-  {
-    double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-    double rand = (1.0 - tpos) * std::pow(dist(rng), tpos);
-    alpha *= rand;
-  }
   if (alpha < 1.0)
   {
     Ray next(rec.p + r.dir * 1e-4, r.dir);
@@ -340,7 +332,6 @@ void Renderer::render_window(std::vector<Material> &mats,
               center += applied;
               if (applied.length_squared() > 0)
               {
-                scene.update_beams(mats);
                 scene.build_bvh();
                 edit_dist = (center - cam.origin).length();
               }
@@ -395,7 +386,6 @@ void Renderer::render_window(std::vector<Material> &mats,
           }
           if (changed)
           {
-            scene.update_beams(mats);
             scene.build_bvh();
           }
         }
@@ -422,7 +412,6 @@ void Renderer::render_window(std::vector<Material> &mats,
       else if (focused && e.type == SDL_KEYDOWN &&
                e.key.keysym.scancode == SDL_SCANCODE_C)
       {
-        scene.update_beams(mats);
         scene.build_bvh();
         std::string save = next_save_path(scene_path);
         if (Parser::save_rt_file(save, scene, cam, mats))
@@ -478,7 +467,6 @@ void Renderer::render_window(std::vector<Material> &mats,
       }
       if (changed)
       {
-        scene.update_beams(mats);
         scene.build_bvh();
       }
     }
@@ -512,7 +500,6 @@ void Renderer::render_window(std::vector<Material> &mats,
         cam.origin = edit_pos - cam.forward * edit_dist;
         if (applied.length_squared() > 0)
         {
-          scene.update_beams(mats);
           scene.build_bvh();
         }
       }
@@ -629,7 +616,7 @@ void Renderer::render_window(std::vector<Material> &mats,
       for (size_t i = 0; i < scene.objects.size(); ++i)
       {
         auto &obj = scene.objects[i];
-        if (obj->is_beam() || obj->is_plane())
+        if (obj->is_plane())
           continue;
         AABB box;
         if (!obj->bounding_box(box))
