@@ -18,7 +18,8 @@
 namespace rt
 {
 
-static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
+static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
+                      const Vec3 &p, const PointLight &L)
 {
   Vec3 to_light = L.position - p;
   double dist_to_light = to_light.length();
@@ -33,6 +34,9 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
       continue;
     if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), obj->object_id) !=
         L.ignore_ids.end())
+      continue;
+    const Material &m = mats[obj->material_id];
+    if (!m.casts_shadow)
       continue;
     if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
     {
@@ -69,38 +73,45 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
   Vec3 sum(col.x * scene.ambient.color.x * scene.ambient.intensity,
            col.y * scene.ambient.color.y * scene.ambient.intensity,
            col.z * scene.ambient.color.z * scene.ambient.intensity);
-  for (const auto &L : scene.lights)
+  if (!m.unlit)
   {
-    if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), rec.object_id) !=
-        L.ignore_ids.end())
-      continue;
-    Vec3 to_light = L.position - rec.p;
-    double dist = to_light.length();
-    if (L.range > 0.0 && dist > L.range)
-      continue;
-    Vec3 ldir = to_light / dist;
-    if (L.cutoff_cos > -1.0)
+    for (const auto &L : scene.lights)
     {
-      Vec3 spot_dir = (rec.p - L.position).normalized();
-      if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
+      if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), rec.object_id) !=
+          L.ignore_ids.end())
         continue;
+      Vec3 to_light = L.position - rec.p;
+      double dist = to_light.length();
+      if (L.range > 0.0 && dist > L.range)
+        continue;
+      Vec3 ldir = to_light / dist;
+      if (L.cutoff_cos > -1.0)
+      {
+        Vec3 spot_dir = (rec.p - L.position).normalized();
+        if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
+          continue;
+      }
+      if (in_shadow(scene, mats, rec.p, L))
+        continue;
+      double atten = 1.0;
+      if (L.range > 0.0)
+        atten = std::max(0.0, 1.0 - dist / L.range);
+      double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
+      Vec3 h = (ldir + eye).normalized();
+      double spec =
+          std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
+          m.specular_k;
+      sum += Vec3(col.x * L.color.x * L.intensity * diff * atten +
+                      L.color.x * spec * atten,
+                  col.y * L.color.y * L.intensity * diff * atten +
+                      L.color.y * spec * atten,
+                  col.z * L.color.z * L.intensity * diff * atten +
+                      L.color.z * spec * atten);
     }
-    if (in_shadow(scene, rec.p, L))
-      continue;
-    double atten = 1.0;
-    if (L.range > 0.0)
-      atten = std::max(0.0, 1.0 - dist / L.range);
-    double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
-    Vec3 h = (ldir + eye).normalized();
-    double spec =
-        std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
-        m.specular_k;
-    sum += Vec3(col.x * L.color.x * L.intensity * diff * atten +
-                    L.color.x * spec * atten,
-                col.y * L.color.y * L.intensity * diff * atten +
-                    L.color.y * spec * atten,
-                col.z * L.color.z * L.intensity * diff * atten +
-                    L.color.z * spec * atten);
+  }
+  else
+  {
+    sum = col;
   }
   if (m.mirror)
   {
@@ -111,11 +122,10 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
   }
   double alpha = m.alpha;
-  if (m.random_alpha)
+  if (m.beam_falloff)
   {
     double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-    double rand = (1.0 - tpos) * std::pow(dist(rng), tpos);
-    alpha *= rand;
+    alpha *= (1.0 - tpos);
   }
   if (alpha < 1.0)
   {

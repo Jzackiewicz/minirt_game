@@ -1,5 +1,6 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
+#include "rt/BeamSource.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Collision.hpp"
 #include "rt/Camera.hpp"
@@ -124,18 +125,33 @@ void Scene::update_beams(const std::vector<Material> &mats)
         }
       }
     }
+    pending_lights.push_back({bm, hit_any ? hit_rec.object_id : -1});
   }
 
   for (const auto &pl : pending_lights)
   {
     auto bm = pl.beam;
     Vec3 light_col = mats[bm->material_id].base_color;
-    const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+    double light_radius = bm->radius * 1.33;
+    double cone_cos =
+        (bm->length > 0.0 && light_radius < bm->length)
+            ? std::sqrt(std::max(0.0, 1.0 -
+                                         (light_radius / bm->length) *
+                                             (light_radius / bm->length)))
+            : -1.0;
     double remain = bm->total_length - bm->start;
     double ratio = (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
+    std::vector<int> ignore{bm->object_id, pl.hit_id};
+    if (auto src = bm->source.lock())
+    {
+      ignore.push_back(src->object_id);
+      auto bs = std::static_pointer_cast<BeamSource>(src);
+      ignore.push_back(bs->mid.object_id);
+      ignore.push_back(bs->inner.object_id);
+    }
     lights.emplace_back(bm->path.orig, light_col, bm->light_intensity * ratio,
-                        std::vector<int>{bm->object_id, pl.hit_id}, bm->object_id,
-                        bm->path.dir, cone_cos, bm->length);
+                        ignore, bm->object_id, bm->path.dir, cone_cos,
+                        bm->length);
   }
 
   for (auto &L : lights)
@@ -233,7 +249,7 @@ Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
       if (obj->is_beam())
         continue;
       const Material &mat = mats[obj->material_id];
-      if (mat.alpha < 1.0)
+      if (!mat.solid)
         continue;
       if (obj->hit(r, 1e-4, len, tmp))
         return true;
