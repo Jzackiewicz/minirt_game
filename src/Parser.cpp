@@ -4,6 +4,8 @@
 #include "rt/Cylinder.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Sphere.hpp"
+#include "rt/Beam.hpp"
+#include "rt/BeamSource.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -14,6 +16,7 @@
 #include <cstring>
 #include <filesystem>
 #include <iomanip>
+#include <vector>
 
 namespace
 {
@@ -165,6 +168,47 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
           parse_rgba(s_rgb, rgb, a))
       {
         outScene.lights.emplace_back(p, rgb_to_unit(rgb), inten);
+      }
+    }
+    else if (id == "bm")
+    {
+      std::string s_intens, s_pos, s_dir, s_rgb, s_r, s_len, s_move;
+      iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_r >> s_len >> s_move;
+      Vec3 c, dir, rgb;
+      double inten = 0.0, rad = 1.0, len = 1.0;
+      double a = 255.0;
+      if (to_double(s_intens, inten) && parse_triple(s_pos, c) &&
+          parse_triple(s_dir, dir) && parse_rgba(s_rgb, rgb, a) &&
+          to_double(s_r, rad) && to_double(s_len, len))
+      {
+        bool movable = (s_move == "M");
+        Vec3 col = rgb_to_unit(rgb);
+        auto src_parts =
+            make_beam_source(c, rad, col, oid, mid, materials, movable);
+        for (auto &p : src_parts)
+          outScene.objects.push_back(p);
+        std::vector<int> ignore_ids;
+        if (src_parts.size() >= 2)
+        {
+          ignore_ids.push_back(src_parts[0]->object_id);
+          ignore_ids.push_back(src_parts[1]->object_id);
+          for (auto &L : outScene.lights)
+          {
+            L.ignore_ids.push_back(src_parts[0]->object_id);
+            L.ignore_ids.push_back(src_parts[1]->object_id);
+          }
+        }
+        auto laser = make_laser(c, dir, rad, len, oid, mid, movable);
+        materials.emplace_back();
+        materials.back().color = col;
+        materials.back().base_color = col;
+        materials.back().alpha = alpha_to_unit(a);
+        laser->material_id = mid;
+        outScene.objects.push_back(laser);
+        ++mid;
+        auto light =
+            make_beam_light(c, dir, col, inten, rad, len, ignore_ids);
+        outScene.lights.push_back(light);
       }
     }
     else if (id == "sp")
