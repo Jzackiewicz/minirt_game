@@ -282,6 +282,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     {
       std::string s_pos, s_dir, s_rgb, s_g, s_L;
       iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
+      (void)s_g;
       std::string s_move;
       if (!(iss >> s_move))
         s_move = "IM";
@@ -289,10 +290,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (!(iss >> s_intens))
         s_intens = "0.75";
       Vec3 o, dir, rgb;
-      double g = 0.1, L = 1.0, intensity = 0.75;
+      double L = 1.0, intensity = 0.75;
       double a = 255;
       if (parse_triple(s_pos, o) && parse_triple(s_dir, dir) &&
-          parse_rgba(s_rgb, rgb, a) && to_double(s_g, g) && to_double(s_L, L) &&
+          parse_rgba(s_rgb, rgb, a) && to_double(s_L, L) &&
           to_double(s_intens, intensity))
       {
         Vec3 unit = rgb_to_unit(rgb);
@@ -304,7 +305,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         int beam_mat = mid++;
 
         Vec3 dir_norm = dir.normalized();
-        auto bm = std::make_shared<Beam>(o, dir_norm, g, L, intensity,
+        auto bm = std::make_shared<Beam>(o, dir_norm, L, intensity,
                                          oid++, beam_mat);
 
         materials.emplace_back();
@@ -429,7 +430,7 @@ bool Parser::save_rt_file(const std::string &path, const Scene &scene,
       out << "bm " << vec_to_str(bm->path.orig) << ' '
           << vec_to_str(bm->path.dir) << ' '
           << rgba_to_str(m.base_color, m.alpha) << ' '
-          << bm->radius << ' ' << bm->total_length << ' ' << move << ' '
+          << 0.0 << ' ' << bm->total_length << ' ' << move << ' '
           << bm->light_intensity << '\n';
     }
   }

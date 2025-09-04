@@ -116,7 +116,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
           Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
           Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
           auto new_bm = std::make_shared<Beam>(
-              refl_orig, refl_dir, bm->radius, new_len, bm->light_intensity, 0,
+              refl_orig, refl_dir, new_len, bm->light_intensity, 0,
               bm->material_id, new_start, bm->total_length);
           new_bm->source = bm->source;
           to_process.push_back(new_bm);
@@ -166,7 +166,7 @@ void Scene::build_bvh()
   std::vector<HittablePtr> objs;
   objs.reserve(objects.size());
   for (auto &o : objects)
-    if (!o->is_plane())
+    if (!o->is_plane() && !o->is_beam())
       objs.push_back(o);
   if (objs.empty())
   {

@@ -8,15 +8,13 @@ namespace rt
 struct Beam : public Hittable
 {
   Ray path;
-  double radius;
   double length;
   double start;
   double total_length;
   double light_intensity;
   std::weak_ptr<Hittable> source;
-  Beam(const Vec3 &origin, const Vec3 &dir, double radius, double length,
-       double intensity, int oid, int mid, double start = 0.0,
-       double total = -1.0);
+  Beam(const Vec3 &origin, const Vec3 &dir, double length, double intensity,
+       int oid, int mid, double start = 0.0, double total = -1.0);
 
   bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const override;
   bool bounding_box(AABB &out) const override;
