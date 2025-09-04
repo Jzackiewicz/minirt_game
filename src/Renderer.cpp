@@ -18,7 +18,8 @@
 namespace rt
 {
 
-static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
+static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
+                      const Vec3 &p, const PointLight &L)
 {
   Vec3 to_light = L.position - p;
   double dist_to_light = to_light.length();
@@ -36,7 +37,8 @@ static bool in_shadow(const Scene &scene, const Vec3 &p, const PointLight &L)
       continue;
     if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
     {
-      return true;
+      if (mats[tmp.material_id].cast_shadow)
+        return true;
     }
   }
   return false;
@@ -85,7 +87,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
       if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
         continue;
     }
-    if (in_shadow(scene, rec.p, L))
+    if (in_shadow(scene, mats, rec.p, L))
       continue;
     double atten = 1.0;
     if (L.range > 0.0)
@@ -111,11 +113,10 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
     sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
   }
   double alpha = m.alpha;
-  if (m.random_alpha)
+  if (m.beam_falloff)
   {
     double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-    double rand = (1.0 - tpos) * std::pow(dist(rng), tpos);
-    alpha *= rand;
+    alpha *= (1.0 - tpos);
   }
   if (alpha < 1.0)
   {

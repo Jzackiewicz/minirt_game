@@ -4,11 +4,11 @@
 namespace rt
 {
 BeamSource::BeamSource(const Vec3 &c, const Vec3 &dir,
-                       const std::shared_ptr<Beam> &bm, int oid,
+                       const std::shared_ptr<Beam> &bm, double r, int oid,
                        int mat_big, int mat_mid, int mat_small)
-    : Sphere(c, 0.6, oid, mat_big),
-      mid(c, 0.6 * 0.67, -oid - 1, mat_mid),
-      inner(c, 0.6 * 0.33, -oid - 2, mat_small), beam(bm)
+    : Sphere(c, r * 1.33 * 1.33, oid, mat_big),
+      mid(c, r * 1.33, -oid - 1, mat_mid),
+      inner(c, r, -oid - 2, mat_small), beam(bm)
 {
 }
 

@@ -281,13 +281,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     else if (id == "bm")
     {
       std::string s_pos, s_dir, s_rgb, s_g, s_L;
-      iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
-      std::string s_move;
+      std::string s_intens, s_move;
+      iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
       if (!(iss >> s_move))
         s_move = "IM";
-      std::string s_intens;
-      if (!(iss >> s_intens))
-        s_intens = "0.75";
       Vec3 o, dir, rgb;
       double g = 0.1, L = 1.0, intensity = 0.75;
       double a = 255;
@@ -300,7 +297,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().color = unit;
         materials.back().base_color = unit;
         materials.back().alpha = alpha_to_unit(a);
-        materials.back().random_alpha = true;
+        materials.back().beam_falloff = true;
         int beam_mat = mid++;
 
         Vec3 dir_norm = dir.normalized();
@@ -310,28 +307,34 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.emplace_back();
         materials.back().color = Vec3(1.0, 1.0, 1.0);
         materials.back().base_color = materials.back().color;
-        materials.back().alpha = 0.25;
+        materials.back().alpha = 0.67;
+        materials.back().cast_shadow = false;
         int big_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = (Vec3(1.0, 1.0, 1.0) + unit) * 0.5;
         materials.back().base_color = materials.back().color;
-        materials.back().alpha = 0.5;
+        materials.back().alpha = 0.33;
+        materials.back().cast_shadow = false;
         int mid_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = unit;
         materials.back().base_color = unit;
         materials.back().alpha = 1.0;
+        materials.back().cast_shadow = false;
         int small_mat = mid++;
 
-        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, oid++,
+        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, g, oid++,
                                                 big_mat, mid_mat, small_mat);
-        src->movable = (s_move == "M");
+        bool movable = (s_move == "M");
+        src->movable = movable;
+        bm->movable = movable;
         bm->source = src;
         outScene.objects.push_back(bm);
         outScene.objects.push_back(src);
-        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+        const double cone_cos =
+            L > 0.0 ? L / std::sqrt(L * L + (3.0 * g) * (3.0 * g)) : -1.0;
         outScene.lights.emplace_back(
             o, unit, intensity,
             std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
