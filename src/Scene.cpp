@@ -1,11 +1,12 @@
 #include "rt/Scene.hpp"
 #include "rt/Beam.hpp"
+#include "rt/BeamSource.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Collision.hpp"
 #include "rt/Camera.hpp"
 #include <algorithm>
 #include <limits>
-#include <unordered_map>
+#include <unordered_set>
 #include <cmath>
 
 namespace
@@ -21,79 +22,32 @@ namespace rt
 {
 void Scene::update_beams(const std::vector<Material> &mats)
 {
+  std::unordered_set<int> src_ids;
+  for (const auto &bm : beams)
+    if (auto src = bm->source.lock())
+      src_ids.insert(src->object_id);
+
   std::vector<PointLight> static_lights;
   static_lights.reserve(lights.size());
   for (const auto &L : lights)
   {
-    bool keep = true;
-    if (L.attached_id >= 0)
-    {
-      auto it = std::find_if(objects.begin(), objects.end(),
-                             [&](const HittablePtr &o) {
-                               return o->object_id == L.attached_id;
-                             });
-      if (it != objects.end() && (*it)->is_beam())
-        keep = false;
-    }
-    if (keep)
-      static_lights.push_back(L);
+    if (L.attached_id >= 0 && src_ids.count(L.attached_id))
+      continue;
+    static_lights.push_back(L);
   }
   lights = std::move(static_lights);
 
-  std::vector<std::shared_ptr<Beam>> roots;
-  std::vector<HittablePtr> non_beams;
-  non_beams.reserve(objects.size());
-  std::unordered_map<int, int> id_map;
-
-  for (auto &obj : objects)
-  {
-    if (obj->is_beam())
-    {
-      auto bm = std::static_pointer_cast<Beam>(obj);
-      if (bm->start <= 0.0)
-      {
-        bm->start = 0.0;
-        bm->length = bm->total_length;
-        roots.push_back(bm);
-      }
-      continue;
-    }
-    non_beams.push_back(obj);
-  }
-
-  for (size_t i = 0; i < non_beams.size(); ++i)
-  {
-    id_map[non_beams[i]->object_id] = static_cast<int>(i);
-    non_beams[i]->object_id = static_cast<int>(i);
-  }
-
-  objects = std::move(non_beams);
-  int next_oid = static_cast<int>(objects.size());
-
-  std::vector<std::shared_ptr<Beam>> to_process = roots;
-  struct PendingLight
-  {
-    std::shared_ptr<Beam> beam;
-    int hit_id;
-  };
-  std::vector<PendingLight> pending_lights;
+  std::vector<std::shared_ptr<Beam>> to_process = beams;
   for (size_t i = 0; i < to_process.size(); ++i)
   {
     auto bm = to_process[i];
-    if (i < roots.size())
-      id_map[bm->object_id] = next_oid;
-    bm->object_id = next_oid;
-    objects.push_back(bm);
-    ++next_oid;
-
     Ray forward(bm->path.orig, bm->path.dir);
     HitRecord tmp, hit_rec;
     bool hit_any = false;
-    double closest = bm->length;
+    double max_len = bm->total_length - bm->start;
+    double closest = max_len;
     for (auto &other : objects)
     {
-      if (other.get() == bm.get())
-        continue;
       if (auto src = bm->source.lock())
         if (other.get() == src.get())
           continue;
@@ -104,59 +58,41 @@ void Scene::update_beams(const std::vector<Material> &mats)
         hit_any = true;
       }
     }
-    if (hit_any)
-    {
-      bm->length = closest;
-      if (mats[hit_rec.material_id].mirror)
-      {
-        double new_start = bm->start + closest;
-        double new_len = bm->total_length - new_start;
-        if (new_len > 1e-4)
-        {
-          Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
-          Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
-          auto new_bm = std::make_shared<Beam>(
-              refl_orig, refl_dir, bm->radius, new_len, bm->light_intensity, 0,
-              bm->material_id, new_start, bm->total_length);
-          new_bm->source = bm->source;
-          to_process.push_back(new_bm);
-          pending_lights.push_back({new_bm, hit_rec.object_id});
-        }
-      }
-    }
-  }
+    double segment_len = hit_any ? closest : max_len;
+    bm->length = segment_len;
 
-  for (const auto &pl : pending_lights)
-  {
-    auto bm = pl.beam;
     Vec3 light_col = mats[bm->material_id].base_color;
     const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
     double remain = bm->total_length - bm->start;
     double ratio = (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
-    lights.emplace_back(bm->path.orig, light_col, bm->light_intensity * ratio,
-                        std::vector<int>{bm->object_id, pl.hit_id}, bm->object_id,
-                        bm->path.dir, cone_cos, bm->length);
-  }
-
-  for (auto &L : lights)
-  {
-    if (L.attached_id >= 0)
+    int src_id = -1;
+    std::vector<int> ignore;
+    if (auto src_ptr = bm->source.lock())
     {
-      auto it = id_map.find(L.attached_id);
-      if (it != id_map.end())
-        L.attached_id = it->second;
-      if (L.attached_id >= 0 && L.attached_id < static_cast<int>(objects.size()))
-      {
-        Vec3 dir = objects[L.attached_id]->spot_direction();
-        if (dir.length_squared() > 0)
-          L.direction = dir.normalized();
-      }
+      auto src = std::static_pointer_cast<BeamSource>(src_ptr);
+      src_id = src->object_id;
+      ignore.push_back(src->object_id);
+      ignore.push_back(src->mid.object_id);
     }
-    for (int &ign : L.ignore_ids)
+    if (hit_any)
+      ignore.push_back(hit_rec.object_id);
+    lights.emplace_back(bm->path.orig, light_col, bm->light_intensity * ratio,
+                        ignore, src_id, bm->path.dir, cone_cos, segment_len);
+
+    if (hit_any && mats[hit_rec.material_id].mirror)
     {
-      auto it = id_map.find(ign);
-      if (it != id_map.end())
-        ign = it->second;
+      double new_start = bm->start + segment_len;
+      double new_len = bm->total_length - new_start;
+      if (new_len > 1e-4)
+      {
+        Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
+        Vec3 refl_orig = forward.at(segment_len) + refl_dir * 1e-4;
+        auto new_bm = std::make_shared<Beam>(
+            refl_orig, refl_dir, new_len, bm->light_intensity, bm->material_id,
+            new_start, bm->total_length);
+        new_bm->source = bm->source;
+        to_process.push_back(new_bm);
+      }
     }
   }
 }

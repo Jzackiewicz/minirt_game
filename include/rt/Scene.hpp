@@ -2,6 +2,7 @@
 #pragma once
 #include "BVH.hpp"
 #include "Hittable.hpp"
+#include "Beam.hpp"
 #include "light.hpp"
 #include "material.hpp"
 #include <memory>
@@ -14,6 +15,7 @@ struct Scene
 {
   std::vector<HittablePtr> objects;
   std::vector<PointLight> lights;
+  std::vector<std::shared_ptr<Beam>> beams;
   Ambient ambient{Vec3(1, 1, 1), 0.0};
   std::shared_ptr<Hittable> accel;
 

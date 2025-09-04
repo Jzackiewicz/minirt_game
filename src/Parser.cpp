@@ -280,8 +280,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     }
     else if (id == "bm")
     {
-      std::string s_pos, s_dir, s_rgb, s_g, s_L;
-      iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
+      std::string s_pos, s_dir, s_rgb, s_L;
+      iss >> s_pos >> s_dir >> s_rgb >> s_L;
       std::string s_move;
       if (!(iss >> s_move))
         s_move = "IM";
@@ -289,10 +289,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
       if (!(iss >> s_intens))
         s_intens = "0.75";
       Vec3 o, dir, rgb;
-      double g = 0.1, L = 1.0, intensity = 0.75;
+      double L = 1.0, intensity = 0.75;
       double a = 255;
       if (parse_triple(s_pos, o) && parse_triple(s_dir, dir) &&
-          parse_rgba(s_rgb, rgb, a) && to_double(s_g, g) && to_double(s_L, L) &&
+          parse_rgba(s_rgb, rgb, a) && to_double(s_L, L) &&
           to_double(s_intens, intensity))
       {
         Vec3 unit = rgb_to_unit(rgb);
@@ -304,8 +304,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         int beam_mat = mid++;
 
         Vec3 dir_norm = dir.normalized();
-        auto bm = std::make_shared<Beam>(o, dir_norm, g, L, intensity,
-                                         oid++, beam_mat);
+        auto bm = std::make_shared<Beam>(o, dir_norm, L, intensity,
+                                         beam_mat);
 
         materials.emplace_back();
         materials.back().color = Vec3(1.0, 1.0, 1.0);
@@ -329,13 +329,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                                 big_mat, mid_mat, small_mat);
         src->movable = (s_move == "M");
         bm->source = src;
-        outScene.objects.push_back(bm);
         outScene.objects.push_back(src);
-        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-        outScene.lights.emplace_back(
-            o, unit, intensity,
-            std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
-            src->object_id, dir_norm, cone_cos, L);
+        outScene.beams.push_back(bm);
       }
     }
     else if (id == "co")
@@ -413,31 +408,25 @@ bool Parser::save_rt_file(const std::string &path, const Scene &scene,
   }
 
   std::unordered_set<int> beam_sources;
-  for (const auto &obj : scene.objects)
+  for (const auto &bm : scene.beams)
   {
-    if (obj->is_beam())
-    {
-      auto bm = std::static_pointer_cast<Beam>(obj);
-      if (bm->start > 0.0)
-        continue;
-      if (auto src = bm->source.lock())
-        beam_sources.insert(src->object_id);
-      const Material &m = mats[bm->material_id];
-      std::string move = "IM";
-      if (auto src = bm->source.lock(); src && src->movable)
-        move = "M";
-      out << "bm " << vec_to_str(bm->path.orig) << ' '
-          << vec_to_str(bm->path.dir) << ' '
-          << rgba_to_str(m.base_color, m.alpha) << ' '
-          << bm->radius << ' ' << bm->total_length << ' ' << move << ' '
-          << bm->light_intensity << '\n';
-    }
+    if (bm->start > 0.0)
+      continue;
+    if (auto src = bm->source.lock())
+      beam_sources.insert(src->object_id);
+    const Material &m = mats[bm->material_id];
+    std::string move = "IM";
+    if (auto src = bm->source.lock(); src && src->movable)
+      move = "M";
+    out << "bm " << vec_to_str(bm->path.orig) << ' '
+        << vec_to_str(bm->path.dir) << ' '
+        << rgba_to_str(m.base_color, m.alpha) << ' '
+        << bm->total_length << ' ' << move << ' '
+        << bm->light_intensity << '\n';
   }
 
   for (const auto &obj : scene.objects)
   {
-    if (obj->is_beam())
-      continue;
     if (beam_sources.count(obj->object_id))
       continue;
     const Material &m = mats[obj->material_id];
