@@ -166,7 +166,7 @@ void Scene::build_bvh()
   std::vector<HittablePtr> objs;
   objs.reserve(objects.size());
   for (auto &o : objects)
-    if (!o->is_plane())
+    if (!o->is_plane() && !o->is_beam())
       objs.push_back(o);
   if (objs.empty())
   {
