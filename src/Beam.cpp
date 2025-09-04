@@ -15,72 +15,65 @@ Beam::Beam(const Vec3 &origin, const Vec3 &dir, double r, double len,
 
 bool Beam::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
-  Vec3 u = r.dir;
-  Vec3 v = path.dir;
-  Vec3 w0 = r.orig - path.orig;
-  double a = Vec3::dot(u, u);
-  double b = Vec3::dot(u, v);
-  double c = Vec3::dot(v, v);
-  double d = Vec3::dot(u, w0);
-  double e = Vec3::dot(v, w0);
-  double denom = a * c - b * b;
+  bool hit_any = false;
+  double closest = tmax;
+  Vec3 centers[3] = {path.orig, path.at(length * 0.5), path.at(length)};
 
-  double sc, tc;
-  if (std::fabs(denom) < 1e-9)
+  for (const Vec3 &center : centers)
   {
-    sc = -d / a;
-    tc = (a * e - b * d) / (a * c);
-  }
-  else
-  {
-    sc = (b * e - c * d) / denom;
-    tc = (a * e - b * d) / denom;
-  }
+    Vec3 oc = r.orig - center;
+    double a = Vec3::dot(r.dir, r.dir);
+    double half_b = Vec3::dot(oc, r.dir);
+    double c = Vec3::dot(oc, oc) - radius * radius;
+    double disc = half_b * half_b - a * c;
+    if (disc < 0.0)
+      continue;
+    double sqrt_d = std::sqrt(disc);
+    double t = (-half_b - sqrt_d) / a;
+    if (t < tmin || t > closest)
+    {
+      t = (-half_b + sqrt_d) / a;
+      if (t < tmin || t > closest)
+        continue;
+    }
 
-  if (sc < tmin || sc > tmax)
-    return false;
-  if (tc < 0.0 || tc > length)
-    return false;
+    Vec3 p = r.at(t);
+    double tc = Vec3::dot(p - path.orig, path.dir);
+    if (tc < 0.0 || tc > length)
+      continue;
 
-  Vec3 pr = r.at(sc);
-  Vec3 pb = path.at(tc);
-  Vec3 diff = pr - pb;
-  double dist2 = diff.length_squared();
-  if (dist2 > radius * radius)
-    return false;
-
-  Vec3 outward;
-  if (dist2 > 1e-12)
-  {
-    outward = diff.normalized();
-  }
-  else
-  {
-    outward = Vec3::cross(path.dir, Vec3(1, 0, 0));
-    if (outward.length_squared() < 1e-12)
-      outward = Vec3::cross(path.dir, Vec3(0, 1, 0));
-    outward = outward.normalized();
+    Vec3 outward = (p - center).normalized();
+    rec.t = t;
+    rec.p = p;
+    rec.object_id = object_id;
+    rec.material_id = material_id;
+    rec.beam_ratio = (start + tc) / total_length;
+    rec.set_face_normal(r, outward);
+    hit_any = true;
+    closest = t;
   }
 
-  rec.t = sc;
-  rec.p = pr;
-  rec.object_id = object_id;
-  rec.material_id = material_id;
-  rec.beam_ratio = (start + tc) / total_length;
-  rec.set_face_normal(r, outward);
-  return true;
+  return hit_any;
 }
 
 bool Beam::bounding_box(AABB &out) const
 {
-  Vec3 start = path.orig;
-  Vec3 end = path.at(length);
-  Vec3 min(std::min(start.x, end.x), std::min(start.y, end.y),
-           std::min(start.z, end.z));
-  Vec3 max(std::max(start.x, end.x), std::max(start.y, end.y),
-           std::max(start.z, end.z));
+  Vec3 centers[3] = {path.orig, path.at(length * 0.5), path.at(length)};
   Vec3 ex(radius, radius, radius);
-  out = AABB(min - ex, max + ex);
+  Vec3 min(1e30, 1e30, 1e30);
+  Vec3 max(-1e30, -1e30, -1e30);
+  for (const Vec3 &c : centers)
+  {
+    Vec3 cmin = c - ex;
+    Vec3 cmax = c + ex;
+    min.x = std::min(min.x, cmin.x);
+    min.y = std::min(min.y, cmin.y);
+    min.z = std::min(min.z, cmin.z);
+    max.x = std::max(max.x, cmax.x);
+    max.y = std::max(max.y, cmax.y);
+    max.z = std::max(max.z, cmax.z);
+  }
+  out = AABB(min, max);
   return true;
 }
 
