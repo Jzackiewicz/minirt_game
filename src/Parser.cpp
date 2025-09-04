@@ -280,43 +280,36 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     }
     else if (id == "bm")
     {
-      std::string s_pos, s_dir, s_rgb, s_g, s_L;
-      iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
-      std::string s_move;
-      if (!(iss >> s_move))
-        s_move = "IM";
-      std::string s_intens;
-      if (!(iss >> s_intens))
-        s_intens = "0.75";
+      std::string s_intens, s_pos, s_dir, s_rgba, s_rad, s_len, s_move;
+      iss >> s_intens >> s_pos >> s_dir >> s_rgba >> s_rad >> s_len >> s_move;
       Vec3 o, dir, rgb;
-      double g = 0.1, L = 1.0, intensity = 0.75;
+      double radius = 0.1, length = 1.0, intensity = 1.0;
       double a = 255;
       if (parse_triple(s_pos, o) && parse_triple(s_dir, dir) &&
-          parse_rgba(s_rgb, rgb, a) && to_double(s_g, g) && to_double(s_L, L) &&
-          to_double(s_intens, intensity))
+          parse_rgba(s_rgba, rgb, a) && to_double(s_rad, radius) &&
+          to_double(s_len, length) && to_double(s_intens, intensity))
       {
         Vec3 unit = rgb_to_unit(rgb);
         materials.emplace_back();
         materials.back().color = unit;
         materials.back().base_color = unit;
         materials.back().alpha = alpha_to_unit(a);
-        materials.back().random_alpha = true;
         int beam_mat = mid++;
 
         Vec3 dir_norm = dir.normalized();
-        auto bm = std::make_shared<Beam>(o, dir_norm, g, L, intensity,
+        auto bm = std::make_shared<Beam>(o, dir_norm, radius, length, intensity,
                                          oid++, beam_mat);
 
         materials.emplace_back();
         materials.back().color = Vec3(1.0, 1.0, 1.0);
         materials.back().base_color = materials.back().color;
-        materials.back().alpha = 0.25;
+        materials.back().alpha = 0.67;
         int big_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = (Vec3(1.0, 1.0, 1.0) + unit) * 0.5;
         materials.back().base_color = materials.back().color;
-        materials.back().alpha = 0.5;
+        materials.back().alpha = 0.33;
         int mid_mat = mid++;
 
         materials.emplace_back();
@@ -325,17 +318,19 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = 1.0;
         int small_mat = mid++;
 
-        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, oid++,
+        auto src = std::make_shared<BeamSource>(o, dir_norm, radius, bm, oid++,
                                                 big_mat, mid_mat, small_mat);
         src->movable = (s_move == "M");
         bm->source = src;
         outScene.objects.push_back(bm);
         outScene.objects.push_back(src);
-        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+        double cone_radius = radius * 1.33;
+        double ratio = radius / cone_radius;
+        double cone_cos = std::sqrt(1.0 - ratio * ratio);
         outScene.lights.emplace_back(
             o, unit, intensity,
-            std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
-            src->object_id, dir_norm, cone_cos, L);
+            std::vector<int>{bm->object_id, src->object_id}, src->object_id,
+            dir_norm, cone_cos, length);
       }
     }
     else if (id == "co")
