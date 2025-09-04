@@ -39,6 +39,7 @@ struct Hittable
   bool movable = false;
   int object_id = 0;
   int material_id = 0;
+  bool casts_shadow = true;
   virtual ~Hittable() = default;
   virtual bool hit(const Ray &r, double tmin, double tmax,
                    HitRecord &rec) const = 0;

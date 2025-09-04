@@ -280,61 +280,62 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     }
     else if (id == "bm")
     {
-      std::string s_pos, s_dir, s_rgb, s_g, s_L;
-      iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
-      std::string s_move;
-      if (!(iss >> s_move))
+      std::string s_intens, s_pos, s_dir, s_rgb, s_rad, s_L, s_move;
+      iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_rad >> s_L >> s_move;
+      if (s_move.empty())
         s_move = "IM";
-      std::string s_intens;
-      if (!(iss >> s_intens))
-        s_intens = "0.75";
       Vec3 o, dir, rgb;
-      double g = 0.1, L = 1.0, intensity = 0.75;
+      double intensity = 1.0, radius = 0.1, L = 1.0;
       double a = 255;
-      if (parse_triple(s_pos, o) && parse_triple(s_dir, dir) &&
-          parse_rgba(s_rgb, rgb, a) && to_double(s_g, g) && to_double(s_L, L) &&
-          to_double(s_intens, intensity))
+      if (to_double(s_intens, intensity) && parse_triple(s_pos, o) &&
+          parse_triple(s_dir, dir) && parse_rgba(s_rgb, rgb, a) &&
+          to_double(s_rad, radius) && to_double(s_L, L))
       {
         Vec3 unit = rgb_to_unit(rgb);
         materials.emplace_back();
         materials.back().color = unit;
         materials.back().base_color = unit;
         materials.back().alpha = alpha_to_unit(a);
-        materials.back().random_alpha = true;
+        materials.back().unlit = true;
         int beam_mat = mid++;
 
         Vec3 dir_norm = dir.normalized();
-        auto bm = std::make_shared<Beam>(o, dir_norm, g, L, intensity,
+        auto bm = std::make_shared<Beam>(o, dir_norm, radius, L, intensity,
                                          oid++, beam_mat);
 
         materials.emplace_back();
         materials.back().color = Vec3(1.0, 1.0, 1.0);
         materials.back().base_color = materials.back().color;
-        materials.back().alpha = 0.25;
-        int big_mat = mid++;
+        materials.back().alpha = 0.67;
+        int outer_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = (Vec3(1.0, 1.0, 1.0) + unit) * 0.5;
         materials.back().base_color = materials.back().color;
-        materials.back().alpha = 0.5;
+        materials.back().alpha = 0.33;
+        materials.back().unlit = true;
         int mid_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = unit;
         materials.back().base_color = unit;
         materials.back().alpha = 1.0;
-        int small_mat = mid++;
+        materials.back().unlit = true;
+        int inner_mat = mid++;
 
-        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, oid++,
-                                                big_mat, mid_mat, small_mat);
+        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, radius, oid++,
+                                                outer_mat, mid_mat, inner_mat);
         src->movable = (s_move == "M");
         bm->source = src;
         outScene.objects.push_back(bm);
         outScene.objects.push_back(src);
-        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+        double light_radius = radius * 1.33;
+        double cone_cos =
+            (light_radius >= L)
+                ? -1.0
+                : std::sqrt(1.0 - (light_radius / L) * (light_radius / L));
         outScene.lights.emplace_back(
-            o, unit, intensity,
-            std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
+            o, unit, intensity, std::vector<int>{bm->object_id, src->object_id},
             src->object_id, dir_norm, cone_cos, L);
       }
     }
@@ -426,11 +427,10 @@ bool Parser::save_rt_file(const std::string &path, const Scene &scene,
       std::string move = "IM";
       if (auto src = bm->source.lock(); src && src->movable)
         move = "M";
-      out << "bm " << vec_to_str(bm->path.orig) << ' '
-          << vec_to_str(bm->path.dir) << ' '
-          << rgba_to_str(m.base_color, m.alpha) << ' '
-          << bm->radius << ' ' << bm->total_length << ' ' << move << ' '
-          << bm->light_intensity << '\n';
+      out << "bm " << bm->light_intensity << ' ' << vec_to_str(bm->path.orig)
+          << ' ' << vec_to_str(bm->path.dir) << ' '
+          << rgba_to_str(m.base_color, m.alpha) << ' ' << bm->radius << ' '
+          << bm->total_length << ' ' << move << '\n';
     }
   }
 

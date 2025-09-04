@@ -99,6 +99,8 @@ void Scene::update_beams(const std::vector<Material> &mats)
           continue;
       if (other->hit(forward, 1e-4, closest, tmp))
       {
+        if (tmp.object_id < 0)
+          continue;
         closest = tmp.t;
         hit_rec = tmp;
         hit_any = true;
@@ -130,7 +132,12 @@ void Scene::update_beams(const std::vector<Material> &mats)
   {
     auto bm = pl.beam;
     Vec3 light_col = mats[bm->material_id].base_color;
-    const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+    double light_radius = bm->radius * 1.33;
+    double cone_cos =
+        (light_radius >= bm->length)
+            ? -1.0
+            : std::sqrt(1.0 - (light_radius / bm->length) *
+                                    (light_radius / bm->length));
     double remain = bm->total_length - bm->start;
     double ratio = (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
     lights.emplace_back(bm->path.orig, light_col, bm->light_intensity * ratio,

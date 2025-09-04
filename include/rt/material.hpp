@@ -16,7 +16,7 @@ struct Material
   double specular_exp = 50.0;
   double specular_k = 0.5;
   bool mirror = false;
-  bool random_alpha = false;
+  bool unlit = false;
   bool checkered = false; // render as checkered pattern when true
 };
 
