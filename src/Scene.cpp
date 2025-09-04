@@ -106,17 +106,21 @@ void Scene::update_beams(const std::vector<Material> &mats)
     }
     if (hit_any)
     {
+      double old_len = bm->length;
       bm->length = closest;
       if (mats[hit_rec.material_id].mirror)
       {
         double new_start = bm->start + closest;
         double new_len = bm->total_length - new_start;
-        if (new_len > 1e-4)
+        double ratio = (old_len > 1e-4) ? (old_len - closest) / old_len : 0.0;
+        if (new_len > 1e-4 && ratio > 0.0)
         {
           Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
           Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
+          double new_intensity =
+              bm->light_intensity * ratio * (REFLECTION / 100.0);
           auto new_bm = std::make_shared<Beam>(
-              refl_orig, refl_dir, bm->radius, new_len, bm->light_intensity, 0,
+              refl_orig, refl_dir, bm->radius, new_len, new_intensity, 0,
               bm->material_id, new_start, bm->total_length);
           new_bm->source = bm->source;
           to_process.push_back(new_bm);
@@ -131,9 +135,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
     auto bm = pl.beam;
     Vec3 light_col = mats[bm->material_id].base_color;
     const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-    double remain = bm->total_length - bm->start;
-    double ratio = (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
-    lights.emplace_back(bm->path.orig, light_col, bm->light_intensity * ratio,
+    lights.emplace_back(bm->path.orig, light_col, bm->light_intensity,
                         std::vector<int>{bm->object_id, pl.hit_id}, bm->object_id,
                         bm->path.dir, cone_cos, bm->length);
   }
