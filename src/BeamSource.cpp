@@ -4,12 +4,13 @@
 namespace rt
 {
 BeamSource::BeamSource(const Vec3 &c, const Vec3 &dir,
-                       const std::shared_ptr<Beam> &bm, int oid,
+                       const std::shared_ptr<Beam> &bm, double radius, int oid,
                        int mat_big, int mat_mid, int mat_small)
-    : Sphere(c, 0.6, oid, mat_big),
-      mid(c, 0.6 * 0.67, -oid - 1, mat_mid),
-      inner(c, 0.6 * 0.33, -oid - 2, mat_small), beam(bm)
+    : Sphere(c, radius * (4.0 / 3.0) * (4.0 / 3.0), oid, mat_big),
+      mid(c, radius * (4.0 / 3.0), -oid - 1, mat_mid),
+      inner(c, radius, -oid - 2, mat_small), beam(bm)
 {
+  (void)dir;
 }
 
 bool BeamSource::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
