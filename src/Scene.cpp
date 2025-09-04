@@ -97,6 +97,8 @@ void Scene::update_beams(const std::vector<Material> &mats)
       if (auto src = bm->source.lock())
         if (other.get() == src.get())
           continue;
+      if (other->is_beam())
+        continue;
       if (other->hit(forward, 1e-4, closest, tmp))
       {
         closest = tmp.t;
