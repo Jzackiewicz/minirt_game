@@ -50,7 +50,6 @@ bool Cylinder::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
       rec.p = p;
       rec.object_id = object_id;
       rec.material_id = material_id;
-      rec.beam_ratio = (s + height / 2) / height;
       rec.set_face_normal(r, outward);
       closest = root;
       hit_any = true;
@@ -73,7 +72,6 @@ bool Cylinder::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
         rec.p = p;
         rec.object_id = object_id;
         rec.material_id = material_id;
-        rec.beam_ratio = 1.0;
         rec.set_face_normal(r, axis);
         closest = t;
         hit_any = true;
@@ -94,7 +92,6 @@ bool Cylinder::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
         rec.p = p;
         rec.object_id = object_id;
         rec.material_id = material_id;
-        rec.beam_ratio = 0.0;
         rec.set_face_normal(r, (-1) * axis);
         closest = t;
         hit_any = true;

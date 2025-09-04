@@ -271,9 +271,6 @@ bool precise_collision(const HittablePtr &a, const HittablePtr &b)
   if (!a || !b)
     return false;
 
-  if (a->is_beam() || b->is_beam())
-    return false;
-
   ShapeType ta = a->shape_type();
   ShapeType tb = b->shape_type();
 

@@ -1,51 +1,48 @@
 #include "rt/BeamSource.hpp"
+#include "rt/Beam.hpp"
 #include <cmath>
 
-namespace rt
-{
-BeamSource::BeamSource(const Vec3 &c, const Vec3 &dir,
-                       const std::shared_ptr<Beam> &bm, int oid,
-                       int mat_big, int mat_mid, int mat_small)
-    : Sphere(c, 0.6, oid, mat_big),
-      mid(c, 0.6 * 0.67, -oid - 1, mat_mid),
-      inner(c, 0.6 * 0.33, -oid - 2, mat_small), beam(bm)
-{
+namespace rt {
+BeamSource::BeamSource(const Vec3 &c, double base_radius,
+                       const std::shared_ptr<Beam> &bm, int oid, int mat_outer,
+                       int mat_mid, int mat_inner)
+    : Sphere(c, base_radius * 16.0 / 9.0, oid, mat_outer),
+      mid(c, base_radius * 4.0 / 3.0, oid, mat_mid),
+      inner(c, base_radius, oid, mat_inner), beam(bm) {
+  casts_shadow = false;
+  mid.casts_shadow = false;
+  inner.casts_shadow = false;
+  mid.collidable = false;
+  inner.collidable = false;
 }
 
-bool BeamSource::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
-{
+bool BeamSource::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const {
   bool hit_any = false;
   HitRecord tmp;
   double closest = tmax;
-  if (Sphere::hit(r, tmin, closest, tmp))
-  {
+  if (Sphere::hit(r, tmin, closest, tmp)) {
     hit_any = true;
     closest = tmp.t;
     rec = tmp;
   }
-  if (mid.hit(r, tmin, closest, tmp))
-  {
+  if (mid.hit(r, tmin, closest, tmp)) {
     hit_any = true;
     closest = tmp.t;
     rec = tmp;
+    rec.material_id = mid.material_id;
   }
-  if (inner.hit(r, tmin, closest, tmp))
-  {
-    Vec3 beam_dir = beam ? beam->path.dir : Vec3(0, 0, 1);
-    Vec3 to_hit = (tmp.p - inner.center).normalized();
-    const double hole_cos = std::sqrt(1.0 - 0.25 * 0.25);
-    if (Vec3::dot(beam_dir, to_hit) < hole_cos)
-    {
-      hit_any = true;
-      closest = tmp.t;
-      rec = tmp;
-    }
+  if (inner.hit(r, tmin, closest, tmp)) {
+    hit_any = true;
+    closest = tmp.t;
+    rec = tmp;
+    rec.material_id = inner.material_id;
   }
+  if (hit_any)
+    rec.object_id = object_id;
   return hit_any;
 }
 
-void BeamSource::translate(const Vec3 &delta)
-{
+void BeamSource::translate(const Vec3 &delta) {
   Sphere::translate(delta);
   mid.translate(delta);
   inner.translate(delta);
@@ -53,8 +50,7 @@ void BeamSource::translate(const Vec3 &delta)
     beam->path.orig += delta;
 }
 
-void BeamSource::rotate(const Vec3 &ax, double angle)
-{
+void BeamSource::rotate(const Vec3 &ax, double angle) {
   auto rotate_vec = [](const Vec3 &v, const Vec3 &axis, double ang) {
     double c = std::cos(ang);
     double s = std::sin(ang);
@@ -62,11 +58,6 @@ void BeamSource::rotate(const Vec3 &ax, double angle)
   };
   if (beam)
     beam->path.dir = rotate_vec(beam->path.dir, ax, angle).normalized();
-}
-
-Vec3 BeamSource::spot_direction() const
-{
-  return beam ? beam->path.dir : Vec3(0, 0, 1);
 }
 
 } // namespace rt

@@ -2,19 +2,18 @@
 #include <algorithm>
 #include <cmath>
 
-namespace rt
-{
+namespace rt {
 Beam::Beam(const Vec3 &origin, const Vec3 &dir, double r, double len,
            double intensity, int oid, int mid, double s, double total)
     : path(origin, dir.normalized()), radius(r), length(len), start(s),
-      total_length(total < 0 ? len : total), light_intensity(intensity)
-{
+      total_length(total < 0 ? len : total), light_intensity(intensity) {
   object_id = oid;
   material_id = mid;
+  collidable = false;
+  casts_shadow = false;
 }
 
-bool Beam::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
-{
+bool Beam::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const {
   Vec3 u = r.dir;
   Vec3 v = path.dir;
   Vec3 w0 = r.orig - path.orig;
@@ -26,13 +25,10 @@ bool Beam::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
   double denom = a * c - b * b;
 
   double sc, tc;
-  if (std::fabs(denom) < 1e-9)
-  {
+  if (std::fabs(denom) < 1e-9) {
     sc = -d / a;
     tc = (a * e - b * d) / (a * c);
-  }
-  else
-  {
+  } else {
     sc = (b * e - c * d) / denom;
     tc = (a * e - b * d) / denom;
   }
@@ -50,12 +46,9 @@ bool Beam::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
     return false;
 
   Vec3 outward;
-  if (dist2 > 1e-12)
-  {
+  if (dist2 > 1e-12) {
     outward = diff.normalized();
-  }
-  else
-  {
+  } else {
     outward = Vec3::cross(path.dir, Vec3(1, 0, 0));
     if (outward.length_squared() < 1e-12)
       outward = Vec3::cross(path.dir, Vec3(0, 1, 0));
@@ -71,19 +64,16 @@ bool Beam::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
   return true;
 }
 
-bool Beam::bounding_box(AABB &out) const
-{
-  Vec3 start = path.orig;
-  Vec3 end = path.at(length);
-  Vec3 min(std::min(start.x, end.x), std::min(start.y, end.y),
-           std::min(start.z, end.z));
-  Vec3 max(std::max(start.x, end.x), std::max(start.y, end.y),
-           std::max(start.z, end.z));
+bool Beam::bounding_box(AABB &out) const {
+  Vec3 startp = path.orig;
+  Vec3 endp = path.at(length);
+  Vec3 min(std::min(startp.x, endp.x), std::min(startp.y, endp.y),
+           std::min(startp.z, endp.z));
+  Vec3 max(std::max(startp.x, endp.x), std::max(startp.y, endp.y),
+           std::max(startp.z, endp.z));
   Vec3 ex(radius, radius, radius);
   out = AABB(min - ex, max + ex);
   return true;
 }
-
-bool Beam::is_beam() const { return true; }
 
 } // namespace rt

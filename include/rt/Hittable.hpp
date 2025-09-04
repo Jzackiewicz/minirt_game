@@ -39,6 +39,8 @@ struct Hittable
   bool movable = false;
   int object_id = 0;
   int material_id = 0;
+  bool casts_shadow = true;
+  bool collidable = true;
   virtual ~Hittable() = default;
   virtual bool hit(const Ray &r, double tmin, double tmax,
                    HitRecord &rec) const = 0;
@@ -55,7 +57,6 @@ struct Hittable
     (void)axis;
     (void)angle;
   }
-  virtual Vec3 spot_direction() const { return Vec3(0, 0, 0); }
 };
 
 using HittablePtr = std::shared_ptr<Hittable>;
