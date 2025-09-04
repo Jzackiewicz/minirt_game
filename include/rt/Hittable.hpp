@@ -37,6 +37,7 @@ struct HitRecord
 struct Hittable
 {
   bool movable = false;
+  bool casts_shadow = true;
   int object_id = 0;
   int material_id = 0;
   virtual ~Hittable() = default;

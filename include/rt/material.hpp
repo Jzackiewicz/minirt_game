@@ -18,6 +18,7 @@ struct Material
   bool mirror = false;
   bool random_alpha = false;
   bool checkered = false; // render as checkered pattern when true
+  bool unlit = false;      // when true, skip lighting calculations
 };
 
 Vec3 phong(const Material &m, const Ambient &ambient,

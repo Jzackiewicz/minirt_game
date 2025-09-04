@@ -280,20 +280,17 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
     }
     else if (id == "bm")
     {
-      std::string s_pos, s_dir, s_rgb, s_g, s_L;
-      iss >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
+      std::string s_intens, s_pos, s_dir, s_rgb, s_r, s_L;
+      iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_r >> s_L;
       std::string s_move;
       if (!(iss >> s_move))
         s_move = "IM";
-      std::string s_intens;
-      if (!(iss >> s_intens))
-        s_intens = "0.75";
       Vec3 o, dir, rgb;
-      double g = 0.1, L = 1.0, intensity = 0.75;
+      double radius = 0.1, L = 1.0, intensity = 1.0;
       double a = 255;
-      if (parse_triple(s_pos, o) && parse_triple(s_dir, dir) &&
-          parse_rgba(s_rgb, rgb, a) && to_double(s_g, g) && to_double(s_L, L) &&
-          to_double(s_intens, intensity))
+      if (to_double(s_intens, intensity) && parse_triple(s_pos, o) &&
+          parse_triple(s_dir, dir) && parse_rgba(s_rgb, rgb, a) &&
+          to_double(s_r, radius) && to_double(s_L, L))
       {
         Vec3 unit = rgb_to_unit(rgb);
         materials.emplace_back();
@@ -304,38 +301,41 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         int beam_mat = mid++;
 
         Vec3 dir_norm = dir.normalized();
-        auto bm = std::make_shared<Beam>(o, dir_norm, g, L, intensity,
+        auto bm = std::make_shared<Beam>(o, dir_norm, radius, L, intensity,
                                          oid++, beam_mat);
 
         materials.emplace_back();
         materials.back().color = Vec3(1.0, 1.0, 1.0);
         materials.back().base_color = materials.back().color;
-        materials.back().alpha = 0.25;
+        materials.back().alpha = 0.67;
         int big_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = (Vec3(1.0, 1.0, 1.0) + unit) * 0.5;
         materials.back().base_color = materials.back().color;
-        materials.back().alpha = 0.5;
+        materials.back().alpha = 0.33;
+        materials.back().unlit = true;
         int mid_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = unit;
         materials.back().base_color = unit;
         materials.back().alpha = 1.0;
+        materials.back().unlit = true;
         int small_mat = mid++;
 
-        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, oid++,
+        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, radius, oid++,
                                                 big_mat, mid_mat, small_mat);
         src->movable = (s_move == "M");
         bm->source = src;
         outScene.objects.push_back(bm);
         outScene.objects.push_back(src);
-        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-        outScene.lights.emplace_back(
-            o, unit, intensity,
-            std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
-            src->object_id, dir_norm, cone_cos, L);
+        double shine_radius = radius * 1.33;
+        double cone_cos =
+            std::sqrt(std::max(0.0, 1.0 - (shine_radius / L) * (shine_radius / L)));
+        outScene.lights.emplace_back(o, unit, intensity,
+                                     std::vector<int>{bm->object_id},
+                                     src->object_id, dir_norm, cone_cos, L);
       }
     }
     else if (id == "co")
@@ -426,11 +426,10 @@ bool Parser::save_rt_file(const std::string &path, const Scene &scene,
       std::string move = "IM";
       if (auto src = bm->source.lock(); src && src->movable)
         move = "M";
-      out << "bm " << vec_to_str(bm->path.orig) << ' '
-          << vec_to_str(bm->path.dir) << ' '
-          << rgba_to_str(m.base_color, m.alpha) << ' '
-          << bm->radius << ' ' << bm->total_length << ' ' << move << ' '
-          << bm->light_intensity << '\n';
+      out << "bm " << bm->light_intensity << ' ' << vec_to_str(bm->path.orig)
+          << ' ' << vec_to_str(bm->path.dir) << ' '
+          << rgba_to_str(m.base_color, m.alpha) << ' ' << bm->radius << ' '
+          << bm->total_length << ' ' << move << '\n';
     }
   }
 
