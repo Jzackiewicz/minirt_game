@@ -12,156 +12,173 @@ namespace
 {
 inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
 {
-	return v - n * (2.0 * Vec3::dot(v, n));
+        return v - n * (2.0 * Vec3::dot(v, n));
 }
 
 } // namespace
 
+// Remove lights attached to beam segments and collect root laser objects.
+void Scene::prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
+                                                       std::unordered_map<int, int> &id_map)
+{
+        std::vector<PointLight> static_lights;
+        static_lights.reserve(lights.size());
+        for (const auto &L : lights)
+        {
+                bool keep = true;
+                if (L.attached_id >= 0)
+                {
+                        auto it = std::find_if(objects.begin(), objects.end(),
+                                                                   [&](const HittablePtr &o)
+                                                                   { return o->object_id == L.attached_id; });
+                        if (it != objects.end() && (*it)->is_beam())
+                                keep = false;
+                }
+                if (keep)
+                        static_lights.push_back(L);
+        }
+        lights = std::move(static_lights);
+
+        std::vector<HittablePtr> non_beams;
+        non_beams.reserve(objects.size());
+        for (auto &obj : objects)
+        {
+                if (obj->is_beam())
+                {
+                        auto bm = std::static_pointer_cast<Laser>(obj);
+                        if (bm->start <= 0.0)
+                        {
+                                bm->start = 0.0;
+                                bm->length = bm->total_length;
+                                roots.push_back(bm);
+                        }
+                        continue;
+                }
+                non_beams.push_back(obj);
+        }
+
+        for (size_t i = 0; i < non_beams.size(); ++i)
+        {
+                id_map[non_beams[i]->object_id] = static_cast<int>(i);
+                non_beams[i]->object_id = static_cast<int>(i);
+        }
+
+        objects = std::move(non_beams);
+}
+
+// Trace laser beams, spawning reflections and associated point lights.
+void Scene::process_beams(const std::vector<Material> &mats,
+                                              std::vector<std::shared_ptr<Laser>> &roots,
+                                              std::unordered_map<int, int> &id_map)
+{
+        int next_oid = static_cast<int>(objects.size());
+        std::vector<std::shared_ptr<Laser>> to_process = roots;
+        class PendingLight
+        {
+        public:
+                std::shared_ptr<Laser> beam;
+                int hit_id;
+        };
+        std::vector<PendingLight> pending_lights;
+        for (size_t i = 0; i < to_process.size(); ++i)
+        {
+                auto bm = to_process[i];
+                if (i < roots.size())
+                        id_map[bm->object_id] = next_oid;
+                bm->object_id = next_oid++;
+                objects.push_back(bm);
+
+                Ray forward(bm->path.orig, bm->path.dir);
+                HitRecord tmp, hit_rec;
+                bool hit_any = false;
+                double closest = bm->length;
+                for (auto &other : objects)
+                {
+                        if (other.get() == bm.get())
+                                continue;
+                        if (auto src = bm->source.lock())
+                                if (other.get() == src.get())
+                                        continue;
+                        if (other->hit(forward, 1e-4, closest, tmp))
+                        {
+                                closest = tmp.t;
+                                hit_rec = tmp;
+                                hit_any = true;
+                        }
+                }
+                if (hit_any)
+                {
+                        bm->length = closest;
+                        if (mats[hit_rec.material_id].mirror)
+                        {
+                                double new_start = bm->start + closest;
+                                double new_len = bm->total_length - new_start;
+                                if (new_len > 1e-4)
+                                {
+                                        Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
+                                        Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
+                                        auto new_bm = std::make_shared<Laser>(
+                                                refl_orig, refl_dir, bm->radius, new_len,
+                                                bm->light_intensity, 0, bm->material_id, new_start,
+                                                bm->total_length);
+                                        new_bm->source = bm->source;
+                                        to_process.push_back(new_bm);
+                                        pending_lights.push_back({new_bm, hit_rec.object_id});
+                                }
+                        }
+                }
+        }
+
+        for (const auto &pl : pending_lights)
+        {
+                auto bm = pl.beam;
+                Vec3 light_col = mats[bm->material_id].base_color;
+                const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+                double remain = bm->total_length - bm->start;
+                double ratio =
+                        (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
+                lights.emplace_back(bm->path.orig, light_col,
+                                                        bm->light_intensity * ratio,
+                                                        std::vector<int>{bm->object_id, pl.hit_id},
+                                                        bm->object_id, bm->path.dir, cone_cos, bm->length);
+        }
+}
+
+// Remap light references after objects have been reindexed.
+void Scene::remap_light_ids(const std::unordered_map<int, int> &id_map)
+{
+        for (auto &L : lights)
+        {
+                if (L.attached_id >= 0)
+                {
+                        auto it = id_map.find(L.attached_id);
+                        if (it != id_map.end())
+                                L.attached_id = it->second;
+                        if (L.attached_id >= 0 &&
+                                L.attached_id < static_cast<int>(objects.size()))
+                        {
+                                Vec3 dir = objects[L.attached_id]->spot_direction();
+                                if (dir.length_squared() > 0)
+                                        L.direction = dir.normalized();
+                        }
+                }
+                for (int &ign : L.ignore_ids)
+                {
+                        auto it = id_map.find(ign);
+                        if (it != id_map.end())
+                                ign = it->second;
+                }
+        }
+}
+
 // Remove finished beam segments and spawn new beams for reflections.
 void Scene::update_beams(const std::vector<Material> &mats)
 {
-	std::vector<PointLight> static_lights;
-	static_lights.reserve(lights.size());
-	for (const auto &L : lights)
-	{
-		bool keep = true;
-		if (L.attached_id >= 0)
-		{
-			auto it = std::find_if(objects.begin(), objects.end(),
-								   [&](const HittablePtr &o)
-								   { return o->object_id == L.attached_id; });
-			if (it != objects.end() && (*it)->is_beam())
-				keep = false;
-		}
-		if (keep)
-			static_lights.push_back(L);
-	}
-	lights = std::move(static_lights);
-
-	std::vector<std::shared_ptr<Laser>> roots;
-	std::vector<HittablePtr> non_beams;
-	non_beams.reserve(objects.size());
-	std::unordered_map<int, int> id_map;
-
-	for (auto &obj : objects)
-	{
-		if (obj->is_beam())
-		{
-			auto bm = std::static_pointer_cast<Laser>(obj);
-			if (bm->start <= 0.0)
-			{
-				bm->start = 0.0;
-				bm->length = bm->total_length;
-				roots.push_back(bm);
-			}
-			continue;
-		}
-		non_beams.push_back(obj);
-	}
-
-	for (size_t i = 0; i < non_beams.size(); ++i)
-	{
-		id_map[non_beams[i]->object_id] = static_cast<int>(i);
-		non_beams[i]->object_id = static_cast<int>(i);
-	}
-
-	objects = std::move(non_beams);
-	int next_oid = static_cast<int>(objects.size());
-
-	std::vector<std::shared_ptr<Laser>> to_process = roots;
-	class PendingLight
-	{
-	public:
-		std::shared_ptr<Laser> beam;
-		int hit_id;
-	};
-	std::vector<PendingLight> pending_lights;
-	for (size_t i = 0; i < to_process.size(); ++i)
-	{
-		auto bm = to_process[i];
-		if (i < roots.size())
-			id_map[bm->object_id] = next_oid;
-		bm->object_id = next_oid;
-		objects.push_back(bm);
-		++next_oid;
-
-		Ray forward(bm->path.orig, bm->path.dir);
-		HitRecord tmp, hit_rec;
-		bool hit_any = false;
-		double closest = bm->length;
-		for (auto &other : objects)
-		{
-			if (other.get() == bm.get())
-				continue;
-			if (auto src = bm->source.lock())
-				if (other.get() == src.get())
-					continue;
-			if (other->hit(forward, 1e-4, closest, tmp))
-			{
-				closest = tmp.t;
-				hit_rec = tmp;
-				hit_any = true;
-			}
-		}
-		if (hit_any)
-		{
-			bm->length = closest;
-			if (mats[hit_rec.material_id].mirror)
-			{
-				double new_start = bm->start + closest;
-				double new_len = bm->total_length - new_start;
-				if (new_len > 1e-4)
-				{
-					Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
-					Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
-					auto new_bm = std::make_shared<Laser>(
-						refl_orig, refl_dir, bm->radius, new_len,
-						bm->light_intensity, 0, bm->material_id, new_start,
-						bm->total_length);
-					new_bm->source = bm->source;
-					to_process.push_back(new_bm);
-					pending_lights.push_back({new_bm, hit_rec.object_id});
-				}
-			}
-		}
-	}
-
-	for (const auto &pl : pending_lights)
-	{
-		auto bm = pl.beam;
-		Vec3 light_col = mats[bm->material_id].base_color;
-		const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-		double remain = bm->total_length - bm->start;
-		double ratio =
-			(bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
-		lights.emplace_back(bm->path.orig, light_col,
-							bm->light_intensity * ratio,
-							std::vector<int>{bm->object_id, pl.hit_id},
-							bm->object_id, bm->path.dir, cone_cos, bm->length);
-	}
-
-	for (auto &L : lights)
-	{
-		if (L.attached_id >= 0)
-		{
-			auto it = id_map.find(L.attached_id);
-			if (it != id_map.end())
-				L.attached_id = it->second;
-			if (L.attached_id >= 0 &&
-				L.attached_id < static_cast<int>(objects.size()))
-			{
-				Vec3 dir = objects[L.attached_id]->spot_direction();
-				if (dir.length_squared() > 0)
-					L.direction = dir.normalized();
-			}
-		}
-		for (int &ign : L.ignore_ids)
-		{
-			auto it = id_map.find(ign);
-			if (it != id_map.end())
-				ign = it->second;
-		}
-	}
+        std::vector<std::shared_ptr<Laser>> roots;
+        std::unordered_map<int, int> id_map;
+        prepare_beam_roots(roots, id_map);
+        process_beams(mats, roots, id_map);
+        remap_light_ids(id_map);
 }
 
 // Construct a bounding volume hierarchy for faster ray queries.

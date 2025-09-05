@@ -108,6 +108,253 @@ inline double alpha_to_unit(double a) { return a / 255.0; }
 
 } // namespace
 
+// Parse ambient light definition line.
+static void parse_ambient(std::istringstream &iss, Scene &scene)
+{
+        std::string s_intens, s_rgb;
+        iss >> s_intens >> s_rgb;
+        double intensity = 0;
+        Vec3 rgb;
+        double a = 255;
+        if (to_double(s_intens, intensity) && parse_rgba(s_rgb, rgb, a))
+                scene.ambient = Ambient(rgb_to_unit(rgb), intensity);
+}
+
+// Parse camera definition line.
+static void parse_camera(std::istringstream &iss, Vec3 &pos, Vec3 &dir, double &fov)
+{
+        std::string s_pos, s_dir, s_fov;
+        iss >> s_pos >> s_dir >> s_fov;
+        parse_triple(s_pos, pos);
+        parse_triple(s_dir, dir);
+        to_double(s_fov, fov);
+}
+
+// Parse point light definition line.
+static void parse_light(std::istringstream &iss, Scene &scene)
+{
+        std::string s_pos, s_intens, s_rgb;
+        iss >> s_pos >> s_intens >> s_rgb;
+        Vec3 p, rgb;
+        double inten = 1.0;
+        double a = 255;
+        if (parse_triple(s_pos, p) && to_double(s_intens, inten) &&
+                parse_rgba(s_rgb, rgb, a))
+                scene.lights.emplace_back(p, rgb_to_unit(rgb), inten);
+}
+
+// Parse sphere definition line.
+static void parse_sphere(std::istringstream &iss, Scene &scene, int &oid, int &mid,
+                                               std::vector<Material> &mats)
+{
+        std::string s_pos, s_r, s_rgb;
+        iss >> s_pos >> s_r >> s_rgb;
+        std::string s_mirror;
+        if (!(iss >> s_mirror))
+                s_mirror = "NR";
+        std::string s_move;
+        if (!(iss >> s_move))
+                s_move = "IM";
+        Vec3 c, rgb;
+        double r = 1.0;
+        double a = 255;
+        if (parse_triple(s_pos, c) && to_double(s_r, r) && parse_rgba(s_rgb, rgb, a))
+        {
+                auto s = std::make_shared<Sphere>(c, r, oid++, mid);
+                s->movable = (s_move == "M");
+                mats.emplace_back();
+                mats.back().color = rgb_to_unit(rgb);
+                mats.back().base_color = mats.back().color;
+                mats.back().alpha = alpha_to_unit(a);
+                mats.back().mirror = (s_mirror == "R" || s_mirror == "1");
+                scene.objects.push_back(s);
+                ++mid;
+        }
+}
+
+// Parse plane definition line.
+static void parse_plane(std::istringstream &iss, Scene &scene, int &oid, int &mid,
+                                              std::vector<Material> &mats)
+{
+        std::string s_p, s_n, s_rgb;
+        iss >> s_p >> s_n >> s_rgb;
+        std::string s_mirror;
+        if (!(iss >> s_mirror))
+                s_mirror = "NR";
+        std::string s_move;
+        if (!(iss >> s_move))
+                s_move = "IM";
+        Vec3 p, n, rgb;
+        double a = 255;
+        if (parse_triple(s_p, p) && parse_triple(s_n, n) && parse_rgba(s_rgb, rgb, a))
+        {
+                auto pl = std::make_shared<Plane>(p, n, oid++, mid);
+                pl->movable = (s_move == "M");
+                mats.emplace_back();
+                mats.back().color = rgb_to_unit(rgb);
+                mats.back().base_color = mats.back().color;
+                mats.back().alpha = alpha_to_unit(a);
+                mats.back().mirror = (s_mirror == "R" || s_mirror == "1");
+                scene.objects.push_back(pl);
+                ++mid;
+        }
+}
+
+// Parse cylinder definition line.
+static void parse_cylinder(std::istringstream &iss, Scene &scene, int &oid, int &mid,
+                                                   std::vector<Material> &mats)
+{
+        std::string s_pos, s_dir, s_d, s_h, s_rgb;
+        iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
+        std::string s_mirror;
+        if (!(iss >> s_mirror))
+                s_mirror = "NR";
+        std::string s_move;
+        if (!(iss >> s_move))
+                s_move = "IM";
+        Vec3 c, dir, rgb;
+        double d = 1.0, h = 1.0;
+        double a = 255;
+        if (parse_triple(s_pos, c) && parse_triple(s_dir, dir) &&
+                to_double(s_d, d) && to_double(s_h, h) && parse_rgba(s_rgb, rgb, a))
+        {
+                auto cy =
+                        std::make_shared<Cylinder>(c, dir, d / 2.0, h, oid++, mid);
+                cy->movable = (s_move == "M");
+                mats.emplace_back();
+                mats.back().color = rgb_to_unit(rgb);
+                mats.back().base_color = mats.back().color;
+                mats.back().alpha = alpha_to_unit(a);
+                mats.back().mirror = (s_mirror == "R" || s_mirror == "1");
+                scene.objects.push_back(cy);
+                ++mid;
+        }
+}
+
+// Parse cube definition line.
+static void parse_cube(std::istringstream &iss, Scene &scene, int &oid, int &mid,
+                                            std::vector<Material> &mats)
+{
+        std::string s_pos, s_orient, s_L, s_W, s_H, s_rgb;
+        iss >> s_pos >> s_orient >> s_L >> s_W >> s_H >> s_rgb;
+        std::string s_mirror;
+        if (!(iss >> s_mirror))
+                s_mirror = "NR";
+        std::string s_move;
+        if (!(iss >> s_move))
+                s_move = "IM";
+        Vec3 c, orient, rgb;
+        double L = 1.0, W = 1.0, H = 1.0;
+        double alpha = 255;
+        if (parse_triple(s_pos, c) && parse_triple(s_orient, orient) &&
+                to_double(s_L, L) && to_double(s_W, W) && to_double(s_H, H) &&
+                parse_rgba(s_rgb, rgb, alpha))
+        {
+                auto cu =
+                        std::make_shared<Cube>(c, orient, L, W, H, oid++, mid);
+                cu->movable = (s_move == "M");
+                mats.emplace_back();
+                mats.back().color = rgb_to_unit(rgb);
+                mats.back().base_color = mats.back().color;
+                mats.back().alpha = alpha_to_unit(alpha);
+                mats.back().mirror = (s_mirror == "R" || s_mirror == "1");
+                scene.objects.push_back(cu);
+                ++mid;
+        }
+}
+
+// Parse beam definition line.
+static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid,
+                                            std::vector<Material> &mats)
+{
+        std::string s_intens, s_pos, s_dir, s_rgb, s_g, s_L;
+        iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
+        std::string s_move;
+        if (!(iss >> s_move))
+                s_move = "IM";
+        Vec3 o, dir, rgb;
+        double g = 0.1, L = 1.0, intensity = 0.75;
+        double a = 255;
+        if (to_double(s_intens, intensity) && parse_triple(s_pos, o) &&
+                parse_triple(s_dir, dir) && parse_rgba(s_rgb, rgb, a) &&
+                to_double(s_g, g) && to_double(s_L, L))
+        {
+                Vec3 unit = rgb_to_unit(rgb);
+                mats.emplace_back();
+                mats.back().color = unit;
+                mats.back().base_color = unit;
+                mats.back().alpha = alpha_to_unit(a);
+                mats.back().random_alpha = true;
+                int beam_mat = mid++;
+
+                Vec3 dir_norm = dir.normalized();
+
+                mats.emplace_back();
+                mats.back().color = Vec3(1.0, 1.0, 1.0);
+                mats.back().base_color = mats.back().color;
+                mats.back().alpha = 0.67;
+                int big_mat = mid++;
+
+                mats.emplace_back();
+                mats.back().color = (Vec3(1.0, 1.0, 1.0) + unit) * 0.5;
+                mats.back().base_color = mats.back().color;
+                mats.back().alpha = 0.33;
+                int mid_mat = mid++;
+
+                mats.emplace_back();
+                mats.back().color = unit;
+                mats.back().base_color = unit;
+                mats.back().alpha = 1.0;
+                int small_mat = mid++;
+
+                auto bm = std::make_shared<Beam>(o, dir_norm, g, L, intensity,
+                                                                                         oid, beam_mat, big_mat,
+                                                                                         mid_mat, small_mat);
+                oid += 2;
+                bm->source->movable = (s_move == "M");
+                scene.objects.push_back(bm->laser);
+                scene.objects.push_back(bm->source);
+                const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+                scene.lights.emplace_back(
+                        o, unit, intensity,
+                        std::vector<int>{bm->laser->object_id,
+                                                         bm->source->object_id,
+                                                         bm->source->mid.object_id},
+                        bm->source->object_id, dir_norm, cone_cos, L);
+        }
+}
+
+// Parse cone definition line.
+static void parse_cone(std::istringstream &iss, Scene &scene, int &oid, int &mid,
+                                           std::vector<Material> &mats)
+{
+        std::string s_pos, s_dir, s_d, s_h, s_rgb;
+        iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
+        std::string s_mirror;
+        if (!(iss >> s_mirror))
+                s_mirror = "NR";
+        std::string s_move;
+        if (!(iss >> s_move))
+                s_move = "IM";
+        Vec3 c, dir, rgb;
+        double d = 1.0, h = 1.0;
+        double a = 255;
+        if (parse_triple(s_pos, c) && parse_triple(s_dir, dir) &&
+                to_double(s_d, d) && to_double(s_h, h) && parse_rgba(s_rgb, rgb, a))
+        {
+                auto co =
+                        std::make_shared<Cone>(c, dir, d / 2.0, h, oid++, mid);
+                co->movable = (s_move == "M");
+                mats.emplace_back();
+                mats.back().color = rgb_to_unit(rgb);
+                mats.back().base_color = mats.back().color;
+                mats.back().alpha = alpha_to_unit(a);
+                mats.back().mirror = (s_mirror == "R" || s_mirror == "1");
+                scene.objects.push_back(co);
+                ++mid;
+        }
+}
+
 // storage dla materiałów
 std::vector<Material> Parser::materials;
 
@@ -126,247 +373,34 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
 	Vec3 cam_pos(0, 0, -10), cam_dir(0, 0, 1);
 	double fov = 60.0;
 
-	while (std::getline(in, line))
-	{
-		if (line.empty() || line[0] == '#')
-			continue;
-		std::istringstream iss(line);
-		std::string id;
-		iss >> id;
+        while (std::getline(in, line))
+        {
+                if (line.empty() || line[0] == '#')
+                        continue;
+                std::istringstream iss(line);
+                std::string id;
+                iss >> id;
 
-		if (id == "A")
-		{
-			std::string s_intens, s_rgb;
-			iss >> s_intens >> s_rgb;
-			double intensity = 0;
-			Vec3 rgb;
-			double a = 255;
-			if (to_double(s_intens, intensity) && parse_rgba(s_rgb, rgb, a))
-			{
-				outScene.ambient = Ambient(rgb_to_unit(rgb), intensity);
-			}
-		}
-		else if (id == "C")
-		{
-			std::string s_pos, s_dir, s_fov;
-			iss >> s_pos >> s_dir >> s_fov;
-			parse_triple(s_pos, cam_pos);
-			parse_triple(s_dir, cam_dir);
-			to_double(s_fov, fov);
-		}
-		else if (id == "L")
-		{
-			std::string s_pos, s_intens, s_rgb;
-			iss >> s_pos >> s_intens >> s_rgb;
-			Vec3 p, rgb;
-			double inten = 1.0;
-			double a = 255;
-			if (parse_triple(s_pos, p) && to_double(s_intens, inten) &&
-				parse_rgba(s_rgb, rgb, a))
-			{
-				outScene.lights.emplace_back(p, rgb_to_unit(rgb), inten);
-			}
-		}
-		else if (id == "sp")
-		{
-			std::string s_pos, s_r, s_rgb;
-			iss >> s_pos >> s_r >> s_rgb;
-			std::string s_mirror;
-			if (!(iss >> s_mirror))
-				s_mirror = "NR";
-			std::string s_move;
-			if (!(iss >> s_move))
-				s_move = "IM";
-			Vec3 c, rgb;
-			double r = 1.0;
-			double a = 255;
-			if (parse_triple(s_pos, c) && to_double(s_r, r) &&
-				parse_rgba(s_rgb, rgb, a))
-			{
-				auto s = std::make_shared<Sphere>(c, r, oid++, mid);
-				s->movable = (s_move == "M");
-				materials.emplace_back();
-				materials.back().color = rgb_to_unit(rgb);
-				materials.back().base_color = materials.back().color;
-				materials.back().alpha = alpha_to_unit(a);
-				materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
-				outScene.objects.push_back(s);
-				++mid;
-			}
-		}
-		else if (id == "pl")
-		{
-			std::string s_p, s_n, s_rgb;
-			iss >> s_p >> s_n >> s_rgb;
-			std::string s_mirror;
-			if (!(iss >> s_mirror))
-				s_mirror = "NR";
-			std::string s_move;
-			if (!(iss >> s_move))
-				s_move = "IM";
-			Vec3 p, n, rgb;
-			double a = 255;
-			if (parse_triple(s_p, p) && parse_triple(s_n, n) &&
-				parse_rgba(s_rgb, rgb, a))
-			{
-				auto pl = std::make_shared<Plane>(p, n, oid++, mid);
-				pl->movable = (s_move == "M");
-				materials.emplace_back();
-				materials.back().color = rgb_to_unit(rgb);
-				materials.back().base_color = materials.back().color;
-				materials.back().alpha = alpha_to_unit(a);
-				materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
-				outScene.objects.push_back(pl);
-				++mid;
-			}
-		}
-		else if (id == "cy")
-		{
-			std::string s_pos, s_dir, s_d, s_h, s_rgb;
-			iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
-			std::string s_mirror;
-			if (!(iss >> s_mirror))
-				s_mirror = "NR";
-			std::string s_move;
-			if (!(iss >> s_move))
-				s_move = "IM";
-			Vec3 c, dir, rgb;
-			double d = 1.0, h = 1.0;
-			double a = 255;
-			if (parse_triple(s_pos, c) && parse_triple(s_dir, dir) &&
-				to_double(s_d, d) && to_double(s_h, h) &&
-				parse_rgba(s_rgb, rgb, a))
-			{
-				auto cy =
-					std::make_shared<Cylinder>(c, dir, d / 2.0, h, oid++, mid);
-				cy->movable = (s_move == "M");
-				materials.emplace_back();
-				materials.back().color = rgb_to_unit(rgb);
-				materials.back().base_color = materials.back().color;
-				materials.back().alpha = alpha_to_unit(a);
-				materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
-				outScene.objects.push_back(cy);
-				++mid;
-			}
-		}
-		else if (id == "cu")
-		{
-			std::string s_pos, s_orient, s_L, s_W, s_H, s_rgb;
-			iss >> s_pos >> s_orient >> s_L >> s_W >> s_H >> s_rgb;
-			std::string s_mirror;
-			if (!(iss >> s_mirror))
-				s_mirror = "NR";
-			std::string s_move;
-			if (!(iss >> s_move))
-				s_move = "IM";
-			Vec3 c, orient, rgb;
-			double L = 1.0, W = 1.0, H = 1.0;
-			double alpha = 255;
-			if (parse_triple(s_pos, c) && parse_triple(s_orient, orient) &&
-				to_double(s_L, L) && to_double(s_W, W) && to_double(s_H, H) &&
-				parse_rgba(s_rgb, rgb, alpha))
-			{
-				auto cu =
-					std::make_shared<Cube>(c, orient, L, W, H, oid++, mid);
-				cu->movable = (s_move == "M");
-				materials.emplace_back();
-				materials.back().color = rgb_to_unit(rgb);
-				materials.back().base_color = materials.back().color;
-				materials.back().alpha = alpha_to_unit(alpha);
-				materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
-				outScene.objects.push_back(cu);
-				++mid;
-			}
-		}
-		else if (id == "bm")
-		{
-			std::string s_intens, s_pos, s_dir, s_rgb, s_g, s_L;
-			iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
-			std::string s_move;
-			if (!(iss >> s_move))
-				s_move = "IM";
-			Vec3 o, dir, rgb;
-			double g = 0.1, L = 1.0, intensity = 0.75;
-			double a = 255;
-			if (to_double(s_intens, intensity) && parse_triple(s_pos, o) &&
-				parse_triple(s_dir, dir) && parse_rgba(s_rgb, rgb, a) &&
-				to_double(s_g, g) && to_double(s_L, L))
-			{
-				Vec3 unit = rgb_to_unit(rgb);
-				materials.emplace_back();
-				materials.back().color = unit;
-				materials.back().base_color = unit;
-				materials.back().alpha = alpha_to_unit(a);
-				materials.back().random_alpha = true;
-				int beam_mat = mid++;
-
-				Vec3 dir_norm = dir.normalized();
-
-				materials.emplace_back();
-				materials.back().color = Vec3(1.0, 1.0, 1.0);
-				materials.back().base_color = materials.back().color;
-				materials.back().alpha = 0.67;
-				int big_mat = mid++;
-
-				materials.emplace_back();
-				materials.back().color = (Vec3(1.0, 1.0, 1.0) + unit) * 0.5;
-				materials.back().base_color = materials.back().color;
-				materials.back().alpha = 0.33;
-				int mid_mat = mid++;
-
-				materials.emplace_back();
-				materials.back().color = unit;
-				materials.back().base_color = unit;
-				materials.back().alpha = 1.0;
-				int small_mat = mid++;
-
-				auto bm = std::make_shared<Beam>(o, dir_norm, g, L, intensity,
-												 oid, beam_mat, big_mat,
-												 mid_mat, small_mat);
-				oid += 2;
-				bm->source->movable = (s_move == "M");
-				outScene.objects.push_back(bm->laser);
-				outScene.objects.push_back(bm->source);
-				const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-				outScene.lights.emplace_back(
-					o, unit, intensity,
-					std::vector<int>{bm->laser->object_id,
-									 bm->source->object_id,
-									 bm->source->mid.object_id},
-					bm->source->object_id, dir_norm, cone_cos, L);
-			}
-		}
-		else if (id == "co")
-		{
-			std::string s_pos, s_dir, s_d, s_h, s_rgb;
-			iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
-			std::string s_mirror;
-			if (!(iss >> s_mirror))
-				s_mirror = "NR";
-			std::string s_move;
-			if (!(iss >> s_move))
-				s_move = "IM";
-			Vec3 c, dir, rgb;
-			double d = 1.0, h = 1.0;
-			double a = 255;
-			if (parse_triple(s_pos, c) && parse_triple(s_dir, dir) &&
-				to_double(s_d, d) && to_double(s_h, h) &&
-				parse_rgba(s_rgb, rgb, a))
-			{
-				auto co =
-					std::make_shared<Cone>(c, dir, d / 2.0, h, oid++, mid);
-				co->movable = (s_move == "M");
-				materials.emplace_back();
-				materials.back().color = rgb_to_unit(rgb);
-				materials.back().base_color = materials.back().color;
-				materials.back().alpha = alpha_to_unit(a);
-				materials.back().mirror = (s_mirror == "R" || s_mirror == "1");
-				outScene.objects.push_back(co);
-				++mid;
-			}
-		}
-		// TODO: textures...
-	}
+                if (id == "A")
+                        parse_ambient(iss, outScene);
+                else if (id == "C")
+                        parse_camera(iss, cam_pos, cam_dir, fov);
+                else if (id == "L")
+                        parse_light(iss, outScene);
+                else if (id == "sp")
+                        parse_sphere(iss, outScene, oid, mid, materials);
+                else if (id == "pl")
+                        parse_plane(iss, outScene, oid, mid, materials);
+                else if (id == "cy")
+                        parse_cylinder(iss, outScene, oid, mid, materials);
+                else if (id == "cu")
+                        parse_cube(iss, outScene, oid, mid, materials);
+                else if (id == "bm")
+                        parse_beam(iss, outScene, oid, mid, materials);
+                else if (id == "co")
+                        parse_cone(iss, outScene, oid, mid, materials);
+                // TODO: textures...
+        }
 
 	outCamera =
 		Camera(cam_pos, cam_pos + cam_dir, fov, double(width) / double(height));
