@@ -28,4 +28,3 @@ int main(int argc, char **argv)
 	run_application(scene_path, width, height, quality);
 	return 0;
 }
-

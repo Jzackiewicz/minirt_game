@@ -13,5 +13,5 @@
  * @param quality Output quality character.
  * @return True on success.
  */
-bool parse_arguments(int argc, char **argv, std::string &scene_path, int &width, int &height, char &quality);
-
+bool parse_arguments(int argc, char **argv, std::string &scene_path, int &width,
+					 int &height, char &quality);

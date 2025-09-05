@@ -2,7 +2,8 @@
 #include <cstdlib>
 #include <iostream>
 
-bool parse_arguments(int argc, char **argv, std::string &scene_path, int &width, int &height, char &quality)
+bool parse_arguments(int argc, char **argv, std::string &scene_path, int &width,
+					 int &height, char &quality)
 {
 	if (argc < 2)
 	{
@@ -15,7 +16,8 @@ bool parse_arguments(int argc, char **argv, std::string &scene_path, int &width,
 	{
 		std::string last;
 		last = argv[argc - 1];
-		if (last.size() == 1 && (last == "L" || last == "M" || last == "H" || last == "l" || last == "m" || last == "h"))
+		if (last.size() == 1 && (last == "L" || last == "M" || last == "H" ||
+								 last == "l" || last == "m" || last == "h"))
 		{
 			quality = last[0];
 			--argc;
@@ -39,4 +41,3 @@ bool parse_arguments(int argc, char **argv, std::string &scene_path, int &width,
 	}
 	return true;
 }
-

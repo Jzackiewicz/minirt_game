@@ -2,16 +2,14 @@
 #pragma once
 #include "Vec3.hpp"
 
-namespace rt
+class Ray
 {
-struct Ray
-{
-  Vec3 orig;
-  Vec3 dir;
+	public:
+	Vec3 orig;
+	Vec3 dir;
 
-  Ray();
-  Ray(const Vec3 &o, const Vec3 &d);
+	Ray();
+	Ray(const Vec3 &o, const Vec3 &d);
 
-  Vec3 at(double t) const;
+	Vec3 at(double t) const;
 };
-} // namespace rt

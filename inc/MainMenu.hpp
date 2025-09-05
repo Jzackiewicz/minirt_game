@@ -14,4 +14,3 @@ class MainMenu
 	public:
 	static bool show(int width, int height);
 };
-

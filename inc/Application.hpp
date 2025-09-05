@@ -10,5 +10,5 @@
  * @param height Desired window height.
  * @param quality Render quality (L/M/H).
  */
-void run_application(const std::string &scene_path, int width, int height, char quality);
-
+void run_application(const std::string &scene_path, int width, int height,
+					 char quality);
