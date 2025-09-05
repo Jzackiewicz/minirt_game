@@ -1,8 +1,8 @@
 
-#include "rt/Camera.hpp"
-#include "rt/Parser.hpp"   // single translation include for brevity
-#include "rt/Renderer.hpp" // same trick
-#include "rt/Scene.hpp"
+#include "Camera.hpp"
+#include "Parser.hpp"   // single translation include for brevity
+#include "Renderer.hpp" // same trick
+#include "Scene.hpp"
 #include <SDL.h>
 #include <SDL_main.h>
 #include <cstdint>

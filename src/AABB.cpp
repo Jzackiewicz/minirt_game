@@ -1,4 +1,4 @@
-#include "rt/AABB.hpp"
+#include "AABB.hpp"
 #include <algorithm>
 #include <cmath>
 

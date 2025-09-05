@@ -1,10 +1,10 @@
-#include "rt/Collision.hpp"
-#include "rt/Sphere.hpp"
-#include "rt/Cube.hpp"
-#include "rt/Cylinder.hpp"
-#include "rt/Cone.hpp"
-#include "rt/Plane.hpp"
-#include "rt/AABB.hpp"
+#include "Collision.hpp"
+#include "Sphere.hpp"
+#include "Cube.hpp"
+#include "Cylinder.hpp"
+#include "Cone.hpp"
+#include "Plane.hpp"
+#include "AABB.hpp"
 #include <array>
 #include <cmath>
 #include <algorithm>

@@ -1,4 +1,4 @@
-#include "rt/Cylinder.hpp"
+#include "Cylinder.hpp"
 #include <cmath>
 
 namespace rt

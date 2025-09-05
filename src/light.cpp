@@ -1,4 +1,4 @@
-#include "rt/light.hpp"
+#include "light.hpp"
 #include <utility>
 
 namespace rt

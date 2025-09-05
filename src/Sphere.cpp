@@ -1,4 +1,4 @@
-#include "rt/Sphere.hpp"
+#include "Sphere.hpp"
 #include <cmath>
 
 namespace rt

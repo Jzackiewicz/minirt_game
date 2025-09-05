@@ -1,4 +1,4 @@
-#include "rt/Camera.hpp"
+#include "Camera.hpp"
 #include <algorithm>
 
 namespace rt

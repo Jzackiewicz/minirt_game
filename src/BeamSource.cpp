@@ -1,4 +1,4 @@
-#include "rt/BeamSource.hpp"
+#include "BeamSource.hpp"
 #include <cmath>
 
 namespace rt

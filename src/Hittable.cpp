@@ -1,4 +1,4 @@
-#include "rt/Hittable.hpp"
+#include "Hittable.hpp"
 
 namespace rt
 {

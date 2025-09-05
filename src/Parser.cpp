@@ -1,10 +1,10 @@
-#include "rt/Parser.hpp"
-#include "rt/Beam.hpp"
-#include "rt/Cube.hpp"
-#include "rt/Cone.hpp"
-#include "rt/Cylinder.hpp"
-#include "rt/Plane.hpp"
-#include "rt/Sphere.hpp"
+#include "Parser.hpp"
+#include "Beam.hpp"
+#include "Cube.hpp"
+#include "Cone.hpp"
+#include "Cylinder.hpp"
+#include "Plane.hpp"
+#include "Sphere.hpp"
 
 #include <algorithm>
 #include <charconv>

@@ -1,4 +1,4 @@
-#include "rt/material.hpp"
+#include "material.hpp"
 #include <algorithm>
 #include <cmath>
 

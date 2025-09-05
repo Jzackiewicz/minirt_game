@@ -1,4 +1,4 @@
-#include "rt/Plane.hpp"
+#include "Plane.hpp"
 #include <cmath>
 
 namespace rt

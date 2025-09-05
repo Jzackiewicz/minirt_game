@@ -1,4 +1,4 @@
-#include "rt/BVH.hpp"
+#include "BVH.hpp"
 #include <algorithm>
 
 namespace rt

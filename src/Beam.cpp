@@ -1,4 +1,4 @@
-#include "rt/Beam.hpp"
+#include "Beam.hpp"
 
 namespace rt {
 Beam::Beam(const Vec3 &origin, const Vec3 &dir, double radius, double length,

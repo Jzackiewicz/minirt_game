@@ -1,4 +1,4 @@
-#include "rt/Ray.hpp"
+#include "Ray.hpp"
 
 namespace rt
 {

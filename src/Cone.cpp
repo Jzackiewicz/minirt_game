@@ -1,4 +1,4 @@
-#include "rt/Cone.hpp"
+#include "Cone.hpp"
 #include <cmath>
 
 namespace rt

@@ -1,8 +1,8 @@
-#include "rt/Scene.hpp"
-#include "rt/Laser.hpp"
-#include "rt/Plane.hpp"
-#include "rt/Collision.hpp"
-#include "rt/Camera.hpp"
+#include "Scene.hpp"
+#include "Laser.hpp"
+#include "Plane.hpp"
+#include "Collision.hpp"
+#include "Camera.hpp"
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
@@ -178,45 +178,79 @@ void Scene::build_bvh()
 
 Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
 {
-  if (index < 0 || index >= static_cast<int>(objects.size()))
-    return Vec3(0, 0, 0);
-  auto obj = objects[index];
-  if (!obj || obj->is_beam())
-    return Vec3(0, 0, 0);
-
-  auto move_lights = [&](const Vec3 &d) {
-    for (auto &L : lights)
-      if (L.attached_id == obj->object_id)
-        L.position += d;
-  };
-
-  obj->translate(delta);
-  move_lights(delta);
-  if (!collides(index))
-    return delta;
-  obj->translate(delta * -1);
-  move_lights(delta * -1);
-
-  Vec3 moved(0, 0, 0);
-  Vec3 axes[3] = {Vec3(delta.x, 0, 0), Vec3(0, delta.y, 0),
-                  Vec3(0, 0, delta.z)};
-  for (const Vec3 &ax : axes)
+  if (!is_movable(index))
   {
-    if (ax.length_squared() == 0)
-      continue;
-    obj->translate(ax);
-    move_lights(ax);
-    if (collides(index))
-    {
-      obj->translate(ax * -1);
-      move_lights(ax * -1);
-    }
-    else
-    {
-      moved += ax;
-    }
+    return Vec3(0, 0, 0);
+  }
+
+  HittablePtr object;
+  object = objects[index];
+
+  apply_translation(object, delta);
+  if (!collides(index))
+  {
+    return delta;
+  }
+  apply_translation(object, delta * -1);
+
+  Vec3 moved;
+  moved = Vec3(0, 0, 0);
+
+  Vec3 axis_deltas[3];
+  axis_deltas[0] = Vec3(delta.x, 0, 0);
+  axis_deltas[1] = Vec3(0, delta.y, 0);
+  axis_deltas[2] = Vec3(0, 0, delta.z);
+  for (const Vec3 &axis_delta : axis_deltas)
+  {
+    attempt_axis_move(index, axis_delta, moved);
   }
   return moved;
+}
+
+bool Scene::is_movable(int index) const
+{
+  if (index < 0 || index >= static_cast<int>(objects.size()))
+  {
+    return false;
+  }
+  HittablePtr object;
+  object = objects[index];
+  if (!object || object->is_beam())
+  {
+    return false;
+  }
+  return true;
+}
+
+void Scene::apply_translation(const HittablePtr &object, const Vec3 &delta)
+{
+  object->translate(delta);
+  for (auto &light : lights)
+  {
+    if (light.attached_id == object->object_id)
+    {
+      light.position += delta;
+    }
+  }
+}
+
+void Scene::attempt_axis_move(int index, const Vec3 &axis_delta, Vec3 &moved)
+{
+  if (axis_delta.length_squared() == 0)
+  {
+    return;
+  }
+  HittablePtr object;
+  object = objects[index];
+  apply_translation(object, axis_delta);
+  if (collides(index))
+  {
+    apply_translation(object, axis_delta * -1);
+  }
+  else
+  {
+    moved += axis_delta;
+  }
 }
 
 Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,

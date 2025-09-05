@@ -1,7 +1,7 @@
-#include "rt/Renderer.hpp"
-#include "rt/Config.hpp"
-#include "rt/AABB.hpp"
-#include "rt/Parser.hpp"
+#include "Renderer.hpp"
+#include "Config.hpp"
+#include "AABB.hpp"
+#include "Parser.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
