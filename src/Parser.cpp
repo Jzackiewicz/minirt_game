@@ -1,6 +1,6 @@
 #include "rt/Parser.hpp"
 #include "rt/Beam.hpp"
-#include "rt/BeamSource.hpp"
+#include "rt/LightRay.hpp"
 #include "rt/Cube.hpp"
 #include "rt/Cone.hpp"
 #include "rt/Cylinder.hpp"
@@ -301,8 +301,6 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         int beam_mat = mid++;
 
         Vec3 dir_norm = dir.normalized();
-        auto bm = std::make_shared<Beam>(o, dir_norm, g, L, intensity,
-                                         oid++, beam_mat);
 
         materials.emplace_back();
         materials.back().color = Vec3(1.0, 1.0, 1.0);
@@ -322,17 +320,17 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         materials.back().alpha = 1.0;
         int small_mat = mid++;
 
-        auto src = std::make_shared<BeamSource>(o, dir_norm, bm, g, oid++,
-                                                big_mat, mid_mat, small_mat);
-        src->movable = (s_move == "M");
-        bm->source = src;
-        outScene.objects.push_back(bm);
-        outScene.objects.push_back(src);
+        Beam beam(o, dir_norm, g, L, intensity, oid, beam_mat, big_mat, mid_mat,
+                   small_mat);
+        beam.source->movable = (s_move == "M");
+        outScene.objects.push_back(beam.light);
+        outScene.objects.push_back(beam.source);
         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
         outScene.lights.emplace_back(
             o, unit, intensity,
-            std::vector<int>{bm->object_id, src->object_id, src->mid.object_id},
-            src->object_id, dir_norm, cone_cos, L);
+            std::vector<int>{beam.light->object_id, beam.source->object_id,
+                             beam.source->mid.object_id},
+            beam.source->object_id, dir_norm, cone_cos, L);
       }
     }
     else if (id == "co")
@@ -414,7 +412,7 @@ bool Parser::save_rt_file(const std::string &path, const Scene &scene,
   {
     if (obj->is_beam())
     {
-      auto bm = std::static_pointer_cast<Beam>(obj);
+      auto bm = std::static_pointer_cast<LightRay>(obj);
       if (bm->start > 0.0)
         continue;
       if (auto src = bm->source.lock())

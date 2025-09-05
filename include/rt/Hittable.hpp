@@ -17,7 +17,7 @@ enum class ShapeType
   Cone,
   Plane,
   BVH,
-  Beam
+  LightRay
 };
 
 struct Material;

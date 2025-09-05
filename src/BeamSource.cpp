@@ -4,7 +4,7 @@
 namespace rt
 {
 BeamSource::BeamSource(const Vec3 &c, const Vec3 &dir,
-                       const std::shared_ptr<Beam> &bm, double radius, int oid,
+                       const std::shared_ptr<LightRay> &bm, double radius, int oid,
                        int mat_big, int mat_mid, int mat_small)
     : Sphere(c, radius * (4.0 / 3.0) * (4.0 / 3.0), oid, mat_big),
       mid(c, radius * (4.0 / 3.0), -oid - 1, mat_mid),

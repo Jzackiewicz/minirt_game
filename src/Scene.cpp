@@ -1,5 +1,5 @@
 #include "rt/Scene.hpp"
-#include "rt/Beam.hpp"
+#include "rt/LightRay.hpp"
 #include "rt/Plane.hpp"
 #include "rt/Collision.hpp"
 #include "rt/Camera.hpp"
@@ -40,7 +40,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
   }
   lights = std::move(static_lights);
 
-  std::vector<std::shared_ptr<Beam>> roots;
+  std::vector<std::shared_ptr<LightRay>> roots;
   std::vector<HittablePtr> non_beams;
   non_beams.reserve(objects.size());
   std::unordered_map<int, int> id_map;
@@ -49,7 +49,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
   {
     if (obj->is_beam())
     {
-      auto bm = std::static_pointer_cast<Beam>(obj);
+      auto bm = std::static_pointer_cast<LightRay>(obj);
       if (bm->start <= 0.0)
       {
         bm->start = 0.0;
@@ -70,10 +70,10 @@ void Scene::update_beams(const std::vector<Material> &mats)
   objects = std::move(non_beams);
   int next_oid = static_cast<int>(objects.size());
 
-  std::vector<std::shared_ptr<Beam>> to_process = roots;
+  std::vector<std::shared_ptr<LightRay>> to_process = roots;
   struct PendingLight
   {
-    std::shared_ptr<Beam> beam;
+    std::shared_ptr<LightRay> beam;
     int hit_id;
   };
   std::vector<PendingLight> pending_lights;
@@ -115,7 +115,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
         {
           Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
           Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
-          auto new_bm = std::make_shared<Beam>(
+          auto new_bm = std::make_shared<LightRay>(
               refl_orig, refl_dir, bm->radius, new_len, bm->light_intensity, 0,
               bm->material_id, new_start, bm->total_length);
           new_bm->source = bm->source;
