@@ -164,6 +164,77 @@ static std::string next_save_path(const std::string &orig)
   }
 }
 
+// Simple 8x8 bitmap font for menu text (subset of ASCII)
+static const unsigned char FONT_A[8] = {0x0C, 0x1E, 0x33, 0x33, 0x3F, 0x33, 0x33, 0x00};
+static const unsigned char FONT_E[8] = {0x7F, 0x46, 0x16, 0x1E, 0x16, 0x46, 0x7F, 0x00};
+static const unsigned char FONT_G[8] = {0x3C, 0x66, 0x03, 0x03, 0x73, 0x66, 0x7C, 0x00};
+static const unsigned char FONT_I[8] = {0x1E, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00};
+static const unsigned char FONT_L[8] = {0x0F, 0x06, 0x06, 0x06, 0x46, 0x66, 0x7F, 0x00};
+static const unsigned char FONT_N[8] = {0x63, 0x67, 0x6F, 0x7B, 0x73, 0x63, 0x63, 0x00};
+static const unsigned char FONT_P[8] = {0x3F, 0x66, 0x66, 0x3E, 0x06, 0x06, 0x0F, 0x00};
+static const unsigned char FONT_S[8] = {0x1E, 0x33, 0x07, 0x0E, 0x38, 0x33, 0x1E, 0x00};
+static const unsigned char FONT_T[8] = {0x3F, 0x2D, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00};
+static const unsigned char FONT_Y[8] = {0x33, 0x33, 0x33, 0x1E, 0x0C, 0x0C, 0x1E, 0x00};
+static const unsigned char FONT_SPACE[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+static const unsigned char *get_glyph(char c)
+{
+  switch (c)
+  {
+  case 'A':
+    return FONT_A;
+  case 'E':
+    return FONT_E;
+  case 'G':
+    return FONT_G;
+  case 'I':
+    return FONT_I;
+  case 'L':
+    return FONT_L;
+  case 'N':
+    return FONT_N;
+  case 'P':
+    return FONT_P;
+  case 'S':
+    return FONT_S;
+  case 'T':
+    return FONT_T;
+  case 'Y':
+    return FONT_Y;
+  default:
+    return FONT_SPACE;
+  }
+}
+
+static void draw_char(SDL_Renderer *ren, char c, int x, int y, SDL_Color col,
+                      int scale)
+{
+  const unsigned char *glyph = get_glyph(c);
+  SDL_SetRenderDrawColor(ren, col.r, col.g, col.b, col.a);
+  for (int row = 0; row < 8; ++row)
+  {
+    for (int colidx = 0; colidx < 8; ++colidx)
+    {
+      if (glyph[row] & (1 << colidx))
+      {
+        SDL_Rect r{ x + colidx * scale, y + row * scale, scale, scale };
+        SDL_RenderFillRect(ren, &r);
+      }
+    }
+  }
+}
+
+static void draw_text(SDL_Renderer *ren, const std::string &text, int x, int y,
+                      SDL_Color col, int scale)
+{
+  int cx = x;
+  for (char c : text)
+  {
+    draw_char(ren, c, cx, y, col, scale);
+    cx += 8 * scale;
+  }
+}
+
 Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
 
 void Renderer::render_ppm(const std::string &path,
@@ -296,6 +367,12 @@ void Renderer::render_window(std::vector<Material> &mats,
   Vec3 edit_pos;
   bool rotating = false;
 
+  bool show_menu = true;
+  SDL_Rect play_btn{W / 2 - 150, H / 2 - 150, 300, 100};
+  SDL_Rect settings_btn{W / 2 - 150, H / 2 + 50, 300, 100};
+  bool hover_play = false;
+  bool hover_settings = false;
+
   while (running)
   {
     Uint32 now = SDL_GetTicks();
@@ -307,6 +384,25 @@ void Renderer::render_window(std::vector<Material> &mats,
     {
       if (e.type == SDL_QUIT)
         running = false;
+      else if (show_menu)
+      {
+        if (e.type == SDL_MOUSEBUTTONDOWN &&
+            e.button.button == SDL_BUTTON_LEFT)
+        {
+          int x = e.button.x;
+          int y = e.button.y;
+          if (x >= play_btn.x && x < play_btn.x + play_btn.w &&
+              y >= play_btn.y && y < play_btn.y + play_btn.h)
+          {
+            show_menu = false;
+          }
+          else if (x >= settings_btn.x && x < settings_btn.x + settings_btn.w &&
+                   y >= settings_btn.y && y < settings_btn.y + settings_btn.h)
+          {
+            // settings button does nothing for now
+          }
+        }
+      }
       else if (e.type == SDL_WINDOWEVENT &&
                e.window.event == SDL_WINDOWEVENT_LEAVE)
       {
@@ -525,7 +621,24 @@ void Renderer::render_window(std::vector<Material> &mats,
       }
     }
 
-    if (!edit_mode)
+    int mx, my;
+    SDL_GetMouseState(&mx, &my);
+    hover_play = show_menu &&
+                 mx >= play_btn.x && mx < play_btn.x + play_btn.w &&
+                 my >= play_btn.y && my < play_btn.y + play_btn.h;
+    hover_settings = show_menu &&
+                     mx >= settings_btn.x &&
+                         mx < settings_btn.x + settings_btn.w &&
+                     my >= settings_btn.y &&
+                         my < settings_btn.y + settings_btn.h;
+
+    if (show_menu)
+    {
+      if (hover_mat >= 0)
+        mats[hover_mat].color = mats[hover_mat].base_color;
+      hover_obj = hover_mat = -1;
+    }
+    else if (!edit_mode)
     {
       Ray center_ray = cam.ray_through(0.5, 0.5);
       HitRecord hrec;
@@ -607,6 +720,27 @@ void Renderer::render_window(std::vector<Material> &mats,
     SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
     SDL_RenderClear(ren);
     SDL_RenderCopy(ren, tex, nullptr, nullptr);
+    if (show_menu)
+    {
+      auto draw_button = [&](SDL_Rect &r, const char *label, bool hover)
+      {
+        SDL_Color fill = hover ? SDL_Color{0, 128, 128, 255}
+                               : SDL_Color{0, 0, 0, 255};
+        SDL_SetRenderDrawColor(ren, fill.r, fill.g, fill.b, fill.a);
+        SDL_RenderFillRect(ren, &r);
+        SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
+        SDL_RenderDrawRect(ren, &r);
+        SDL_Color tc = hover ? SDL_Color{0, 0, 0, 255}
+                             : SDL_Color{255, 255, 255, 255};
+        int scale = 4;
+        int tw = std::strlen(label) * 8 * scale;
+        int th = 8 * scale;
+        draw_text(ren, label, r.x + (r.w - tw) / 2,
+                  r.y + (r.h - th) / 2, tc, scale);
+      };
+      draw_button(play_btn, "PLAY", hover_play);
+      draw_button(settings_btn, "SETTINGS", hover_settings);
+    }
     if (edit_mode)
     {
       auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
