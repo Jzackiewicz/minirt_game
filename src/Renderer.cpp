@@ -165,6 +165,470 @@ static std::string next_save_path(const std::string &orig)
 
 Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
 
+struct Renderer::RenderState
+{
+        bool running = true;
+        bool focused = false;
+        bool edit_mode = false;
+        bool rotating = false;
+        int hover_obj = -1;
+        int hover_mat = -1;
+        int selected_obj = -1;
+        int selected_mat = -1;
+        double edit_dist = 0.0;
+        Vec3 edit_pos;
+};
+
+/// Initialize SDL window, renderer and texture objects.
+bool Renderer::init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
+                                               int W, int H, int RW, int RH)
+{
+        if (SDL_Init(SDL_INIT_VIDEO) != 0)
+        {
+                std::cerr << "SDL_Init Error: " << SDL_GetError() << "\n";
+                return false;
+        }
+        win = SDL_CreateWindow("MiniRT", SDL_WINDOWPOS_UNDEFINED,
+                                                   SDL_WINDOWPOS_UNDEFINED, W, H, 0);
+        if (!win)
+        {
+                std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << "\n";
+                SDL_Quit();
+                return false;
+        }
+        SDL_SetWindowResizable(win, SDL_FALSE);
+        ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
+        if (!ren)
+        {
+                std::cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << "\n";
+                SDL_DestroyWindow(win);
+                SDL_Quit();
+                return false;
+        }
+        tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24,
+                                                         SDL_TEXTUREACCESS_STREAMING, RW, RH);
+        if (!tex)
+        {
+                std::cerr << "SDL_CreateTexture Error: " << SDL_GetError() << "\n";
+                SDL_DestroyRenderer(ren);
+                SDL_DestroyWindow(win);
+                SDL_Quit();
+                return false;
+        }
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+        SDL_ShowCursor(SDL_ENABLE);
+        SDL_SetWindowGrab(win, SDL_FALSE);
+        return true;
+}
+
+/// Handle SDL events, updating render state and selection.
+void Renderer::process_events(RenderState &st, SDL_Window *win, int W, int H,
+                                                        std::vector<Material> &mats,
+                                                        const std::string &scene_path)
+{
+        SDL_Event e;
+        while (SDL_PollEvent(&e))
+        {
+                if (e.type == SDL_QUIT)
+                        st.running = false;
+                else if (e.type == SDL_WINDOWEVENT &&
+                                 e.window.event == SDL_WINDOWEVENT_LEAVE)
+                {
+                        st.focused = false;
+                        SDL_SetRelativeMouseMode(SDL_FALSE);
+                        SDL_ShowCursor(SDL_ENABLE);
+                        SDL_SetWindowGrab(win, SDL_FALSE);
+                }
+                else if (e.type == SDL_MOUSEBUTTONDOWN &&
+                                 e.button.button == SDL_BUTTON_LEFT)
+                {
+                        st.focused = true;
+                        SDL_SetRelativeMouseMode(SDL_TRUE);
+                        SDL_ShowCursor(SDL_DISABLE);
+                        SDL_SetWindowGrab(win, SDL_TRUE);
+                        SDL_WarpMouseInWindow(win, W / 2, H / 2);
+                        if (!st.edit_mode && st.hover_obj >= 0)
+                        {
+                                st.selected_obj = st.hover_obj;
+                                st.selected_mat = st.hover_mat;
+                                st.hover_obj = st.hover_mat = -1;
+                                mats[st.selected_mat].checkered = true;
+                                mats[st.selected_mat].color =
+                                        mats[st.selected_mat].base_color;
+                                AABB box;
+                                if (scene.objects[st.selected_obj]->bounding_box(box))
+                                {
+                                        Vec3 center = (box.min + box.max) * 0.5;
+                                        st.edit_dist =
+                                                (center - cam.origin).length();
+                                        Vec3 desired =
+                                                cam.origin + cam.forward * st.edit_dist;
+                                        Vec3 delta = desired - center;
+                                        if (delta.length_squared() > 0)
+                                        {
+                                                Vec3 applied = scene.move_with_collision(
+                                                        st.selected_obj, delta);
+                                                center += applied;
+                                                if (applied.length_squared() > 0)
+                                                {
+                                                        scene.update_beams(mats);
+                                                        scene.build_bvh();
+                                                        st.edit_dist =
+                                                                (center - cam.origin).length();
+                                                }
+                                        }
+                                        st.edit_pos = center;
+                                }
+                                st.edit_mode = true;
+                        }
+                        else if (st.edit_mode)
+                        {
+                                mats[st.selected_mat].checkered = false;
+                                mats[st.selected_mat].color =
+                                        mats[st.selected_mat].base_color;
+                                st.selected_obj = st.selected_mat = -1;
+                                st.edit_mode = false;
+                                st.rotating = false;
+                        }
+                }
+                else if (e.type == SDL_MOUSEBUTTONDOWN &&
+                                 e.button.button == SDL_BUTTON_RIGHT)
+                {
+                        if (st.edit_mode)
+                                st.rotating = true;
+                }
+                else if (e.type == SDL_MOUSEBUTTONUP &&
+                                 e.button.button == SDL_BUTTON_RIGHT)
+                {
+                        st.rotating = false;
+                }
+                else if (st.focused && e.type == SDL_MOUSEMOTION)
+                {
+                        if (st.edit_mode && st.rotating)
+                        {
+                                double sens = MOUSE_SENSITIVITY;
+                                bool changed = false;
+                                double yaw = -e.motion.xrel * sens;
+                                if (yaw != 0.0)
+                                {
+                                        scene.objects[st.selected_obj]->rotate(cam.up, yaw);
+                                        if (scene.collides(st.selected_obj))
+                                                scene.objects[st.selected_obj]->rotate(
+                                                        cam.up, -yaw);
+                                        else
+                                                changed = true;
+                                }
+                                double pitch = -e.motion.yrel * sens;
+                                if (pitch != 0.0)
+                                {
+                                        scene.objects[st.selected_obj]->rotate(cam.right,
+                                                                                                          pitch);
+                                        if (scene.collides(st.selected_obj))
+                                                scene.objects[st.selected_obj]->rotate(
+                                                        cam.right, -pitch);
+                                        else
+                                                changed = true;
+                                }
+                                if (changed)
+                                {
+                                        scene.update_beams(mats);
+                                        scene.build_bvh();
+                                }
+                        }
+                        else
+                        {
+                                double sens = MOUSE_SENSITIVITY;
+                                cam.rotate(-e.motion.xrel * sens,
+                                                   -e.motion.yrel * sens);
+                        }
+                }
+                else if (e.type == SDL_MOUSEWHEEL)
+                {
+                        double step = e.wheel.y * SCROLL_STEP;
+                        if (st.edit_mode)
+                        {
+                                st.edit_dist += step;
+                                if (st.edit_dist < 0.1)
+                                        st.edit_dist = 0.1;
+                        }
+                        else if (st.focused)
+                        {
+                                scene.move_camera(cam, cam.up * step, mats);
+                        }
+                }
+                else if (st.focused && e.type == SDL_KEYDOWN &&
+                                 e.key.keysym.scancode == SDL_SCANCODE_C)
+                {
+                        scene.update_beams(mats);
+                        scene.build_bvh();
+                        std::string save = next_save_path(scene_path);
+                        if (Parser::save_rt_file(save, scene, cam, mats))
+                                std::cout << "Saved scene to: " << save << "\n";
+                        else
+                                std::cerr << "Failed to save scene to: " << save << "\n";
+                }
+                else if (st.focused && e.type == SDL_KEYDOWN &&
+                                 e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+                {
+                        st.running = false;
+                }
+        }
+}
+
+/// Handle continuous keyboard input for camera or object control.
+void Renderer::handle_keyboard(RenderState &st, double dt,
+                                                          std::vector<Material> &mats)
+{
+        const Uint8 *state = SDL_GetKeyboardState(nullptr);
+        Vec3 forward_xz = cam.forward;
+        forward_xz.y = 0.0;
+        if (forward_xz.length_squared() > 0.0)
+                forward_xz = forward_xz.normalized();
+        Vec3 right_xz = cam.right;
+
+        if (st.edit_mode)
+        {
+                double cam_speed = CAMERA_MOVE_SPEED * dt;
+                if (state[SDL_SCANCODE_W])
+                        scene.move_camera(cam, forward_xz * cam_speed, mats);
+                if (state[SDL_SCANCODE_S])
+                        scene.move_camera(cam, forward_xz * -cam_speed, mats);
+                if (state[SDL_SCANCODE_A])
+                        scene.move_camera(cam, right_xz * -cam_speed, mats);
+                if (state[SDL_SCANCODE_D])
+                        scene.move_camera(cam, right_xz * cam_speed, mats);
+                if (state[SDL_SCANCODE_SPACE])
+                        scene.move_camera(cam, Vec3(0, 1, 0) * cam_speed, mats);
+                if (state[SDL_SCANCODE_LCTRL])
+                        scene.move_camera(cam, Vec3(0, -1, 0) * cam_speed, mats);
+
+                double rot_speed = OBJECT_ROTATE_SPEED * dt;
+                bool changed = false;
+                if (state[SDL_SCANCODE_Q])
+                {
+                        scene.objects[st.selected_obj]->rotate(cam.forward, -rot_speed);
+                        if (scene.collides(st.selected_obj))
+                                scene.objects[st.selected_obj]->rotate(cam.forward,
+                                                                                                      rot_speed);
+                        else
+                                changed = true;
+                }
+                if (state[SDL_SCANCODE_E])
+                {
+                        scene.objects[st.selected_obj]->rotate(cam.forward, rot_speed);
+                        if (scene.collides(st.selected_obj))
+                                scene.objects[st.selected_obj]->rotate(cam.forward,
+                                                                                                      -rot_speed);
+                        else
+                                changed = true;
+                }
+                if (changed)
+                {
+                        scene.update_beams(mats);
+                        scene.build_bvh();
+                }
+        }
+        else if (st.focused)
+        {
+                if (state[SDL_SCANCODE_ESCAPE])
+                        st.running = false;
+                double speed = CAMERA_MOVE_SPEED * dt;
+                if (state[SDL_SCANCODE_W])
+                        scene.move_camera(cam, forward_xz * speed, mats);
+                if (state[SDL_SCANCODE_S])
+                        scene.move_camera(cam, forward_xz * -speed, mats);
+                if (state[SDL_SCANCODE_A])
+                        scene.move_camera(cam, right_xz * -speed, mats);
+                if (state[SDL_SCANCODE_D])
+                        scene.move_camera(cam, right_xz * speed, mats);
+                if (state[SDL_SCANCODE_SPACE])
+                        scene.move_camera(cam, Vec3(0, 1, 0) * speed, mats);
+                if (state[SDL_SCANCODE_LCTRL])
+                        scene.move_camera(cam, Vec3(0, -1, 0) * speed, mats);
+        }
+}
+
+/// Update object selection or hover based on current state.
+void Renderer::update_selection(RenderState &st,
+                                                          std::vector<Material> &mats)
+{
+        if (st.edit_mode)
+        {
+                if (st.hover_mat >= 0 && st.hover_mat != st.selected_mat)
+                        mats[st.hover_mat].color =
+                                mats[st.hover_mat].base_color;
+                st.hover_obj = st.hover_mat = -1;
+
+                Vec3 desired = cam.origin + cam.forward * st.edit_dist;
+                Vec3 delta = desired - st.edit_pos;
+                if (delta.length_squared() > 0)
+                {
+                        Vec3 applied = scene.move_with_collision(st.selected_obj, delta);
+                        st.edit_pos += applied;
+                        cam.origin = st.edit_pos - cam.forward * st.edit_dist;
+                        if (applied.length_squared() > 0)
+                        {
+                                scene.update_beams(mats);
+                                scene.build_bvh();
+                        }
+                }
+                else
+                {
+                        cam.origin = st.edit_pos - cam.forward * st.edit_dist;
+                }
+        }
+        else
+        {
+                Ray center_ray = cam.ray_through(0.5, 0.5);
+                HitRecord hrec;
+                if (scene.hit(center_ray, 1e-4, 1e9, hrec) &&
+                        scene.objects[hrec.object_id]->movable)
+                {
+                        if (st.hover_mat != hrec.material_id)
+                        {
+                                if (st.hover_mat >= 0)
+                                        mats[st.hover_mat].color =
+                                                mats[st.hover_mat].base_color;
+                                st.hover_obj = hrec.object_id;
+                                st.hover_mat = hrec.material_id;
+                        }
+                        bool blink = ((SDL_GetTicks() / 250) % 2) == 0;
+                        mats[st.hover_mat].color =
+                                blink ? (Vec3(1.0, 1.0, 1.0) -
+                                                 mats[st.hover_mat].base_color)
+                                          : mats[st.hover_mat].base_color;
+                }
+                else
+                {
+                        if (st.hover_mat >= 0)
+                                mats[st.hover_mat].color =
+                                        mats[st.hover_mat].base_color;
+                        st.hover_obj = st.hover_mat = -1;
+                }
+        }
+}
+
+/// Render the current frame and display it to the window.
+void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex,
+                                                       std::vector<Vec3> &framebuffer,
+                                                       std::vector<unsigned char> &pixels,
+                                                       int RW, int RH, int W, int H, int T,
+                                                       std::vector<Material> &mats)
+{
+        std::atomic<int> next_row{0};
+        auto worker = [&]()
+        {
+                std::mt19937 rng(std::random_device{}());
+                std::uniform_real_distribution<double> dist(0.0, 1.0);
+                for (;;)
+                {
+                        int y = next_row.fetch_add(1);
+                        if (y >= RH)
+                                break;
+                        for (int x = 0; x < RW; ++x)
+                        {
+                                double u = (x + 0.5) / RW;
+                                double v = (y + 0.5) / RH;
+                                Ray r = cam.ray_through(u, v);
+                                Vec3 col = trace_ray(scene, mats, r, rng, dist);
+                                framebuffer[y * RW + x] = col;
+                        }
+                }
+        };
+
+        std::vector<std::thread> pool;
+        pool.reserve(T);
+        for (int i = 0; i < T; ++i)
+                pool.emplace_back(worker);
+        for (auto &th : pool)
+                th.join();
+
+        for (int y = 0; y < RH; ++y)
+        {
+                for (int x = 0; x < RW; ++x)
+                {
+                        Vec3 c = framebuffer[y * RW + x];
+                        c.x = std::clamp(c.x, 0.0, 1.0);
+                        c.y = std::clamp(c.y, 0.0, 1.0);
+                        c.z = std::clamp(c.z, 0.0, 1.0);
+                        pixels[(y * RW + x) * 3 + 0] =
+                                static_cast<unsigned char>(std::lround(c.x * 255.0));
+                        pixels[(y * RW + x) * 3 + 1] =
+                                static_cast<unsigned char>(std::lround(c.y * 255.0));
+                        pixels[(y * RW + x) * 3 + 2] =
+                                static_cast<unsigned char>(std::lround(c.z * 255.0));
+                }
+        }
+
+        SDL_UpdateTexture(tex, nullptr, pixels.data(), RW * 3);
+        SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
+        SDL_RenderClear(ren);
+        SDL_RenderCopy(ren, tex, nullptr, nullptr);
+        if (st.edit_mode)
+        {
+                auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
+                {
+                        Vec3 rel = p - cam.origin;
+                        double z = Vec3::dot(rel, cam.forward);
+                        if (z <= 0.0)
+                                return false;
+                        double x = Vec3::dot(rel, cam.right);
+                        double y = Vec3::dot(rel, cam.up);
+                        double fov_rad = cam.fov_deg * M_PI / 180.0;
+                        double half_h = std::tan(fov_rad * 0.5);
+                        double half_w = cam.aspect * half_h;
+                        double u = (x / z / half_w + 1.0) * 0.5;
+                        double v = (1.0 - y / z / half_h) * 0.5;
+                        sx = static_cast<int>(u * W);
+                        sy = static_cast<int>(v * H);
+                        return true;
+                };
+                const int edges[12][2] = {{0, 1},  {0, 2},  {0, 4},  {1, 3},
+                                                                           {1, 5},  {2, 3},  {2, 6},  {3, 7},
+                                                                           {4, 5},  {4, 6},  {5, 7},  {6, 7}};
+                for (size_t i = 0; i < scene.objects.size(); ++i)
+                {
+                        auto &obj = scene.objects[i];
+                        if (obj->is_beam() || obj->is_plane())
+                                continue;
+                        AABB box;
+                        if (!obj->bounding_box(box))
+                                continue;
+                        Vec3 corners[8] = {Vec3(box.min.x, box.min.y, box.min.z),
+                                                           Vec3(box.max.x, box.min.y, box.min.z),
+                                                           Vec3(box.min.x, box.max.y, box.min.z),
+                                                           Vec3(box.max.x, box.max.y, box.min.z),
+                                                           Vec3(box.min.x, box.min.y, box.max.z),
+                                                           Vec3(box.max.x, box.min.y, box.max.z),
+                                                           Vec3(box.min.x, box.max.y, box.max.z),
+                                                           Vec3(box.max.x, box.max.y, box.max.z)};
+                        SDL_Point pts[8];
+                        bool ok = true;
+                        for (int j = 0; j < 8; ++j)
+                        {
+                                int sx, sy;
+                                if (!project(corners[j], sx, sy))
+                                {
+                                        ok = false;
+                                        break;
+                                }
+                                pts[j].x = sx;
+                                pts[j].y = sy;
+                        }
+                        if (!ok)
+                                continue;
+                        if (static_cast<int>(i) == st.selected_obj)
+                                SDL_SetRenderDrawColor(ren, 255, 0, 0, 255);
+                        else
+                                SDL_SetRenderDrawColor(ren, 0, 255, 0, 255);
+                        for (const auto &e : edges)
+                                SDL_RenderDrawLine(ren, pts[e[0]].x, pts[e[0]].y,
+                                                                                   pts[e[1]].x, pts[e[1]].y);
+                }
+        }
+        SDL_RenderPresent(ren);
+}
+
 void Renderer::render_ppm(const std::string &path,
 						  const std::vector<Material> &mats,
 						  const RenderSettings &rset)
@@ -230,455 +694,46 @@ void Renderer::render_ppm(const std::string &path,
 }
 
 void Renderer::render_window(std::vector<Material> &mats,
-							 const RenderSettings &rset,
-							 const std::string &scene_path)
+                                                         const RenderSettings &rset,
+                                                         const std::string &scene_path)
 {
-	const int W = rset.width;
-	const int H = rset.height;
-	const float scale = std::max(1.0f, rset.downscale);
-	const int RW = std::max(1, static_cast<int>(W / scale));
-	const int RH = std::max(1, static_cast<int>(H / scale));
-	const int T = (rset.threads > 0)
-					  ? rset.threads
-					  : (std::thread::hardware_concurrency()
-							 ? (int)std::thread::hardware_concurrency()
-							 : 8);
+        const int W = rset.width;
+        const int H = rset.height;
+        const float scale = std::max(1.0f, rset.downscale);
+        const int RW = std::max(1, static_cast<int>(W / scale));
+        const int RH = std::max(1, static_cast<int>(H / scale));
+        const int T = (rset.threads > 0)
+                                          ? rset.threads
+                                          : (std::thread::hardware_concurrency()
+                                                         ? (int)std::thread::hardware_concurrency()
+                                                         : 8);
 
-	if (SDL_Init(SDL_INIT_VIDEO) != 0)
-	{
-		std::cerr << "SDL_Init Error: " << SDL_GetError() << "\n";
-		return;
-	}
-	SDL_Window *win = SDL_CreateWindow("MiniRT", SDL_WINDOWPOS_UNDEFINED,
-									   SDL_WINDOWPOS_UNDEFINED, W, H, 0);
-	if (!win)
-	{
-		std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << "\n";
-		SDL_Quit();
-		return;
-	}
-	SDL_SetWindowResizable(win, SDL_FALSE);
-	SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
-	if (!ren)
-	{
-		std::cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << "\n";
-		SDL_DestroyWindow(win);
-		SDL_Quit();
-		return;
-	}
-	SDL_Texture *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24,
-										 SDL_TEXTUREACCESS_STREAMING, RW, RH);
-	if (!tex)
-	{
-		std::cerr << "SDL_CreateTexture Error: " << SDL_GetError() << "\n";
-		SDL_DestroyRenderer(ren);
-		SDL_DestroyWindow(win);
-		SDL_Quit();
-		return;
-	}
+        SDL_Window *win = nullptr;
+        SDL_Renderer *ren = nullptr;
+        SDL_Texture *tex = nullptr;
+        if (!init_sdl(win, ren, tex, W, H, RW, RH))
+                return;
 
-	SDL_SetRelativeMouseMode(SDL_FALSE);
+        RenderState st;
+        std::vector<Vec3> framebuffer(RW * RH);
+        std::vector<unsigned char> pixels(RW * RH * 3);
+        Uint32 last = SDL_GetTicks();
 
-	SDL_ShowCursor(SDL_ENABLE);
-	SDL_SetWindowGrab(win, SDL_FALSE);
+        while (st.running)
+        {
+                Uint32 now = SDL_GetTicks();
+                double dt = (now - last) / 1000.0;
+                last = now;
 
-	std::vector<Vec3> framebuffer(RW * RH);
-	std::vector<unsigned char> pixels(RW * RH * 3);
-	SDL_Event e;
-	bool running = true;
-	bool focused = false;
-	Uint32 last = SDL_GetTicks();
-	bool edit_mode = false;
-	int hover_obj = -1;
-	int hover_mat = -1;
-	int selected_obj = -1;
-	int selected_mat = -1;
-	double edit_dist = 0.0;
-	Vec3 edit_pos;
-	bool rotating = false;
+                process_events(st, win, W, H, mats, scene_path);
+                handle_keyboard(st, dt, mats);
+                update_selection(st, mats);
+                render_frame(st, ren, tex, framebuffer, pixels, RW, RH, W, H, T,
+                                         mats);
+        }
 
-	while (running)
-	{
-		Uint32 now = SDL_GetTicks();
-		double dt = (now - last) / 1000.0;
-		last = now;
-
-		while (SDL_PollEvent(&e))
-		{
-			if (e.type == SDL_QUIT)
-				running = false;
-			else if (e.type == SDL_WINDOWEVENT &&
-					 e.window.event == SDL_WINDOWEVENT_LEAVE)
-			{
-				focused = false;
-				SDL_SetRelativeMouseMode(SDL_FALSE);
-				SDL_ShowCursor(SDL_ENABLE);
-				SDL_SetWindowGrab(win, SDL_FALSE);
-			}
-			else if (e.type == SDL_MOUSEBUTTONDOWN &&
-					 e.button.button == SDL_BUTTON_LEFT)
-			{
-				focused = true;
-				SDL_SetRelativeMouseMode(SDL_TRUE);
-				SDL_ShowCursor(SDL_DISABLE);
-				SDL_SetWindowGrab(win, SDL_TRUE);
-				SDL_WarpMouseInWindow(win, W / 2, H / 2);
-				if (!edit_mode && hover_obj >= 0)
-				{
-					selected_obj = hover_obj;
-					selected_mat = hover_mat;
-					hover_obj = hover_mat = -1;
-					mats[selected_mat].checkered = true;
-					mats[selected_mat].color = mats[selected_mat].base_color;
-					AABB box;
-					if (scene.objects[selected_obj]->bounding_box(box))
-					{
-						Vec3 center = (box.min + box.max) * 0.5;
-						edit_dist = (center - cam.origin).length();
-						Vec3 desired = cam.origin + cam.forward * edit_dist;
-						Vec3 delta = desired - center;
-						if (delta.length_squared() > 0)
-						{
-							Vec3 applied =
-								scene.move_with_collision(selected_obj, delta);
-							center += applied;
-							if (applied.length_squared() > 0)
-							{
-								scene.update_beams(mats);
-								scene.build_bvh();
-								edit_dist = (center - cam.origin).length();
-							}
-						}
-						edit_pos = center;
-					}
-					edit_mode = true;
-				}
-				else if (edit_mode)
-				{
-					mats[selected_mat].checkered = false;
-					mats[selected_mat].color = mats[selected_mat].base_color;
-					selected_obj = selected_mat = -1;
-					edit_mode = false;
-					rotating = false;
-				}
-			}
-			else if (e.type == SDL_MOUSEBUTTONDOWN &&
-					 e.button.button == SDL_BUTTON_RIGHT)
-			{
-				if (edit_mode)
-					rotating = true;
-			}
-			else if (e.type == SDL_MOUSEBUTTONUP &&
-					 e.button.button == SDL_BUTTON_RIGHT)
-			{
-				rotating = false;
-			}
-			else if (focused && e.type == SDL_MOUSEMOTION)
-			{
-				if (edit_mode && rotating)
-				{
-					double sens = MOUSE_SENSITIVITY;
-					bool changed = false;
-					double yaw = -e.motion.xrel * sens;
-					if (yaw != 0.0)
-					{
-						scene.objects[selected_obj]->rotate(cam.up, yaw);
-						if (scene.collides(selected_obj))
-							scene.objects[selected_obj]->rotate(cam.up, -yaw);
-						else
-							changed = true;
-					}
-					double pitch = -e.motion.yrel * sens;
-					if (pitch != 0.0)
-					{
-						scene.objects[selected_obj]->rotate(cam.right, pitch);
-						if (scene.collides(selected_obj))
-							scene.objects[selected_obj]->rotate(cam.right,
-																-pitch);
-						else
-							changed = true;
-					}
-					if (changed)
-					{
-						scene.update_beams(mats);
-						scene.build_bvh();
-					}
-				}
-				else
-				{
-					double sens = MOUSE_SENSITIVITY;
-					cam.rotate(-e.motion.xrel * sens, -e.motion.yrel * sens);
-				}
-			}
-			else if (e.type == SDL_MOUSEWHEEL)
-			{
-				double step = e.wheel.y * SCROLL_STEP;
-				if (edit_mode)
-				{
-					edit_dist += step;
-					if (edit_dist < 0.1)
-						edit_dist = 0.1;
-				}
-				else if (focused)
-				{
-					scene.move_camera(cam, cam.up * step, mats);
-				}
-			}
-			else if (focused && e.type == SDL_KEYDOWN &&
-					 e.key.keysym.scancode == SDL_SCANCODE_C)
-			{
-				scene.update_beams(mats);
-				scene.build_bvh();
-				std::string save = next_save_path(scene_path);
-				if (Parser::save_rt_file(save, scene, cam, mats))
-					std::cout << "Saved scene to: " << save << "\n";
-				else
-					std::cerr << "Failed to save scene to: " << save << "\n";
-			}
-			else if (focused && e.type == SDL_KEYDOWN &&
-					 e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
-				running = false;
-		}
-
-		const Uint8 *state = SDL_GetKeyboardState(nullptr);
-		Vec3 forward_xz = cam.forward;
-		forward_xz.y = 0.0;
-		if (forward_xz.length_squared() > 0.0)
-			forward_xz = forward_xz.normalized();
-		Vec3 right_xz = cam.right; // already horizontal
-
-		if (edit_mode)
-		{
-			double cam_speed = CAMERA_MOVE_SPEED * dt;
-			if (state[SDL_SCANCODE_W])
-				scene.move_camera(cam, forward_xz * cam_speed, mats);
-			if (state[SDL_SCANCODE_S])
-				scene.move_camera(cam, forward_xz * -cam_speed, mats);
-			if (state[SDL_SCANCODE_A])
-				scene.move_camera(cam, right_xz * -cam_speed, mats);
-			if (state[SDL_SCANCODE_D])
-				scene.move_camera(cam, right_xz * cam_speed, mats);
-			if (state[SDL_SCANCODE_SPACE])
-				scene.move_camera(cam, Vec3(0, 1, 0) * cam_speed, mats);
-			if (state[SDL_SCANCODE_LCTRL])
-				scene.move_camera(cam, Vec3(0, -1, 0) * cam_speed, mats);
-
-			double rot_speed = OBJECT_ROTATE_SPEED * dt;
-			bool changed = false;
-			if (state[SDL_SCANCODE_Q])
-			{
-				scene.objects[selected_obj]->rotate(cam.forward, -rot_speed);
-				if (scene.collides(selected_obj))
-					scene.objects[selected_obj]->rotate(cam.forward, rot_speed);
-				else
-					changed = true;
-			}
-			if (state[SDL_SCANCODE_E])
-			{
-				scene.objects[selected_obj]->rotate(cam.forward, rot_speed);
-				if (scene.collides(selected_obj))
-					scene.objects[selected_obj]->rotate(cam.forward,
-														-rot_speed);
-				else
-					changed = true;
-			}
-			if (changed)
-			{
-				scene.update_beams(mats);
-				scene.build_bvh();
-			}
-		}
-		else if (focused)
-		{
-			if (state[SDL_SCANCODE_ESCAPE])
-				running = false;
-			double speed = CAMERA_MOVE_SPEED * dt;
-			if (state[SDL_SCANCODE_W])
-				scene.move_camera(cam, forward_xz * speed, mats);
-			if (state[SDL_SCANCODE_S])
-				scene.move_camera(cam, forward_xz * -speed, mats);
-			if (state[SDL_SCANCODE_A])
-				scene.move_camera(cam, right_xz * -speed, mats);
-			if (state[SDL_SCANCODE_D])
-				scene.move_camera(cam, right_xz * speed, mats);
-			if (state[SDL_SCANCODE_SPACE])
-				scene.move_camera(cam, Vec3(0, 1, 0) * speed, mats);
-			if (state[SDL_SCANCODE_LCTRL])
-				scene.move_camera(cam, Vec3(0, -1, 0) * speed, mats);
-		}
-
-		if (edit_mode)
-		{
-			Vec3 desired = cam.origin + cam.forward * edit_dist;
-			Vec3 delta = desired - edit_pos;
-			if (delta.length_squared() > 0)
-			{
-				Vec3 applied = scene.move_with_collision(selected_obj, delta);
-				edit_pos += applied;
-				cam.origin = edit_pos - cam.forward * edit_dist;
-				if (applied.length_squared() > 0)
-				{
-					scene.update_beams(mats);
-					scene.build_bvh();
-				}
-			}
-			else
-			{
-				cam.origin = edit_pos - cam.forward * edit_dist;
-			}
-		}
-
-		if (!edit_mode)
-		{
-			Ray center_ray = cam.ray_through(0.5, 0.5);
-			HitRecord hrec;
-			if (scene.hit(center_ray, 1e-4, 1e9, hrec) &&
-				scene.objects[hrec.object_id]->movable)
-			{
-				if (hover_mat != hrec.material_id)
-				{
-					if (hover_mat >= 0)
-						mats[hover_mat].color = mats[hover_mat].base_color;
-					hover_obj = hrec.object_id;
-					hover_mat = hrec.material_id;
-				}
-				bool blink = ((SDL_GetTicks() / 250) % 2) == 0;
-				mats[hover_mat].color =
-					blink ? (Vec3(1.0, 1.0, 1.0) - mats[hover_mat].base_color)
-						  : mats[hover_mat].base_color;
-			}
-			else
-			{
-				if (hover_mat >= 0)
-					mats[hover_mat].color = mats[hover_mat].base_color;
-				hover_obj = hover_mat = -1;
-			}
-		}
-		else
-		{
-			if (hover_mat >= 0 && hover_mat != selected_mat)
-				mats[hover_mat].color = mats[hover_mat].base_color;
-			hover_obj = hover_mat = -1;
-		}
-
-		std::atomic<int> next_row{0};
-		auto worker = [&]()
-		{
-			std::mt19937 rng(std::random_device{}());
-			std::uniform_real_distribution<double> dist(0.0, 1.0);
-			for (;;)
-			{
-				int y = next_row.fetch_add(1);
-				if (y >= RH)
-					break;
-				for (int x = 0; x < RW; ++x)
-				{
-					double u = (x + 0.5) / RW;
-					double v = (y + 0.5) / RH;
-					Ray r = cam.ray_through(u, v);
-					Vec3 col = trace_ray(scene, mats, r, rng, dist);
-					framebuffer[y * RW + x] = col;
-				}
-			}
-		};
-
-		std::vector<std::thread> pool;
-		pool.reserve(T);
-		for (int i = 0; i < T; ++i)
-			pool.emplace_back(worker);
-		for (auto &th : pool)
-			th.join();
-
-		for (int y = 0; y < RH; ++y)
-		{
-			for (int x = 0; x < RW; ++x)
-			{
-				Vec3 c = framebuffer[y * RW + x];
-				c.x = std::clamp(c.x, 0.0, 1.0);
-				c.y = std::clamp(c.y, 0.0, 1.0);
-				c.z = std::clamp(c.z, 0.0, 1.0);
-				pixels[(y * RW + x) * 3 + 0] =
-					static_cast<unsigned char>(std::lround(c.x * 255.0));
-				pixels[(y * RW + x) * 3 + 1] =
-					static_cast<unsigned char>(std::lround(c.y * 255.0));
-				pixels[(y * RW + x) * 3 + 2] =
-					static_cast<unsigned char>(std::lround(c.z * 255.0));
-			}
-		}
-
-		SDL_UpdateTexture(tex, nullptr, pixels.data(), RW * 3);
-		SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
-		SDL_RenderClear(ren);
-		SDL_RenderCopy(ren, tex, nullptr, nullptr);
-		if (edit_mode)
-		{
-			auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
-			{
-				Vec3 rel = p - cam.origin;
-				double z = Vec3::dot(rel, cam.forward);
-				if (z <= 0.0)
-					return false;
-				double x = Vec3::dot(rel, cam.right);
-				double y = Vec3::dot(rel, cam.up);
-				double fov_rad = cam.fov_deg * M_PI / 180.0;
-				double half_h = std::tan(fov_rad * 0.5);
-				double half_w = cam.aspect * half_h;
-				double u = (x / z / half_w + 1.0) * 0.5;
-				double v = (1.0 - y / z / half_h) * 0.5;
-				sx = static_cast<int>(u * W);
-				sy = static_cast<int>(v * H);
-				return true;
-			};
-			const int edges[12][2] = {{0, 1}, {0, 2}, {0, 4}, {1, 3},
-									  {1, 5}, {2, 3}, {2, 6}, {3, 7},
-									  {4, 5}, {4, 6}, {5, 7}, {6, 7}};
-			for (size_t i = 0; i < scene.objects.size(); ++i)
-			{
-				auto &obj = scene.objects[i];
-				if (obj->is_beam() || obj->is_plane())
-					continue;
-				AABB box;
-				if (!obj->bounding_box(box))
-					continue;
-				Vec3 corners[8] = {Vec3(box.min.x, box.min.y, box.min.z),
-								   Vec3(box.max.x, box.min.y, box.min.z),
-								   Vec3(box.min.x, box.max.y, box.min.z),
-								   Vec3(box.max.x, box.max.y, box.min.z),
-								   Vec3(box.min.x, box.min.y, box.max.z),
-								   Vec3(box.max.x, box.min.y, box.max.z),
-								   Vec3(box.min.x, box.max.y, box.max.z),
-								   Vec3(box.max.x, box.max.y, box.max.z)};
-				SDL_Point pts[8];
-				bool ok = true;
-				for (int j = 0; j < 8; ++j)
-				{
-					int sx, sy;
-					if (!project(corners[j], sx, sy))
-					{
-						ok = false;
-						break;
-					}
-					pts[j].x = sx;
-					pts[j].y = sy;
-				}
-				if (!ok)
-					continue;
-				if (static_cast<int>(i) == selected_obj)
-					SDL_SetRenderDrawColor(ren, 255, 0, 0, 255);
-				else
-					SDL_SetRenderDrawColor(ren, 0, 255, 0, 255);
-				for (const auto &e : edges)
-				{
-					SDL_RenderDrawLine(ren, pts[e[0]].x, pts[e[0]].y,
-									   pts[e[1]].x, pts[e[1]].y);
-				}
-			}
-		}
-		SDL_RenderPresent(ren);
-	}
-
-	SDL_DestroyTexture(tex);
-	SDL_DestroyRenderer(ren);
-	SDL_DestroyWindow(win);
-	SDL_Quit();
+        SDL_DestroyTexture(tex);
+        SDL_DestroyRenderer(ren);
+        SDL_DestroyWindow(win);
+        SDL_Quit();
 }
