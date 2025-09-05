@@ -5,6 +5,10 @@
 #include <string>
 #include <vector>
 
+struct SDL_Window;
+struct SDL_Renderer;
+struct SDL_Texture;
+
 class RenderSettings
 {
 	public:
@@ -18,11 +22,25 @@ class Renderer
 {
 	public:
 	Renderer(Scene &s, Camera &c);
-	void render_ppm(const std::string &path, const std::vector<Material> &mats,
-					const RenderSettings &rset);
-	void render_window(std::vector<Material> &mats, const RenderSettings &rset,
-					   const std::string &scene_path);
-	private:
-	Scene &scene;
-	Camera &cam;
+        void render_ppm(const std::string &path, const std::vector<Material> &mats,
+                                        const RenderSettings &rset);
+        void render_window(std::vector<Material> &mats, const RenderSettings &rset,
+                                           const std::string &scene_path);
+        private:
+        struct RenderState;
+        bool init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
+                                       int W, int H, int RW, int RH);
+        void process_events(RenderState &st, SDL_Window *win, int W, int H,
+                                               std::vector<Material> &mats,
+                                               const std::string &scene_path);
+        void handle_keyboard(RenderState &st, double dt,
+                                               std::vector<Material> &mats);
+        void update_selection(RenderState &st, std::vector<Material> &mats);
+        void render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex,
+                                          std::vector<Vec3> &framebuffer,
+                                          std::vector<unsigned char> &pixels, int RW,
+                                          int RH, int W, int H, int T,
+                                          std::vector<Material> &mats);
+        Scene &scene;
+        Camera &cam;
 };
