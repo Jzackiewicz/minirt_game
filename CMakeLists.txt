@@ -15,7 +15,7 @@ file(GLOB SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
 add_executable(minirt ${SRC_FILES})
 
 find_package(Threads REQUIRED)
-target_include_directories(minirt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(minirt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 
 if (WIN32)
     find_package(SDL2 CONFIG REQUIRED)
