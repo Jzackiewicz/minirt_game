@@ -132,16 +132,17 @@ void Scene::process_beams(const std::vector<Material> &mats,
         for (const auto &pl : pending_lights)
         {
                 auto bm = pl.beam;
-                Vec3 light_col = mats[bm->material_id].base_color;
-                const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-                double remain = bm->total_length - bm->start;
-                double ratio =
-                        (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
-                lights.emplace_back(bm->path.orig, light_col,
-                                                        bm->light_intensity * ratio,
-                                                        std::vector<int>{bm->object_id, pl.hit_id},
-                                                        bm->object_id, bm->path.dir, cone_cos, bm->length);
-        }
+               Vec3 light_col = mats[bm->material_id].base_color;
+               const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+               // Spawn a light source at the reflection point using the beam's
+               // intensity without attenuating it by the remaining travel
+               // distance. This ensures reflected beams behave as new light
+               // sources with the same intensity as the incident ray.
+               lights.emplace_back(bm->path.orig, light_col,
+                                                       bm->light_intensity,
+                                                       std::vector<int>{bm->object_id, pl.hit_id},
+                                                       bm->object_id, bm->path.dir, cone_cos, bm->length);
+       }
 }
 
 // Remap light references after objects have been reindexed.
