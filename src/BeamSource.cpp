@@ -2,13 +2,13 @@
 #include <cmath>
 
 BeamSource::BeamSource(const Vec3 &c, const Vec3 &dir,
-					   const std::shared_ptr<Laser> &bm, double radius, int oid,
-					   int mat_big, int mat_mid, int mat_small)
-	: Sphere(c, radius * (4.0 / 3.0) * (4.0 / 3.0), oid, mat_big),
-	  mid(c, radius * (4.0 / 3.0), -oid - 1, mat_mid),
-	  inner(c, radius, -oid - 2, mat_small), beam(bm)
+                                           const std::shared_ptr<Laser> &bm, double mid_radius,
+                                           int oid, int mat_big, int mat_mid, int mat_small)
+       : Sphere(c, mid_radius * 2.0, oid, mat_big),
+         mid(c, mid_radius, -oid - 1, mat_mid),
+         inner(c, mid_radius * 0.5, -oid - 2, mat_small), beam(bm)
 {
-	(void)dir;
+        (void)dir;
 }
 
 bool BeamSource::hit(const Ray &r, double tmin, double tmax,

@@ -8,9 +8,10 @@ class BeamSource : public Sphere
 	public:
 	Sphere mid;
 	Sphere inner;
-	std::shared_ptr<Laser> beam;
-	BeamSource(const Vec3 &c, const Vec3 &dir, const std::shared_ptr<Laser> &bm,
-			   double radius, int oid, int mat_big, int mat_mid, int mat_small);
+       std::shared_ptr<Laser> beam;
+       BeamSource(const Vec3 &c, const Vec3 &dir,
+                          const std::shared_ptr<Laser> &bm, double mid_radius,
+                          int oid, int mat_big, int mat_mid, int mat_small);
 	bool hit(const Ray &r, double tmin, double tmax,
 			 HitRecord &rec) const override;
 	bool bounding_box(AABB &out) const override
