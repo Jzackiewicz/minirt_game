@@ -314,6 +314,7 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 bm->source->movable = (s_move == "M");
                 scene.objects.push_back(bm->laser);
                 scene.objects.push_back(bm->source);
+                scene.light_rays.push_back(*bm->light);
                 const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
                 scene.lights.emplace_back(
                         o, unit, intensity,
