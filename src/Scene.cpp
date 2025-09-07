@@ -141,6 +141,19 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                         bm->light_intensity * ratio,
                                                         std::vector<int>{bm->object_id, pl.hit_id},
                                                         bm->object_id, bm->path.dir, cone_cos, bm->length);
+                light_rays.emplace_back(bm->path.orig, bm->path.dir,
+                                                        bm->radius,
+                                                        bm->light_intensity * ratio);
+        }
+
+        for (const auto &root : roots)
+        {
+                double remain = root->total_length - root->start;
+                double ratio =
+                        (root->total_length > 0.0) ? remain / root->total_length : 0.0;
+                light_rays.emplace_back(root->path.orig, root->path.dir,
+                                                        root->radius,
+                                                        root->light_intensity * ratio);
         }
 }
 
@@ -174,6 +187,7 @@ void Scene::remap_light_ids(const std::unordered_map<int, int> &id_map)
 // Remove finished beam segments and spawn new beams for reflections.
 void Scene::update_beams(const std::vector<Material> &mats)
 {
+        light_rays.clear();
         std::vector<std::shared_ptr<Laser>> roots;
         std::unordered_map<int, int> id_map;
         prepare_beam_roots(roots, id_map);

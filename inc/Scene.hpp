@@ -1,6 +1,7 @@
 #pragma once
 #include "BVH.hpp"
 #include "Hittable.hpp"
+#include "LightRay.hpp"
 #include "light.hpp"
 #include "material.hpp"
 #include <memory>
@@ -13,8 +14,9 @@ class Laser;
 class Scene
 {
 	public:
-	std::vector<HittablePtr> objects;
-	std::vector<PointLight> lights;
+        std::vector<HittablePtr> objects;
+        std::vector<PointLight> lights;
+        std::vector<LightRay> light_rays;
 	Ambient ambient{Vec3(1, 1, 1), 0.0};
 	std::shared_ptr<Hittable> accel;
 
