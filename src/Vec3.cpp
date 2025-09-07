@@ -90,18 +90,27 @@ Vec3 &Vec3::operator*=(double scalar)
 
 double Vec3::dot(const Vec3 &a, const Vec3 &b)
 {
-	double result;
-	result = a.x * b.x + a.y * b.y + a.z * b.z;
-	return result;
+        double result;
+        result = a.x * b.x + a.y * b.y + a.z * b.z;
+        return result;
 }
 
 Vec3 Vec3::cross(const Vec3 &a, const Vec3 &b)
 {
-	Vec3 cross_product;
-	cross_product.x = a.y * b.z - a.z * b.y;
-	cross_product.y = a.z * b.x - a.x * b.z;
-	cross_product.z = a.x * b.y - a.y * b.x;
-	return cross_product;
+        Vec3 cross_product;
+        cross_product.x = a.y * b.z - a.z * b.y;
+        cross_product.y = a.z * b.x - a.x * b.z;
+        cross_product.z = a.x * b.y - a.y * b.x;
+        return cross_product;
+}
+
+Vec3 Vec3::reflect(const Vec3 &v, const Vec3 &n)
+{
+       Vec3 result;
+       double dot_val;
+       dot_val = Vec3::dot(v, n) * 2.0;
+       result = v - n * dot_val;
+       return result;
 }
 
 Vec3 Vec3::normalized() const

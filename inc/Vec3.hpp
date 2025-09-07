@@ -27,13 +27,14 @@ class Vec3
 	Vec3 operator+(const Vec3 &rhs) const;
 	Vec3 operator-(const Vec3 &rhs) const;
 	Vec3 operator*(double scalar) const;
-	Vec3 operator/(double scalar) const;
-	Vec3 &operator+=(const Vec3 &rhs);
-	Vec3 &operator*=(double scalar);
+        Vec3 operator/(double scalar) const;
+        Vec3 &operator+=(const Vec3 &rhs);
+        Vec3 &operator*=(double scalar);
 
-	static double dot(const Vec3 &a, const Vec3 &b);
-	static Vec3 cross(const Vec3 &a, const Vec3 &b);
-	Vec3 normalized() const;
+        static double dot(const Vec3 &a, const Vec3 &b);
+        static Vec3 cross(const Vec3 &a, const Vec3 &b);
+       static Vec3 reflect(const Vec3 &v, const Vec3 &n);
+        Vec3 normalized() const;
 };
 
 Vec3 operator*(double scalar, const Vec3 &vector);

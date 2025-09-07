@@ -8,14 +8,6 @@
 #include <limits>
 #include <unordered_map>
 
-namespace
-{
-inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
-{
-        return v - n * (2.0 * Vec3::dot(v, n));
-}
-
-} // namespace
 
 // Remove lights attached to beam segments and collect root laser objects.
 void Scene::prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
@@ -115,7 +107,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 double new_len = bm->total_length - new_start;
                                 if (new_len > 1e-4)
                                 {
-                                        Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
+                                       Vec3 refl_dir = Vec3::reflect(forward.dir, hit_rec.normal);
                                         Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
                                        auto new_bm = std::make_shared<Laser>(
                                                refl_orig, refl_dir, new_len,

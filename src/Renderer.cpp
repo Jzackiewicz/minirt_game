@@ -16,31 +16,58 @@
 #include <thread>
 
 static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
-					  const Vec3 &p, const PointLight &L)
+                                         const Vec3 &p, const PointLight &L)
 {
-	Vec3 to_light = L.position - p;
-	double dist_to_light = to_light.length();
-	if (L.range > 0.0 && dist_to_light > L.range)
-		return false;
-	Vec3 dir = to_light.normalized();
-	Ray shadow_ray(p + dir * 1e-4, dir);
-	HitRecord tmp;
-	for (const auto &obj : scene.objects)
-	{
-		if (obj->is_beam())
-			continue;
-		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
-					  obj->object_id) != L.ignore_ids.end())
-			continue;
-		const Material &m = mats[obj->material_id];
-		if (m.alpha < 1.0)
-			continue;
-		if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
-		{
-			return true;
-		}
-	}
-	return false;
+       Vec3 origin;
+       Vec3 dir;
+       origin = p;
+       dir = (L.position - p).normalized();
+       for (int bounce = 0; bounce < 10; ++bounce)
+       {
+               Vec3 to_light;
+               to_light = L.position - origin;
+               double dist_to_light;
+               dist_to_light = Vec3::dot(to_light, dir);
+               if (L.range > 0.0 && to_light.length() > L.range)
+                       return false;
+               if (dist_to_light <= 0.0)
+                       return true;
+               Vec3 perp;
+               perp = to_light - dir * dist_to_light;
+               if (perp.length_squared() > 1e-4)
+                       return true;
+               Ray shadow_ray;
+               shadow_ray = Ray(origin + dir * 1e-4, dir);
+               HitRecord tmp;
+               HitRecord rec;
+               bool hit_any = false;
+               double closest = dist_to_light;
+               for (const auto &obj : scene.objects)
+               {
+                       if (obj->is_beam())
+                               continue;
+                       if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                                     obj->object_id) != L.ignore_ids.end())
+                               continue;
+                       const Material &m = mats[obj->material_id];
+                       if (m.alpha < 1.0)
+                               continue;
+                       if (obj->hit(shadow_ray, 1e-4, closest - 1e-4, tmp))
+                       {
+                               closest = tmp.t;
+                               rec = tmp;
+                               hit_any = true;
+                       }
+               }
+               if (!hit_any)
+                       return false;
+               const Material &hit_mat = mats[rec.material_id];
+               if (!hit_mat.mirror)
+                       return true;
+               origin = rec.p;
+               dir = Vec3::reflect(dir, rec.normal).normalized();
+       }
+       return true;
 }
 
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
@@ -106,9 +133,9 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	}
 	if (m.mirror)
 	{
-		Vec3 refl_dir =
-			r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
-		Ray refl(rec.p + refl_dir * 1e-4, refl_dir);
+               Vec3 refl_dir;
+               refl_dir = Vec3::reflect(r.dir, rec.normal);
+               Ray refl(rec.p + refl_dir * 1e-4, refl_dir);
 		Vec3 refl_col = trace_ray(scene, mats, refl, rng, dist, depth + 1);
 		double refl_ratio = REFLECTION / 100.0;
 		sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
