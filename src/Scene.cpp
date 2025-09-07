@@ -117,10 +117,10 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 {
                                         Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
                                         Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
-                                        auto new_bm = std::make_shared<Laser>(
-                                                refl_orig, refl_dir, bm->radius, new_len,
-                                                bm->light_intensity, 0, bm->material_id, new_start,
-                                                bm->total_length);
+                                       auto new_bm = std::make_shared<Laser>(
+                                               refl_orig, refl_dir, new_len,
+                                               bm->light_intensity, 0, bm->material_id,
+                                               new_start, bm->total_length);
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
                                         pending_lights.push_back({new_bm, hit_rec.object_id});

@@ -267,17 +267,17 @@ static void parse_cube(std::istringstream &iss, Scene &scene, int &oid, int &mid
 static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid,
                                             std::vector<Material> &mats)
 {
-        std::string s_intens, s_pos, s_dir, s_rgb, s_g, s_L;
-        iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_g >> s_L;
+       std::string s_intens, s_pos, s_dir, s_rgb, s_r, s_L;
+       iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_r >> s_L;
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
-        Vec3 o, dir, rgb;
-        double g = 0.1, L = 1.0, intensity = 0.75;
+       Vec3 o, dir, rgb;
+       double ray_radius = 0.1, L = 1.0, intensity = 0.75;
         double a = 255;
-        if (to_double(s_intens, intensity) && parse_triple(s_pos, o) &&
-                parse_triple(s_dir, dir) && parse_rgba(s_rgb, rgb, a) &&
-                to_double(s_g, g) && to_double(s_L, L))
+       if (to_double(s_intens, intensity) && parse_triple(s_pos, o) &&
+               parse_triple(s_dir, dir) && parse_rgba(s_rgb, rgb, a) &&
+               to_double(s_r, ray_radius) && to_double(s_L, L))
         {
                 Vec3 unit = rgb_to_unit(rgb);
                 mats.emplace_back();
@@ -307,9 +307,9 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 mats.back().alpha = 1.0;
                 int small_mat = mid++;
 
-                auto bm = std::make_shared<Beam>(o, dir_norm, g, L, intensity,
-                                                                                         oid, beam_mat, big_mat,
-                                                                                         mid_mat, small_mat);
+               auto bm = std::make_shared<Beam>(o, dir_norm, ray_radius, L,
+                                                                                        intensity, oid, beam_mat,
+                                                                                        big_mat, mid_mat, small_mat);
                 oid += 2;
                 bm->source->movable = (s_move == "M");
                 scene.objects.push_back(bm->laser);
