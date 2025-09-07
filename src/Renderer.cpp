@@ -15,32 +15,65 @@
 #include <string>
 #include <thread>
 
-static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
-					  const Vec3 &p, const PointLight &L)
+namespace
 {
-	Vec3 to_light = L.position - p;
-	double dist_to_light = to_light.length();
-	if (L.range > 0.0 && dist_to_light > L.range)
-		return false;
-	Vec3 dir = to_light.normalized();
-	Ray shadow_ray(p + dir * 1e-4, dir);
-	HitRecord tmp;
-	for (const auto &obj : scene.objects)
-	{
-		if (obj->is_beam())
-			continue;
-		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
-					  obj->object_id) != L.ignore_ids.end())
-			continue;
-		const Material &m = mats[obj->material_id];
-		if (m.alpha < 1.0)
-			continue;
-		if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
-		{
-			return true;
-		}
-	}
-	return false;
+inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
+{
+        return v - n * (2.0 * Vec3::dot(v, n));
+}
+
+static bool blocked(const Scene &scene, const std::vector<Material> &mats,
+                                        const PointLight &L, const Ray &ray,
+                                        double dist_to_light, int depth)
+{
+        if (depth > 10)
+                return true;
+        HitRecord hit_rec, tmp;
+        bool hit_any = false;
+        std::shared_ptr<Hittable> hit_obj;
+        double closest = dist_to_light - 1e-4;
+        for (const auto &obj : scene.objects)
+        {
+                if (obj->is_beam())
+                        continue;
+                if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                          obj->object_id) != L.ignore_ids.end())
+                        continue;
+                const Material &m = mats[obj->material_id];
+                if (m.alpha < 1.0)
+                        continue;
+                if (obj->hit(ray, 1e-4, closest, tmp))
+                {
+                        hit_any = true;
+                        closest = tmp.t;
+                        hit_rec = tmp;
+                        hit_obj = obj;
+                }
+        }
+        if (!hit_any)
+                return false;
+        const Material &hm = mats[hit_obj->material_id];
+        if (hm.mirror)
+        {
+                Vec3 refl_dir = reflect(ray.dir, hit_rec.normal);
+                Ray refl_ray(hit_rec.p + refl_dir * 1e-4, refl_dir);
+                double new_dist = (L.position - refl_ray.orig).length();
+                return blocked(scene, mats, L, refl_ray, new_dist, depth + 1);
+        }
+        return true;
+}
+} // namespace
+
+static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
+                                          const Vec3 &p, const PointLight &L)
+{
+        Vec3 to_light = L.position - p;
+        double dist_to_light = to_light.length();
+        if (L.range > 0.0 && dist_to_light > L.range)
+                return false;
+        Vec3 dir = to_light.normalized();
+        Ray shadow_ray(p + dir * 1e-4, dir);
+        return blocked(scene, mats, L, shadow_ray, dist_to_light, 0);
 }
 
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
