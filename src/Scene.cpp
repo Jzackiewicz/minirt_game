@@ -3,6 +3,7 @@
 #include "Collision.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
+#include "Sphere.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -280,50 +281,50 @@ void Scene::attempt_axis_move(int index, const Vec3 &axis_delta, Vec3 &moved)
 
 // Move camera with collision avoidance.
 Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
-						const std::vector<Material> &mats) const
+                                                const std::vector<Material> &mats) const
 {
-	auto blocked = [&](const Vec3 &start, const Vec3 &d)
-	{
-		double len = d.length();
-		if (len <= 0.0)
-			return false;
-		Ray r(start, d / len);
-		HitRecord tmp;
-		for (const auto &obj : objects)
-		{
-			if (obj->is_beam())
-				continue;
-			const Material &mat = mats[obj->material_id];
-			if (mat.alpha < 1.0)
-				continue;
-			if (obj->hit(r, 1e-4, len, tmp))
-				return true;
-		}
-		return false;
-	};
+        constexpr double cam_radius = 0.2;
 
-	Vec3 start = cam.origin;
-	if (!blocked(start, delta))
-	{
-		cam.move(delta);
-		return delta;
-	}
+        auto collides = [&](const HittablePtr &sph) {
+                for (const auto &obj : objects)
+                {
+                        if (obj->is_beam())
+                                continue;
+                        const Material &mat = mats[obj->material_id];
+                        if (mat.alpha < 1.0)
+                                continue;
+                        if (precise_collision(sph, obj))
+                                return true;
+                }
+                return false;
+        };
 
-	Vec3 moved(0, 0, 0);
-	Vec3 axes[3] = {Vec3(delta.x, 0, 0), Vec3(0, delta.y, 0),
-					Vec3(0, 0, delta.z)};
-	for (const Vec3 &ax : axes)
-	{
-		if (ax.length_squared() == 0)
-			continue;
-		if (!blocked(start, ax))
-		{
-			cam.move(ax);
-			start += ax;
-			moved += ax;
-		}
-	}
-	return moved;
+        auto sphere = std::make_shared<Sphere>(cam.origin, cam_radius, -1, 0);
+        sphere->translate(delta);
+        if (!collides(sphere))
+        {
+                cam.move(delta);
+                return delta;
+        }
+        sphere->translate(delta * -1);
+
+        Vec3 moved(0, 0, 0);
+        Vec3 axes[3] = {Vec3(delta.x, 0, 0), Vec3(0, delta.y, 0),
+                                        Vec3(0, 0, delta.z)};
+        for (const Vec3 &ax : axes)
+        {
+                if (ax.length_squared() == 0)
+                        continue;
+                sphere->translate(ax);
+                if (!collides(sphere))
+                {
+                        cam.move(ax);
+                        moved += ax;
+                }
+                else
+                        sphere->translate(ax * -1);
+        }
+        return moved;
 }
 
 // Check if object at index intersects any other object.
