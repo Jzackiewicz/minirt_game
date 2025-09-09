@@ -44,29 +44,41 @@ const uint8_t *get_glyph(char character)
 										0x11, 0x11, 0x11};
 		return data;
 	}
-	case 'P':
-	{
-		static const uint8_t data[7] = {0x1E, 0x11, 0x11, 0x1E,
-										0x10, 0x10, 0x10};
-		return data;
-	}
-	case 'S':
-	{
-		static const uint8_t data[7] = {0x0F, 0x10, 0x10, 0x0E,
-										0x01, 0x01, 0x1E};
-		return data;
-	}
-	case 'T':
-	{
-		static const uint8_t data[7] = {0x1F, 0x04, 0x04, 0x04,
-										0x04, 0x04, 0x04};
-		return data;
-	}
-	case 'Y':
-	{
-		static const uint8_t data[7] = {0x11, 0x11, 0x0A, 0x04,
-										0x04, 0x04, 0x04};
-		return data;
+        case 'P':
+        {
+                static const uint8_t data[7] = {0x1E, 0x11, 0x11, 0x1E,
+                                                                                0x10, 0x10, 0x10};
+                return data;
+        }
+        case 'Q':
+        {
+                static const uint8_t data[7] = {0x0E, 0x11, 0x11, 0x11,
+                                                                                0x11, 0x13, 0x0F};
+                return data;
+        }
+        case 'S':
+        {
+                static const uint8_t data[7] = {0x0F, 0x10, 0x10, 0x0E,
+                                                                                0x01, 0x01, 0x1E};
+                return data;
+        }
+        case 'T':
+        {
+                static const uint8_t data[7] = {0x1F, 0x04, 0x04, 0x04,
+                                                                                0x04, 0x04, 0x04};
+                return data;
+        }
+        case 'U':
+        {
+                static const uint8_t data[7] = {0x11, 0x11, 0x11, 0x11,
+                                                                                0x11, 0x11, 0x0E};
+                return data;
+        }
+        case 'Y':
+        {
+                static const uint8_t data[7] = {0x11, 0x11, 0x0A, 0x04,
+                                                                                0x04, 0x04, 0x04};
+                return data;
 	}
 	default:
 		return nullptr;
