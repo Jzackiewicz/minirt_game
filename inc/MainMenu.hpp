@@ -7,7 +7,7 @@
  *
  * @param width Window width.
  * @param height Window height.
- * @return True if the user chose to play.
+ * @return True if the user chose to play, false otherwise.
  */
 class MainMenu
 {
