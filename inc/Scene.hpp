@@ -33,7 +33,9 @@ class Scene
 	// Move object while preventing collisions.
 	Vec3 move_with_collision(int index, const Vec3 &delta);
 
-	// Move camera while avoiding obstacles.
+        // Move camera while avoiding obstacles. Camera is treated as a
+        // transparent sphere of fixed radius to prevent clipping into opaque
+        // objects.
         Vec3 move_camera(Camera &cam, const Vec3 &delta,
                                          const std::vector<Material> &materials) const;
         private:

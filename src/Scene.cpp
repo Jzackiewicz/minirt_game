@@ -3,6 +3,7 @@
 #include "Collision.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
+#include "Sphere.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -282,25 +283,25 @@ void Scene::attempt_axis_move(int index, const Vec3 &axis_delta, Vec3 &moved)
 Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
 						const std::vector<Material> &mats) const
 {
-	auto blocked = [&](const Vec3 &start, const Vec3 &d)
-	{
-		double len = d.length();
-		if (len <= 0.0)
-			return false;
-		Ray r(start, d / len);
-		HitRecord tmp;
-		for (const auto &obj : objects)
-		{
-			if (obj->is_beam())
-				continue;
-			const Material &mat = mats[obj->material_id];
-			if (mat.alpha < 1.0)
-				continue;
-			if (obj->hit(r, 1e-4, len, tmp))
-				return true;
-		}
-		return false;
-	};
+        static const double cam_radius = 0.2;
+        auto blocked = [&](const Vec3 &start, const Vec3 &d)
+        {
+                if (d.length_squared() == 0)
+                        return false;
+                HittablePtr cam_sphere =
+                        std::make_shared<Sphere>(start + d, cam_radius, -1, 0);
+                for (const auto &obj : objects)
+                {
+                        if (obj->is_beam())
+                                continue;
+                        const Material &mat = mats[obj->material_id];
+                        if (mat.alpha < 1.0)
+                                continue;
+                        if (precise_collision(cam_sphere, obj))
+                                return true;
+                }
+                return false;
+        };
 
 	Vec3 start = cam.origin;
 	if (!blocked(start, delta))
