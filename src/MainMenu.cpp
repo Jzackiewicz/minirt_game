@@ -135,12 +135,23 @@ bool MainMenu::show(int width, int height)
 		SDL_Quit();
 		return false;
 	}
-	SDL_Rect play_rect;
-	play_rect = {width / 2 - 150, height / 2 - 150, 300, 100};
+        int button_width;
+        button_width = 300;
+        int button_height;
+        button_height = 100;
+        int margin;
+        margin = (height - 3 * button_height) / 4;
+        SDL_Rect play_rect;
+        play_rect = {width / 2 - button_width / 2, margin, button_width,
+                                  button_height};
         SDL_Rect settings_rect;
-        settings_rect = {width / 2 - 150, height / 2 + 50, 300, 100};
+        settings_rect = {width / 2 - button_width / 2,
+                                         margin * 2 + button_height, button_width,
+                                         button_height};
         SDL_Rect quit_rect;
-        quit_rect = {width / 2 - 150, height / 2 + 250, 300, 100};
+        quit_rect = {width / 2 - button_width / 2,
+                                      margin * 3 + 2 * button_height, button_width,
+                                      button_height};
         bool running;
         running = true;
 	bool play_selected;
