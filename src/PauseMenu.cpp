@@ -153,96 +153,192 @@ int text_width(const std::string &text, int scale)
 
 bool PauseMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height)
 {
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, static_cast<Uint8>(255 * 0.35));
-    SDL_Rect overlay = {0, 0, width, height};
-    SDL_RenderFillRect(renderer, &overlay);
+    SDL_Surface *shot = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32,
+                                                      SDL_PIXELFORMAT_ARGB8888);
+    SDL_Texture *background = nullptr;
+    if (shot)
+    {
+        if (SDL_RenderReadPixels(renderer, nullptr, shot->format->format,
+                                 shot->pixels, shot->pitch) == 0)
+            background = SDL_CreateTextureFromSurface(renderer, shot);
+        SDL_FreeSurface(shot);
+    }
 
     int button_width = 300;
     int button_height = 100;
-    int margin = (height - 4 * button_height) / 5;
-
-    SDL_Rect resume_rect = {width / 2 - button_width / 2, margin, button_width, button_height};
-    SDL_Rect leaderboard_rect = {width / 2 - button_width / 2,
-                                 margin * 2 + button_height, button_width, button_height};
-    SDL_Rect settings_rect = {width / 2 - button_width / 2,
-                              margin * 3 + 2 * button_height, button_width, button_height};
-    SDL_Rect quit_rect = {width / 2 - button_width / 2,
-                          margin * 4 + 3 * button_height, button_width, button_height};
-
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderFillRect(renderer, &resume_rect);
-    SDL_RenderFillRect(renderer, &leaderboard_rect);
-    SDL_RenderFillRect(renderer, &settings_rect);
-    SDL_RenderFillRect(renderer, &quit_rect);
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDrawRect(renderer, &resume_rect);
-    SDL_RenderDrawRect(renderer, &leaderboard_rect);
-    SDL_RenderDrawRect(renderer, &settings_rect);
-    SDL_RenderDrawRect(renderer, &quit_rect);
-
     int scale = 4;
-    SDL_Color white = {255, 255, 255, 255};
-    int text_x = width / 2 - text_width("PAUSE", scale) / 2;
-    int text_y = margin / 2 - (7 * scale) / 2;
-    draw_text(renderer, "PAUSE", text_x, text_y, white, scale);
+    int title_scale = scale * 2;
+    std::string title = "PAUSE";
+    int button_gap = 10;
+    int title_gap = 80;
+    int total_buttons_height = 4 * button_height + 3 * button_gap;
+    int title_height = 7 * title_scale;
+    int top_margin = (height - title_height - title_gap - total_buttons_height) / 2;
+    if (top_margin < 0)
+        top_margin = 0;
+    int title_x = width / 2 - text_width(title, title_scale) / 2;
+    int title_y = top_margin;
+    int resume_y = title_y + title_height + title_gap;
+    int center_x = width / 2 - button_width / 2;
+    SDL_Rect resume_rect = {center_x, resume_y, button_width, button_height};
+    SDL_Rect leaderboard_rect = {center_x,
+                                 resume_rect.y + button_height + button_gap,
+                                 button_width, button_height};
+    SDL_Rect settings_rect = {center_x,
+                              leaderboard_rect.y + button_height + button_gap,
+                              button_width, button_height};
+    SDL_Rect quit_rect = {center_x,
+                          settings_rect.y + button_height + button_gap,
+                          button_width, button_height};
 
-    text_x = resume_rect.x + (resume_rect.w - text_width("RESUME", scale)) / 2;
-    text_y = resume_rect.y + (resume_rect.h - 7 * scale) / 2;
-    draw_text(renderer, "RESUME", text_x, text_y, white, scale);
-
-    text_x = leaderboard_rect.x + (leaderboard_rect.w - text_width("LEADERBOARD", scale)) / 2;
-    text_y = leaderboard_rect.y + (leaderboard_rect.h - 7 * scale) / 2;
-    draw_text(renderer, "LEADERBOARD", text_x, text_y, white, scale);
-
-    text_x = settings_rect.x + (settings_rect.w - text_width("SETTINGS", scale)) / 2;
-    text_y = settings_rect.y + (settings_rect.h - 7 * scale) / 2;
-    draw_text(renderer, "SETTINGS", text_x, text_y, white, scale);
-
-    text_x = quit_rect.x + (quit_rect.w - text_width("QUIT", scale)) / 2;
-    text_y = quit_rect.y + (quit_rect.h - 7 * scale) / 2;
-    draw_text(renderer, "QUIT", text_x, text_y, white, scale);
-
-    SDL_RenderPresent(renderer);
-
-    bool resume = false;
-    bool waiting = true;
-    while (waiting)
+    bool running = true;
+    bool resume_selected = false;
+    while (running)
     {
-        SDL_Event e;
-        if (SDL_WaitEvent(&e))
+        SDL_Event event;
+        while (SDL_PollEvent(&event))
         {
-            if (e.type == SDL_QUIT)
+            if (event.type == SDL_QUIT)
             {
-                waiting = false;
-                resume = false;
+                running = false;
             }
-            else if (e.type == SDL_KEYDOWN && e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+            else if (event.type == SDL_KEYDOWN &&
+                     event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
             {
-                waiting = false;
-                resume = true;
+                resume_selected = true;
+                running = false;
             }
-            else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT)
+            else if (event.type == SDL_MOUSEBUTTONDOWN &&
+                     event.button.button == SDL_BUTTON_LEFT)
             {
-                int mx = e.button.x;
-                int my = e.button.y;
-                if (mx >= resume_rect.x && mx < resume_rect.x + resume_rect.w &&
-                    my >= resume_rect.y && my < resume_rect.y + resume_rect.h)
+                int mouse_x = event.button.x;
+                int mouse_y = event.button.y;
+                if (mouse_x >= resume_rect.x &&
+                    mouse_x < resume_rect.x + resume_rect.w &&
+                    mouse_y >= resume_rect.y &&
+                    mouse_y < resume_rect.y + resume_rect.h)
                 {
-                    waiting = false;
-                    resume = true;
+                    resume_selected = true;
+                    running = false;
                 }
-                else if (mx >= quit_rect.x && mx < quit_rect.x + quit_rect.w &&
-                         my >= quit_rect.y && my < quit_rect.y + quit_rect.h)
+                else if (mouse_x >= quit_rect.x &&
+                         mouse_x < quit_rect.x + quit_rect.w &&
+                         mouse_y >= quit_rect.y &&
+                         mouse_y < quit_rect.y + quit_rect.h)
                 {
-                    waiting = false;
-                    resume = false;
+                    running = false;
                 }
             }
         }
+
+        int mouse_x;
+        int mouse_y;
+        SDL_GetMouseState(&mouse_x, &mouse_y);
+        bool hover_resume = mouse_x >= resume_rect.x &&
+                            mouse_x < resume_rect.x + resume_rect.w &&
+                            mouse_y >= resume_rect.y &&
+                            mouse_y < resume_rect.y + resume_rect.h;
+        bool hover_leaderboard = mouse_x >= leaderboard_rect.x &&
+                                 mouse_x < leaderboard_rect.x + leaderboard_rect.w &&
+                                 mouse_y >= leaderboard_rect.y &&
+                                 mouse_y < leaderboard_rect.y + leaderboard_rect.h;
+        bool hover_settings = mouse_x >= settings_rect.x &&
+                              mouse_x < settings_rect.x + settings_rect.w &&
+                              mouse_y >= settings_rect.y &&
+                              mouse_y < settings_rect.y + settings_rect.h;
+        bool hover_quit = mouse_x >= quit_rect.x &&
+                          mouse_x < quit_rect.x + quit_rect.w &&
+                          mouse_y >= quit_rect.y &&
+                          mouse_y < quit_rect.y + quit_rect.h;
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        if (background)
+            SDL_RenderCopy(renderer, background, nullptr, nullptr);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0,
+                               static_cast<Uint8>(255 * 0.35));
+        SDL_Rect overlay = {0, 0, width, height};
+        SDL_RenderFillRect(renderer, &overlay);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+        int x = title_x;
+        for (std::size_t i = 0; i < title.size(); ++i)
+        {
+            SDL_Color color = {255, 255, 255, 255};
+            if (i == 0)
+                color = {0, 0, 255, 255};
+            else if (i == 1)
+                color = {255, 255, 0, 255};
+            else if (i == 2)
+                color = {0, 255, 0, 255};
+            else if (i == 3)
+                color = {255, 0, 0, 255};
+            else if (i == 4)
+                color = {0, 255, 255, 255};
+            else if (i == 5)
+                color = {128, 0, 128, 255};
+            draw_character(renderer, title[i], x, title_y, color,
+                           title_scale);
+            x += (5 + 1) * title_scale;
+        }
+
+        SDL_Color white = {255, 255, 255, 255};
+
+        SDL_Color fill_resume = hover_resume ? SDL_Color{0, 255, 0, 255}
+                                             : SDL_Color{0, 0, 0, 255};
+        SDL_SetRenderDrawColor(renderer, fill_resume.r, fill_resume.g,
+                               fill_resume.b, fill_resume.a);
+        SDL_RenderFillRect(renderer, &resume_rect);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &resume_rect);
+        int text_x = resume_rect.x +
+                     (resume_rect.w - text_width("RESUME", scale)) / 2;
+        int text_y = resume_rect.y + (resume_rect.h - 7 * scale) / 2;
+        draw_text(renderer, "RESUME", text_x, text_y, white, scale);
+
+        SDL_Color fill_leader = hover_leaderboard ? SDL_Color{0, 0, 255, 255}
+                                                  : SDL_Color{0, 0, 0, 255};
+        SDL_SetRenderDrawColor(renderer, fill_leader.r, fill_leader.g,
+                               fill_leader.b, fill_leader.a);
+        SDL_RenderFillRect(renderer, &leaderboard_rect);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &leaderboard_rect);
+        text_x = leaderboard_rect.x +
+                 (leaderboard_rect.w - text_width("LEADERBOARD", scale)) / 2;
+        text_y = leaderboard_rect.y + (leaderboard_rect.h - 7 * scale) / 2;
+        draw_text(renderer, "LEADERBOARD", text_x, text_y, white, scale);
+
+        SDL_Color fill_settings = hover_settings ? SDL_Color{255, 255, 0, 255}
+                                                 : SDL_Color{0, 0, 0, 255};
+        SDL_SetRenderDrawColor(renderer, fill_settings.r, fill_settings.g,
+                               fill_settings.b, fill_settings.a);
+        SDL_RenderFillRect(renderer, &settings_rect);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &settings_rect);
+        text_x = settings_rect.x +
+                 (settings_rect.w - text_width("SETTINGS", scale)) / 2;
+        text_y = settings_rect.y + (settings_rect.h - 7 * scale) / 2;
+        draw_text(renderer, "SETTINGS", text_x, text_y, white, scale);
+
+        SDL_Color fill_quit = hover_quit ? SDL_Color{255, 0, 0, 255}
+                                         : SDL_Color{0, 0, 0, 255};
+        SDL_SetRenderDrawColor(renderer, fill_quit.r, fill_quit.g, fill_quit.b,
+                               fill_quit.a);
+        SDL_RenderFillRect(renderer, &quit_rect);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &quit_rect);
+        text_x = quit_rect.x +
+                 (quit_rect.w - text_width("QUIT", scale)) / 2;
+        text_y = quit_rect.y + (quit_rect.h - 7 * scale) / 2;
+        draw_text(renderer, "QUIT", text_x, text_y, white, scale);
+
+        SDL_RenderPresent(renderer);
+        SDL_Delay(16);
     }
 
-    return resume;
+    if (background)
+        SDL_DestroyTexture(background);
+    return resume_selected;
 }
 
