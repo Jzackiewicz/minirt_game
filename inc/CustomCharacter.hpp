@@ -9,7 +9,7 @@ private:
     CustomCharacter() = delete; // Non-instantiable
 
 public:
-    static const uint8_t *get_glyph(unsigned char character);
+    static const uint8_t *get_glyph(char character);
     static void draw_character(SDL_Renderer *renderer, char character, int x, int y,
                                SDL_Color color, int scale);
     static void draw_text(SDL_Renderer *renderer, const std::string &text, int x, int y,

@@ -13,7 +13,7 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
 
     int total_buttons_height = static_cast<int>(buttons.size()) * button_height +
                                (static_cast<int>(buttons.size()) - 1) * button_gap;
-    int title_height = 8 * title_scale;
+    int title_height = 7 * title_scale;
     int top_margin = (height - title_height - title_gap - total_buttons_height) / 2;
     if (top_margin < 0)
         top_margin = 0;
@@ -45,8 +45,11 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                 for (auto &btn : buttons) {
                     if (mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
-                        result = btn.action;
-                        running = false;
+                        if (btn.action != ButtonAction::Settings &&
+                            btn.action != ButtonAction::Leaderboard) {
+                            result = btn.action;
+                            running = false;
+                        }
                         break;
                     }
                 }
@@ -59,7 +62,22 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        CustomCharacter::draw_text(renderer, title, title_x, title_y, white, title_scale);
+        SDL_Color colors[] = {
+            {0, 0, 255, 255},
+            {255, 255, 0, 255},
+            {0, 255, 0, 255},
+            {255, 0, 0, 255},
+            {0, 255, 255, 255},
+            {128, 0, 128, 255}
+        };
+        int tx = title_x;
+        for (std::size_t i = 0; i < title.size(); ++i) {
+            SDL_Color c = white;
+            if (i < sizeof(colors) / sizeof(colors[0]))
+                c = colors[i];
+            CustomCharacter::draw_character(renderer, title[i], tx, title_y, c, title_scale);
+            tx += (5 + 1) * title_scale;
+        }
 
         for (auto &btn : buttons) {
             bool hover = mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
@@ -70,7 +88,7 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
             SDL_RenderDrawRect(renderer, &btn.rect);
             int text_x = btn.rect.x + (btn.rect.w - CustomCharacter::text_width(btn.text, scale)) / 2;
-            int text_y = btn.rect.y + (btn.rect.h - 8 * scale) / 2;
+            int text_y = btn.rect.y + (btn.rect.h - 7 * scale) / 2;
             CustomCharacter::draw_text(renderer, btn.text, text_x, text_y, white, scale);
         }
 
