@@ -2,6 +2,7 @@
 #include "AABB.hpp"
 #include "Config.hpp"
 #include "Parser.hpp"
+#include "PauseMenu.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -370,7 +371,15 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, int W, int H,
                 else if (st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                 {
-                        st.running = false;
+                        st.focused = false;
+                        SDL_SetRelativeMouseMode(SDL_FALSE);
+                        SDL_ShowCursor(SDL_ENABLE);
+                        SDL_SetWindowGrab(win, SDL_FALSE);
+                        bool resume = PauseMenu::show(W, H);
+                        if (!resume)
+                                st.running = false;
+                        else
+                                SDL_WarpMouseInWindow(win, W / 2, H / 2);
                 }
         }
 }
@@ -430,8 +439,6 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
         }
         else if (st.focused)
         {
-                if (state[SDL_SCANCODE_ESCAPE])
-                        st.running = false;
                 double speed = CAMERA_MOVE_SPEED * dt;
                 if (state[SDL_SCANCODE_W])
                         scene.move_camera(cam, forward_xz * speed, mats);
