@@ -196,7 +196,7 @@ bool MainMenu::show(int width, int height)
         int button_gap;
         button_gap = 10;
         int title_gap;
-        title_gap = 30;
+        title_gap = 80;
         int total_buttons_height;
         total_buttons_height = 4 * button_height + 3 * button_gap;
         int title_height;
