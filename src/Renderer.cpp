@@ -2,6 +2,7 @@
 #include "AABB.hpp"
 #include "Config.hpp"
 #include "Parser.hpp"
+#include "PauseMenu.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -222,7 +223,8 @@ bool Renderer::init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
 }
 
 /// Handle SDL events, updating render state and selection.
-void Renderer::process_events(RenderState &st, SDL_Window *win, int W, int H,
+void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *ren,
+                                                        int W, int H,
                                                         std::vector<Material> &mats,
                                                         const std::string &scene_path)
 {
@@ -370,7 +372,23 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, int W, int H,
                 else if (st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                 {
-                        st.running = false;
+                        st.focused = false;
+                        SDL_SetRelativeMouseMode(SDL_FALSE);
+                        SDL_ShowCursor(SDL_ENABLE);
+                        SDL_SetWindowGrab(win, SDL_FALSE);
+                        bool resume = PauseMenu::show(win, ren, W, H);
+                        if (resume)
+                        {
+                                st.focused = true;
+                                SDL_SetRelativeMouseMode(SDL_TRUE);
+                                SDL_ShowCursor(SDL_DISABLE);
+                                SDL_SetWindowGrab(win, SDL_TRUE);
+                                SDL_WarpMouseInWindow(win, W / 2, H / 2);
+                        }
+                        else
+                        {
+                                st.running = false;
+                        }
                 }
         }
 }
@@ -430,8 +448,6 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
         }
         else if (st.focused)
         {
-                if (state[SDL_SCANCODE_ESCAPE])
-                        st.running = false;
                 double speed = CAMERA_MOVE_SPEED * dt;
                 if (state[SDL_SCANCODE_W])
                         scene.move_camera(cam, forward_xz * speed, mats);
@@ -725,7 +741,7 @@ void Renderer::render_window(std::vector<Material> &mats,
                 double dt = (now - last) / 1000.0;
                 last = now;
 
-                process_events(st, win, W, H, mats, scene_path);
+                process_events(st, win, ren, W, H, mats, scene_path);
                 handle_keyboard(st, dt, mats);
                 update_selection(st, mats);
                 render_frame(st, ren, tex, framebuffer, pixels, RW, RH, W, H, T,
