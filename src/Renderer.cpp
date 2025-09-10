@@ -3,6 +3,7 @@
 #include "Config.hpp"
 #include "Parser.hpp"
 #include "PauseMenu.hpp"
+#include "Settings.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -308,7 +309,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 {
                         if (st.edit_mode && st.rotating)
                         {
-                                double sens = MOUSE_SENSITIVITY;
+                                double sens = g_settings.mouse_sensitivity *
+                                               MOUSE_SENSITIVITY;
                                 bool changed = false;
                                 double yaw = -e.motion.xrel * sens;
                                 if (yaw != 0.0)
@@ -339,9 +341,10 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         }
                         else
                         {
-                                double sens = MOUSE_SENSITIVITY;
+                                double sens = g_settings.mouse_sensitivity *
+                                               MOUSE_SENSITIVITY;
                                 cam.rotate(-e.motion.xrel * sens,
-                                                   -e.motion.yrel * sens);
+                                           -e.motion.yrel * sens);
                         }
                 }
                 else if (e.type == SDL_MOUSEWHEEL)

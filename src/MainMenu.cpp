@@ -1,4 +1,7 @@
 #include "MainMenu.hpp"
+#include "LeaderboardMenu.hpp"
+#include "SettingsMenu.hpp"
+#include "Settings.hpp"
 #include <SDL.h>
 
 MainMenu::MainMenu() : AMenu("MINIRT THE GAME") {
@@ -25,9 +28,26 @@ bool MainMenu::show(int width, int height) {
         return false;
     }
     MainMenu menu;
-    ButtonAction action = menu.run(window, renderer, width, height);
+    bool running = true;
+    bool play = false;
+    while (running) {
+        ButtonAction action = menu.run(window, renderer, width, height);
+        if (action == ButtonAction::Play) {
+            play = true;
+            running = false;
+        } else if (action == ButtonAction::Quit || action == ButtonAction::Back) {
+            running = false;
+        } else if (action == ButtonAction::Settings) {
+            SettingsMenu::show(window, renderer, width, height);
+            width = g_settings.width;
+            height = g_settings.height;
+            SDL_SetWindowSize(window, width, height);
+        } else if (action == ButtonAction::Leaderboard) {
+            LeaderboardMenu::show(window, renderer, width, height);
+        }
+    }
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    return action == ButtonAction::Play;
+    return play;
 }

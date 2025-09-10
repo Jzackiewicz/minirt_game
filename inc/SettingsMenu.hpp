@@ -1,5 +1,8 @@
 #pragma once
 #include "AMenu.hpp"
+#include "ButtonsCluster.hpp"
+#include "Settings.hpp"
+#include "Slider.hpp"
 
 struct SDL_Window;
 struct SDL_Renderer;
@@ -8,5 +11,8 @@ struct SDL_Renderer;
 class SettingsMenu : public AMenu {
 public:
     SettingsMenu();
-    static void show(SDL_Window *window, SDL_Renderer *renderer, int width, int height);
+    ButtonAction run(SDL_Window *window, SDL_Renderer *renderer, int width,
+                     int height);
+    static void show(SDL_Window *window, SDL_Renderer *renderer, int width,
+                     int height);
 };

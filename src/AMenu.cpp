@@ -49,11 +49,8 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                 for (auto &btn : buttons) {
                     if (mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
-                        if (btn.action != ButtonAction::Settings &&
-                            btn.action != ButtonAction::Leaderboard) {
-                            result = btn.action;
-                            running = false;
-                        }
+                        result = btn.action;
+                        running = false;
                         break;
                     }
                 }
