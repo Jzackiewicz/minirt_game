@@ -1,6 +1,7 @@
 #include "MainMenu.hpp"
 #include <SDL.h>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -110,13 +111,26 @@ void draw_character(SDL_Renderer *renderer, char character, int x, int y,
 }
 
 void draw_text(SDL_Renderer *renderer, const std::string &text, int x, int y,
-			   SDL_Color color, int scale)
+                           SDL_Color color, int scale)
 {
-	for (char character : text)
-	{
-		draw_character(renderer, character, x, y, color, scale);
-		x += (5 + 1) * scale;
-	}
+        for (char character : text)
+        {
+                draw_character(renderer, character, x, y, color, scale);
+                x += (5 + 1) * scale;
+        }
+}
+
+void draw_colored_text(SDL_Renderer *renderer, const std::string &text, int x, int y,
+                                          const std::vector<SDL_Color> &colors,
+                                          SDL_Color default_color, int scale)
+{
+        for (std::size_t i = 0; i < text.size(); ++i)
+        {
+                SDL_Color color;
+                color = i < colors.size() ? colors[i] : default_color;
+                draw_character(renderer, text[i],
+                                   x + static_cast<int>(i) * (5 + 1) * scale, y, color, scale);
+        }
 }
 
 int text_width(const std::string &text, int scale)
@@ -151,19 +165,32 @@ bool MainMenu::show(int width, int height)
         button_width = 300;
         int button_height;
         button_height = 100;
+        int title_scale;
+        title_scale = 6;
+        int title_height;
+        title_height = 7 * title_scale;
         int margin;
-        margin = (height - 3 * button_height) / 4;
+        margin = (height - title_height - 4 * button_height) / 6;
+        int center_x;
+        center_x = width / 2 - button_width / 2;
+        int title_y;
+        title_y = margin;
+        int first_button_y;
+        first_button_y = title_y + title_height + margin;
         SDL_Rect play_rect;
-        play_rect = {width / 2 - button_width / 2, margin, button_width,
-                                  button_height};
+        play_rect = {center_x, first_button_y, button_width, button_height};
+        SDL_Rect leaderboard_rect;
+        leaderboard_rect = {center_x,
+                                                first_button_y + (button_height + margin),
+                                                button_width, button_height};
         SDL_Rect settings_rect;
-        settings_rect = {width / 2 - button_width / 2,
-                                         margin * 2 + button_height, button_width,
-                                         button_height};
+        settings_rect = {center_x,
+                                         first_button_y + 2 * (button_height + margin),
+                                         button_width, button_height};
         SDL_Rect quit_rect;
-        quit_rect = {width / 2 - button_width / 2,
-                                      margin * 3 + 2 * button_height, button_width,
-                                      button_height};
+        quit_rect = {center_x,
+                                      first_button_y + 3 * (button_height + margin),
+                                      button_width, button_height};
         bool running;
         running = true;
 	bool play_selected;
@@ -192,6 +219,22 @@ bool MainMenu::show(int width, int height)
                                         play_selected = true;
                                         running = false;
                                 }
+                                else if (mouse_x >= leaderboard_rect.x &&
+                                                 mouse_x < leaderboard_rect.x +
+                                                                 leaderboard_rect.w &&
+                                                 mouse_y >= leaderboard_rect.y &&
+                                                 mouse_y < leaderboard_rect.y +
+                                                                 leaderboard_rect.h)
+                                {
+                                        // Leaderboard functionality to be implemented
+                                }
+                                else if (mouse_x >= settings_rect.x &&
+                                                 mouse_x < settings_rect.x + settings_rect.w &&
+                                                 mouse_y >= settings_rect.y &&
+                                                 mouse_y < settings_rect.y + settings_rect.h)
+                                {
+                                        // Settings functionality to be implemented
+                                }
                                 else if (mouse_x >= quit_rect.x &&
                                                  mouse_x < quit_rect.x + quit_rect.w &&
                                                  mouse_y >= quit_rect.y &&
@@ -204,10 +247,16 @@ bool MainMenu::show(int width, int height)
                 int mouse_x;
                 int mouse_y;
 		SDL_GetMouseState(&mouse_x, &mouse_y);
-		bool hover_play;
-		hover_play =
-			mouse_x >= play_rect.x && mouse_x < play_rect.x + play_rect.w &&
-			mouse_y >= play_rect.y && mouse_y < play_rect.y + play_rect.h;
+                bool hover_play;
+                hover_play =
+                        mouse_x >= play_rect.x && mouse_x < play_rect.x + play_rect.w &&
+                        mouse_y >= play_rect.y && mouse_y < play_rect.y + play_rect.h;
+                bool hover_leaderboard;
+                hover_leaderboard =
+                        mouse_x >= leaderboard_rect.x &&
+                        mouse_x < leaderboard_rect.x + leaderboard_rect.w &&
+                        mouse_y >= leaderboard_rect.y &&
+                        mouse_y < leaderboard_rect.y + leaderboard_rect.h;
                 bool hover_settings;
                 hover_settings = mouse_x >= settings_rect.x &&
                                                  mouse_x < settings_rect.x + settings_rect.w &&
@@ -220,33 +269,55 @@ bool MainMenu::show(int width, int height)
                                          mouse_y < quit_rect.y + quit_rect.h;
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
                 SDL_RenderClear(renderer);
+                SDL_Color white;
+                white = {255, 255, 255, 255};
+                std::string title;
+                title = "MINIRT THE GAME";
+                int title_width;
+                title_width = text_width(title, title_scale);
+                int title_x;
+                title_x = width / 2 - title_width / 2;
+                std::vector<SDL_Color> title_colors;
+                title_colors = {{0, 0, 255, 255}, {255, 255, 0, 255},
+                                                {0, 255, 0, 255}, {255, 0, 0, 255},
+                                                {0, 255, 255, 255}, {128, 0, 128, 255}};
+                draw_colored_text(renderer, title, title_x, title_y, title_colors,
+                                                  white, title_scale);
                 SDL_Color fill;
-                fill =
-                        hover_play ? SDL_Color{0, 128, 128, 255} : SDL_Color{0, 0, 0, 255};
-		SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
-		SDL_RenderFillRect(renderer, &play_rect);
-		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-		SDL_RenderDrawRect(renderer, &play_rect);
-		int scale;
-		scale = 4;
-		SDL_Color white;
-		white = {255, 255, 255, 255};
-		int text_x;
-		int text_y;
-		text_x = play_rect.x + (play_rect.w - text_width("PLAY", scale)) / 2;
-		text_y = play_rect.y + (play_rect.h - 7 * scale) / 2;
-		draw_text(renderer, "PLAY", text_x, text_y, white, scale);
-		fill = hover_settings ? SDL_Color{0, 128, 128, 255}
-							  : SDL_Color{0, 0, 0, 255};
-		SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
-		SDL_RenderFillRect(renderer, &settings_rect);
-		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                fill = hover_play ? SDL_Color{0, 255, 0, 255}
+                                                  : SDL_Color{0, 0, 0, 255};
+                SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+                SDL_RenderFillRect(renderer, &play_rect);
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                SDL_RenderDrawRect(renderer, &play_rect);
+                int scale;
+                scale = 4;
+                int text_x;
+                int text_y;
+                text_x = play_rect.x + (play_rect.w - text_width("PLAY", scale)) / 2;
+                text_y = play_rect.y + (play_rect.h - 7 * scale) / 2;
+                draw_text(renderer, "PLAY", text_x, text_y, white, scale);
+                fill = hover_leaderboard ? SDL_Color{0, 0, 255, 255}
+                                                           : SDL_Color{0, 0, 0, 255};
+                SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+                SDL_RenderFillRect(renderer, &leaderboard_rect);
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                SDL_RenderDrawRect(renderer, &leaderboard_rect);
+                text_x = leaderboard_rect.x +
+                                 (leaderboard_rect.w - text_width("LEADERBOARD", scale)) / 2;
+                text_y = leaderboard_rect.y + (leaderboard_rect.h - 7 * scale) / 2;
+                draw_text(renderer, "LEADERBOARD", text_x, text_y, white, scale);
+                fill = hover_settings ? SDL_Color{255, 255, 0, 255}
+                                                          : SDL_Color{0, 0, 0, 255};
+                SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+                SDL_RenderFillRect(renderer, &settings_rect);
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
                 SDL_RenderDrawRect(renderer, &settings_rect);
                 text_x = settings_rect.x +
                                  (settings_rect.w - text_width("SETTINGS", scale)) / 2;
                 text_y = settings_rect.y + (settings_rect.h - 7 * scale) / 2;
                 draw_text(renderer, "SETTINGS", text_x, text_y, white, scale);
-                fill = hover_quit ? SDL_Color{0, 128, 128, 255}
+                fill = hover_quit ? SDL_Color{255, 0, 0, 255}
                                                   : SDL_Color{0, 0, 0, 255};
                 SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
                 SDL_RenderFillRect(renderer, &quit_rect);
