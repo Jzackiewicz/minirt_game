@@ -44,29 +44,41 @@ const uint8_t *get_glyph(char character)
 										0x11, 0x11, 0x11};
 		return data;
 	}
-	case 'P':
-	{
-		static const uint8_t data[7] = {0x1E, 0x11, 0x11, 0x1E,
-										0x10, 0x10, 0x10};
-		return data;
-	}
-	case 'S':
-	{
-		static const uint8_t data[7] = {0x0F, 0x10, 0x10, 0x0E,
-										0x01, 0x01, 0x1E};
-		return data;
-	}
-	case 'T':
-	{
-		static const uint8_t data[7] = {0x1F, 0x04, 0x04, 0x04,
-										0x04, 0x04, 0x04};
-		return data;
-	}
-	case 'Y':
-	{
-		static const uint8_t data[7] = {0x11, 0x11, 0x0A, 0x04,
-										0x04, 0x04, 0x04};
-		return data;
+        case 'P':
+        {
+                static const uint8_t data[7] = {0x1E, 0x11, 0x11, 0x1E,
+                                                                                0x10, 0x10, 0x10};
+                return data;
+        }
+        case 'Q':
+        {
+                static const uint8_t data[7] = {0x0E, 0x11, 0x11, 0x11,
+                                                                                0x11, 0x13, 0x0F};
+                return data;
+        }
+        case 'S':
+        {
+                static const uint8_t data[7] = {0x0F, 0x10, 0x10, 0x0E,
+                                                                                0x01, 0x01, 0x1E};
+                return data;
+        }
+        case 'T':
+        {
+                static const uint8_t data[7] = {0x1F, 0x04, 0x04, 0x04,
+                                                                                0x04, 0x04, 0x04};
+                return data;
+        }
+        case 'U':
+        {
+                static const uint8_t data[7] = {0x11, 0x11, 0x11, 0x11,
+                                                                                0x11, 0x11, 0x0E};
+                return data;
+        }
+        case 'Y':
+        {
+                static const uint8_t data[7] = {0x11, 0x11, 0x0A, 0x04,
+                                                                                0x04, 0x04, 0x04};
+                return data;
 	}
 	default:
 		return nullptr;
@@ -135,12 +147,25 @@ bool MainMenu::show(int width, int height)
 		SDL_Quit();
 		return false;
 	}
-	SDL_Rect play_rect;
-	play_rect = {width / 2 - 150, height / 2 - 150, 300, 100};
-	SDL_Rect settings_rect;
-	settings_rect = {width / 2 - 150, height / 2 + 50, 300, 100};
-	bool running;
-	running = true;
+        int button_width;
+        button_width = 300;
+        int button_height;
+        button_height = 100;
+        int margin;
+        margin = (height - 3 * button_height) / 4;
+        SDL_Rect play_rect;
+        play_rect = {width / 2 - button_width / 2, margin, button_width,
+                                  button_height};
+        SDL_Rect settings_rect;
+        settings_rect = {width / 2 - button_width / 2,
+                                         margin * 2 + button_height, button_width,
+                                         button_height};
+        SDL_Rect quit_rect;
+        quit_rect = {width / 2 - button_width / 2,
+                                      margin * 3 + 2 * button_height, button_width,
+                                      button_height};
+        bool running;
+        running = true;
 	bool play_selected;
 	play_selected = false;
 	while (running)
@@ -159,33 +184,45 @@ bool MainMenu::show(int width, int height)
 				int mouse_y;
 				mouse_x = event.button.x;
 				mouse_y = event.button.y;
-				if (mouse_x >= play_rect.x &&
-					mouse_x < play_rect.x + play_rect.w &&
-					mouse_y >= play_rect.y &&
-					mouse_y < play_rect.y + play_rect.h)
-				{
-					play_selected = true;
-					running = false;
-				}
-			}
-		}
-		int mouse_x;
-		int mouse_y;
+                                if (mouse_x >= play_rect.x &&
+                                        mouse_x < play_rect.x + play_rect.w &&
+                                        mouse_y >= play_rect.y &&
+                                        mouse_y < play_rect.y + play_rect.h)
+                                {
+                                        play_selected = true;
+                                        running = false;
+                                }
+                                else if (mouse_x >= quit_rect.x &&
+                                                 mouse_x < quit_rect.x + quit_rect.w &&
+                                                 mouse_y >= quit_rect.y &&
+                                                 mouse_y < quit_rect.y + quit_rect.h)
+                                {
+                                        running = false;
+                                }
+                        }
+                }
+                int mouse_x;
+                int mouse_y;
 		SDL_GetMouseState(&mouse_x, &mouse_y);
 		bool hover_play;
 		hover_play =
 			mouse_x >= play_rect.x && mouse_x < play_rect.x + play_rect.w &&
 			mouse_y >= play_rect.y && mouse_y < play_rect.y + play_rect.h;
-		bool hover_settings;
-		hover_settings = mouse_x >= settings_rect.x &&
-						 mouse_x < settings_rect.x + settings_rect.w &&
-						 mouse_y >= settings_rect.y &&
-						 mouse_y < settings_rect.y + settings_rect.h;
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-		SDL_RenderClear(renderer);
-		SDL_Color fill;
-		fill =
-			hover_play ? SDL_Color{0, 128, 128, 255} : SDL_Color{0, 0, 0, 255};
+                bool hover_settings;
+                hover_settings = mouse_x >= settings_rect.x &&
+                                                 mouse_x < settings_rect.x + settings_rect.w &&
+                                                 mouse_y >= settings_rect.y &&
+                                                 mouse_y < settings_rect.y + settings_rect.h;
+                bool hover_quit;
+                hover_quit = mouse_x >= quit_rect.x &&
+                                         mouse_x < quit_rect.x + quit_rect.w &&
+                                         mouse_y >= quit_rect.y &&
+                                         mouse_y < quit_rect.y + quit_rect.h;
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                SDL_RenderClear(renderer);
+                SDL_Color fill;
+                fill =
+                        hover_play ? SDL_Color{0, 128, 128, 255} : SDL_Color{0, 0, 0, 255};
 		SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
 		SDL_RenderFillRect(renderer, &play_rect);
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
@@ -204,16 +241,25 @@ bool MainMenu::show(int width, int height)
 		SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
 		SDL_RenderFillRect(renderer, &settings_rect);
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-		SDL_RenderDrawRect(renderer, &settings_rect);
-		text_x = settings_rect.x +
-				 (settings_rect.w - text_width("SETTINGS", scale)) / 2;
-		text_y = settings_rect.y + (settings_rect.h - 7 * scale) / 2;
-		draw_text(renderer, "SETTINGS", text_x, text_y, white, scale);
-		SDL_RenderPresent(renderer);
-		SDL_Delay(16);
-	}
-	SDL_DestroyRenderer(renderer);
-	SDL_DestroyWindow(window);
-	SDL_Quit();
-	return play_selected;
+                SDL_RenderDrawRect(renderer, &settings_rect);
+                text_x = settings_rect.x +
+                                 (settings_rect.w - text_width("SETTINGS", scale)) / 2;
+                text_y = settings_rect.y + (settings_rect.h - 7 * scale) / 2;
+                draw_text(renderer, "SETTINGS", text_x, text_y, white, scale);
+                fill = hover_quit ? SDL_Color{0, 128, 128, 255}
+                                                  : SDL_Color{0, 0, 0, 255};
+                SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+                SDL_RenderFillRect(renderer, &quit_rect);
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                SDL_RenderDrawRect(renderer, &quit_rect);
+                text_x = quit_rect.x + (quit_rect.w - text_width("QUIT", scale)) / 2;
+                text_y = quit_rect.y + (quit_rect.h - 7 * scale) / 2;
+                draw_text(renderer, "QUIT", text_x, text_y, white, scale);
+                SDL_RenderPresent(renderer);
+                SDL_Delay(16);
+        }
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return play_selected;
 }
