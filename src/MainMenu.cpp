@@ -189,30 +189,33 @@ bool MainMenu::show(int width, int height)
         button_height = 100;
         int scale;
         scale = 4;
+        int title_scale;
+        title_scale = scale * 2;
         std::string title;
         title = "MINIRT THE GAME";
-        int title_height;
-        title_height = 7 * scale;
-        int margin;
-        margin = (height - title_height - 4 * button_height) / 6;
+        int button_gap;
+        button_gap = 10;
+        int top_distance;
+        top_distance = (height - 4 * button_height - 3 * button_gap) / 2;
         int center_x;
         center_x = width / 2 - button_width / 2;
-        int title_x;
-        title_x = width / 2 - text_width(title, scale) / 2;
-        int title_y;
-        title_y = margin;
         SDL_Rect play_rect;
-        play_rect = {center_x, title_y + title_height + margin, button_width,
-                                  button_height};
+        play_rect = {center_x, top_distance, button_width, button_height};
         SDL_Rect leaderboard_rect;
-        leaderboard_rect = {center_x, play_rect.y + button_height + margin,
+        leaderboard_rect = {center_x, play_rect.y + button_height + button_gap,
                                                 button_width, button_height};
         SDL_Rect settings_rect;
-        settings_rect = {center_x, leaderboard_rect.y + button_height + margin,
-                                         button_width, button_height};
+        settings_rect = {center_x, leaderboard_rect.y + button_height +
+                                         button_gap, button_width, button_height};
         SDL_Rect quit_rect;
-        quit_rect = {center_x, settings_rect.y + button_height + margin,
+        quit_rect = {center_x, settings_rect.y + button_height + button_gap,
                                       button_width, button_height};
+        int title_x;
+        title_x = width / 2 - text_width(title, title_scale) / 2;
+        int title_y;
+        title_y = play_rect.y - button_gap - 7 * title_scale;
+        if (title_y < 0)
+                title_y = 0;
         bool running;
         running = true;
         bool play_selected;
@@ -297,8 +300,9 @@ bool MainMenu::show(int width, int height)
                                 color = {0, 255, 255, 255};
                         else if (i == 5)
                                 color = {128, 0, 128, 255};
-                        draw_character(renderer, title[i], x, title_y, color, scale);
-                        x += (5 + 1) * scale;
+                        draw_character(renderer, title[i], x, title_y, color,
+                                                        title_scale);
+                        x += (5 + 1) * title_scale;
                 }
                 SDL_Color fill;
                 fill = hover_play ? SDL_Color{0, 255, 0, 255}
