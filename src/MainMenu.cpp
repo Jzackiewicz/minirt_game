@@ -195,12 +195,23 @@ bool MainMenu::show(int width, int height)
         title = "MINIRT THE GAME";
         int button_gap;
         button_gap = 10;
-        int top_distance;
-        top_distance = (height - 4 * button_height - 3 * button_gap) / 2;
+        int title_gap;
+        title_gap = 20;
+        int margin;
+        margin = (height - 7 * title_scale - title_gap -
+                                   4 * button_height - 3 * button_gap) /
+                         2;
+        if (margin < 0)
+                margin = 0;
         int center_x;
         center_x = width / 2 - button_width / 2;
+        int title_x;
+        title_x = width / 2 - text_width(title, title_scale) / 2;
+        int title_y;
+        title_y = margin;
         SDL_Rect play_rect;
-        play_rect = {center_x, top_distance, button_width, button_height};
+        play_rect = {center_x, title_y + 7 * title_scale + title_gap, button_width,
+                                     button_height};
         SDL_Rect leaderboard_rect;
         leaderboard_rect = {center_x, play_rect.y + button_height + button_gap,
                                                 button_width, button_height};
@@ -210,12 +221,6 @@ bool MainMenu::show(int width, int height)
         SDL_Rect quit_rect;
         quit_rect = {center_x, settings_rect.y + button_height + button_gap,
                                       button_width, button_height};
-        int title_x;
-        title_x = width / 2 - text_width(title, title_scale) / 2;
-        int title_y;
-        title_y = play_rect.y - button_gap - 7 * title_scale;
-        if (title_y < 0)
-                title_y = 0;
         bool running;
         running = true;
         bool play_selected;
