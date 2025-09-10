@@ -1,4 +1,5 @@
 #include "Renderer.hpp"
+#include "Settings.hpp"
 #include "AABB.hpp"
 #include "Config.hpp"
 #include "Parser.hpp"
@@ -308,7 +309,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 {
                         if (st.edit_mode && st.rotating)
                         {
-                                double sens = MOUSE_SENSITIVITY;
+                                double sens = MOUSE_SENSITIVITY * get_settings().mouse_sensitivity;
                                 bool changed = false;
                                 double yaw = -e.motion.xrel * sens;
                                 if (yaw != 0.0)
@@ -339,7 +340,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         }
                         else
                         {
-                                double sens = MOUSE_SENSITIVITY;
+                                double sens = MOUSE_SENSITIVITY * get_settings().mouse_sensitivity;
                                 cam.rotate(-e.motion.xrel * sens,
                                                    -e.motion.yrel * sens);
                         }

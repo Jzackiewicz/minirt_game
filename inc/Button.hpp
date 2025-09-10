@@ -10,6 +10,7 @@ enum class ButtonAction {
     Settings,
     Leaderboard,
     Back,
+    Apply,
     Quit
 };
 
