@@ -1,6 +1,7 @@
 #include "Renderer.hpp"
 #include "AABB.hpp"
 #include "Config.hpp"
+#include "Settings.hpp"
 #include "Parser.hpp"
 #include "PauseMenu.hpp"
 #include <SDL.h>
@@ -308,7 +309,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 {
                         if (st.edit_mode && st.rotating)
                         {
-                                double sens = MOUSE_SENSITIVITY;
+                                double sens = get_mouse_sensitivity();
                                 bool changed = false;
                                 double yaw = -e.motion.xrel * sens;
                                 if (yaw != 0.0)
@@ -339,7 +340,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         }
                         else
                         {
-                                double sens = MOUSE_SENSITIVITY;
+                                double sens = get_mouse_sensitivity();
                                 cam.rotate(-e.motion.xrel * sens,
                                                    -e.motion.yrel * sens);
                         }
@@ -378,7 +379,16 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         SDL_SetWindowGrab(win, SDL_FALSE);
                         SDL_WarpMouseInWindow(win, W / 2, H / 2);
                         bool resume = PauseMenu::show(win, ren, W, H);
-                        if (resume)
+                        if (g_reload_requested)
+                        {
+                                std::string tmp = "scenes/tmp_reload.rt";
+                                if (!Parser::save_rt_file(tmp, scene, cam, mats))
+                                        std::cerr << "Failed to save temp scene to: " << tmp
+                                                  << "\n";
+                                g_reload_scene_path = tmp;
+                                st.running = false;
+                        }
+                        else if (resume)
                         {
                                 st.focused = true;
                                 SDL_SetRelativeMouseMode(SDL_TRUE);
