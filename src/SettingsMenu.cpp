@@ -1,10 +1,408 @@
 #include "SettingsMenu.hpp"
+#include "CustomCharacter.hpp"
+#include <sstream>
+#include <cmath>
+#include <iomanip>
+
+// -----------------------------------------------------------------------------
+// ButtonsCluster implementation
+// -----------------------------------------------------------------------------
+
+ButtonsCluster::ButtonsCluster(const std::vector<std::string> &labels)
+    : selected(labels.empty() ? -1 : 0) {
+    for (const auto &l : labels) {
+        buttons.push_back(Button{l, ButtonAction::None, SDL_Color{0, 0, 0, 255}});
+    }
+}
+
+void ButtonsCluster::layout(int x, int y, int width, int height, int gap) {
+    if (buttons.empty())
+        return;
+    int btn_width = (width - static_cast<int>(buttons.size() - 1) * gap) /
+                    static_cast<int>(buttons.size());
+    for (std::size_t i = 0; i < buttons.size(); ++i) {
+        buttons[i].rect = {x + static_cast<int>(i) * (btn_width + gap), y, btn_width,
+                           height};
+    }
+}
+
+void ButtonsCluster::handle_event(const SDL_Event &event) {
+    if (event.type == SDL_MOUSEBUTTONDOWN &&
+        event.button.button == SDL_BUTTON_LEFT) {
+        int mx = event.button.x;
+        int my = event.button.y;
+        for (std::size_t i = 0; i < buttons.size(); ++i) {
+            const SDL_Rect &r = buttons[i].rect;
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                selected = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+}
+
+void ButtonsCluster::draw(SDL_Renderer *renderer, int scale) const {
+    SDL_Color white{255, 255, 255, 255};
+    SDL_Color black{0, 0, 0, 255};
+    for (std::size_t i = 0; i < buttons.size(); ++i) {
+        const SDL_Rect &rect = buttons[i].rect;
+        bool pressed = static_cast<int>(i) == selected;
+        SDL_Color fill = pressed ? white : black;
+        SDL_Color text = pressed ? black : white;
+        SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+        SDL_RenderFillRect(renderer, &rect);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &rect);
+        int text_x = rect.x + (rect.w - CustomCharacter::text_width(buttons[i].text, scale)) / 2;
+        int text_y = rect.y + (rect.h - 7 * scale) / 2;
+        CustomCharacter::draw_text(renderer, buttons[i].text, text_x, text_y, text, scale);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Slider implementation
+// -----------------------------------------------------------------------------
+
+Slider::Slider(const std::vector<std::string> &vals, int default_index)
+    : values(vals), selected(default_index), dragging(false) {}
+
+void Slider::layout(int x, int y, int width, int height, int scale) {
+    int bar_height = scale * 4;
+    if (bar_height < 1)
+        bar_height = 1;
+    bar_rect = {x, y + (height - bar_height) / 2, width, bar_height};
+    knob_rect.w = scale * 2;
+    if (knob_rect.w < 1)
+        knob_rect.w = 1;
+    knob_rect.h = bar_rect.h;
+    update_knob();
+}
+
+int Slider::index_from_pos(int mx) const {
+    if (values.empty())
+        return 0;
+    int usable_width = bar_rect.w - knob_rect.w;
+    if (usable_width <= 0)
+        return 0;
+    int rel = mx - bar_rect.x - knob_rect.w / 2;
+    if (rel < 0)
+        rel = 0;
+    if (rel > usable_width)
+        rel = usable_width;
+    float t = static_cast<float>(rel) / static_cast<float>(usable_width);
+    int idx = static_cast<int>(std::round(t * (values.size() - 1)));
+    if (idx < 0)
+        idx = 0;
+    if (idx >= static_cast<int>(values.size()))
+        idx = static_cast<int>(values.size()) - 1;
+    return idx;
+}
+
+void Slider::update_knob() {
+    if (values.empty())
+        return;
+    int usable_width = bar_rect.w - knob_rect.w;
+    if (usable_width < 0)
+        usable_width = 0;
+    float t = 0.0f;
+    if (values.size() > 1)
+        t = static_cast<float>(selected) / static_cast<float>(values.size() - 1);
+    knob_rect.x = bar_rect.x + static_cast<int>(t * usable_width);
+    knob_rect.y = bar_rect.y;
+}
+
+void Slider::handle_event(const SDL_Event &event) {
+    if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+        int mx = event.button.x;
+        int my = event.button.y;
+        SDL_Rect hit_rect = {bar_rect.x - knob_rect.w / 2, bar_rect.y,
+                             bar_rect.w + knob_rect.w, bar_rect.h};
+        if (mx >= hit_rect.x && mx < hit_rect.x + hit_rect.w && my >= hit_rect.y &&
+            my < hit_rect.y + hit_rect.h) {
+            dragging = true;
+            selected = index_from_pos(mx);
+            update_knob();
+        }
+    } else if (event.type == SDL_MOUSEBUTTONUP &&
+               event.button.button == SDL_BUTTON_LEFT) {
+        dragging = false;
+    } else if (event.type == SDL_MOUSEMOTION && dragging) {
+        int mx = event.motion.x;
+        selected = index_from_pos(mx);
+        update_knob();
+    }
+}
+
+void Slider::draw(SDL_Renderer *renderer, int scale) const {
+    SDL_Color white{255, 255, 255, 255};
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderFillRect(renderer, &bar_rect);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &bar_rect);
+
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    SDL_RenderFillRect(renderer, &knob_rect);
+
+    int text_x = bar_rect.x + bar_rect.w + 2 * scale;
+    int text_y = bar_rect.y + (bar_rect.h - 7 * scale) / 2;
+    CustomCharacter::draw_text(renderer, current(), text_x, text_y, white, scale);
+}
+
+// -----------------------------------------------------------------------------
+// SettingsSection implementation
+// -----------------------------------------------------------------------------
+
+SettingsSection::SettingsSection(const std::string &text) : label(text) {}
+
+void SettingsSection::layout(int x, int y, int width, int height, int scale) {
+    int label_height = 7 * scale;
+    int gap = 2 * scale;
+    content_rect = {x, y + label_height + gap, width,
+                    height - label_height - gap};
+}
+
+void SettingsSection::draw(SDL_Renderer *renderer, int scale) const {
+    SDL_Color white{255, 255, 255, 255};
+    int label_width = CustomCharacter::text_width(label, scale);
+    int label_height = 7 * scale;
+    int label_x = content_rect.x + (content_rect.w - label_width) / 2;
+    int label_y = content_rect.y - label_height - 2 * scale;
+    CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
+
+    // Placeholder rectangle for content
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &content_rect);
+}
+
+// -----------------------------------------------------------------------------
+// QualitySection implementation
+// -----------------------------------------------------------------------------
+
+QualitySection::QualitySection()
+    : SettingsSection("QUALITY"),
+      cluster({"LOW", "MEDIUM", "HIGH"}) {
+    cluster.selected = 2; // default to HIGH
+}
+
+void QualitySection::layout(int x, int y, int width, int height, int scale) {
+    SettingsSection::layout(x, y, width, height, scale);
+    int gap = 2 * scale;
+    cluster.layout(content_rect.x, content_rect.y, content_rect.w, content_rect.h, gap);
+}
+
+void QualitySection::handle_event(const SDL_Event &event) {
+    cluster.handle_event(event);
+}
+
+void QualitySection::draw(SDL_Renderer *renderer, int scale) const {
+    // Draw label (without placeholder rectangle)
+    SDL_Color white{255, 255, 255, 255};
+    int label_width = CustomCharacter::text_width(label, scale);
+    int label_height = 7 * scale;
+    int label_x = content_rect.x + (content_rect.w - label_width) / 2;
+    int label_y = content_rect.y - label_height - 2 * scale;
+    CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
+
+    cluster.draw(renderer, scale);
+}
+
+// -----------------------------------------------------------------------------
+// Slider-based sections
+// -----------------------------------------------------------------------------
+
+MouseSensitivitySection::MouseSensitivitySection()
+    : SettingsSection("MOUSE SENSITIVITY"),
+      slider([] {
+          std::vector<std::string> vals;
+          for (int i = 1; i <= 20; ++i) {
+              float v = static_cast<float>(i) / 10.0f;
+              std::ostringstream oss;
+              oss.setf(std::ios::fixed);
+              oss.precision(1);
+              oss << v;
+              vals.push_back(oss.str());
+          }
+          return vals;
+      }(), 9) // default 1.0
+{}
+
+void MouseSensitivitySection::layout(int x, int y, int width, int height, int scale) {
+    SettingsSection::layout(x, y, width, height, scale);
+    slider.layout(content_rect.x, content_rect.y, content_rect.w, content_rect.h, scale);
+}
+
+void MouseSensitivitySection::handle_event(const SDL_Event &event) {
+    slider.handle_event(event);
+}
+
+void MouseSensitivitySection::draw(SDL_Renderer *renderer, int scale) const {
+    SDL_Color white{255, 255, 255, 255};
+    int label_width = CustomCharacter::text_width(label, scale);
+    int label_height = 7 * scale;
+    int label_x = content_rect.x + (content_rect.w - label_width) / 2;
+    int label_y = content_rect.y - label_height - 2 * scale;
+    CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
+
+    slider.draw(renderer, scale);
+}
+
+ResolutionSection::ResolutionSection()
+    : SettingsSection("RESOLUTION"),
+      slider({"720x480", "1080x720", "1366x768", "1920x1080"}, 1) {}
+
+void ResolutionSection::layout(int x, int y, int width, int height, int scale) {
+    SettingsSection::layout(x, y, width, height, scale);
+    slider.layout(content_rect.x, content_rect.y, content_rect.w, content_rect.h, scale);
+}
+
+void ResolutionSection::handle_event(const SDL_Event &event) {
+    slider.handle_event(event);
+}
+
+void ResolutionSection::draw(SDL_Renderer *renderer, int scale) const {
+    SDL_Color white{255, 255, 255, 255};
+    int label_width = CustomCharacter::text_width(label, scale);
+    int label_height = 7 * scale;
+    int label_x = content_rect.x + (content_rect.w - label_width) / 2;
+    int label_y = content_rect.y - label_height - 2 * scale;
+    CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
+
+    slider.draw(renderer, scale);
+}
+
+// -----------------------------------------------------------------------------
+// SettingsMenu implementation
+// -----------------------------------------------------------------------------
 
 SettingsMenu::SettingsMenu() : AMenu("SETTINGS") {
+    // Bottom buttons
     buttons.push_back(Button{"BACK", ButtonAction::Back, SDL_Color{255, 0, 0, 255}});
+    buttons.push_back(Button{"APPLY", ButtonAction::None, SDL_Color{0, 255, 0, 255}});
 }
 
 void SettingsMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height) {
     SettingsMenu menu;
     menu.run(window, renderer, width, height);
 }
+
+ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width,
+                               int height) {
+    bool running = true;
+    ButtonAction result = ButtonAction::None;
+    SDL_Color white{255, 255, 255, 255};
+
+    while (running) {
+        SDL_GetWindowSize(window, &width, &height);
+        float scale_factor = static_cast<float>(height) / 600.0f;
+        int scale = static_cast<int>(4 * scale_factor);
+        if (scale < 1)
+            scale = 1;
+        int title_scale = scale * 2;
+        int title_height = 7 * title_scale;
+        int title_gap = static_cast<int>(40 * scale_factor);
+
+        // Section layout values
+        int section_width = static_cast<int>(500 * scale_factor);
+        int content_height = static_cast<int>(70 * scale_factor);
+        int section_height = content_height + 7 * scale + 2 * scale; // content + label + gap
+        int section_gap = static_cast<int>(30 * scale_factor);
+
+        int button_width = static_cast<int>(150 * scale_factor);
+        int button_height = static_cast<int>(80 * scale_factor);
+        int button_gap = static_cast<int>(20 * scale_factor);
+
+        int total_sections_height = 3 * section_height + 2 * section_gap;
+        int total_bottom_width = 2 * button_width + button_gap;
+
+        int total_height = title_height + title_gap + total_sections_height + section_gap +
+                           button_height;
+        int top_margin = (height - total_height) / 2;
+        if (top_margin < 0)
+            top_margin = 0;
+
+        int title_x = width / 2 - CustomCharacter::text_width(title, title_scale) / 2;
+        int title_y = top_margin;
+
+        int section_x = width / 2 - section_width / 2;
+        int section_start_y = title_y + title_height + title_gap;
+
+        quality.layout(section_x, section_start_y, section_width, section_height, scale);
+        mouse_sensitivity.layout(section_x,
+                                 section_start_y + section_height + section_gap,
+                                 section_width, section_height, scale);
+        resolution.layout(section_x,
+                          section_start_y + 2 * (section_height + section_gap),
+                          section_width, section_height, scale);
+
+        int buttons_start_y = section_start_y + 3 * section_height + 2 * section_gap + section_gap;
+        int buttons_start_x = width / 2 - total_bottom_width / 2;
+        for (std::size_t i = 0; i < buttons.size(); ++i) {
+            buttons[i].rect = {buttons_start_x + static_cast<int>(i) *
+                                               (button_width + button_gap),
+                               buttons_start_y, button_width, button_height};
+        }
+
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                running = false;
+                result = ButtonAction::Quit;
+            }
+
+            // Pass events to sections
+            quality.handle_event(event);
+            mouse_sensitivity.handle_event(event);
+            resolution.handle_event(event);
+
+            if (event.type == SDL_MOUSEBUTTONDOWN &&
+                event.button.button == SDL_BUTTON_LEFT) {
+                int mx = event.button.x;
+                int my = event.button.y;
+
+                // Bottom buttons
+                for (auto &btn : buttons) {
+                    if (mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
+                        my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
+                        if (btn.action == ButtonAction::Back) {
+                            result = btn.action;
+                            running = false;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        int mx, my;
+        SDL_GetMouseState(&mx, &my);
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+
+        CustomCharacter::draw_text(renderer, title, title_x, title_y, white, title_scale);
+
+        quality.draw(renderer, scale);
+        mouse_sensitivity.draw(renderer, scale);
+        resolution.draw(renderer, scale);
+
+        for (auto &btn : buttons) {
+            bool hover = mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
+                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h;
+            SDL_Color fill = hover ? btn.hover_color : SDL_Color{0, 0, 0, 255};
+            SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+            SDL_RenderFillRect(renderer, &btn.rect);
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            SDL_RenderDrawRect(renderer, &btn.rect);
+            int text_x =
+                btn.rect.x + (btn.rect.w - CustomCharacter::text_width(btn.text, scale)) / 2;
+            int text_y = btn.rect.y + (btn.rect.h - 7 * scale) / 2;
+            CustomCharacter::draw_text(renderer, btn.text, text_x, text_y, white, scale);
+        }
+
+        SDL_RenderPresent(renderer);
+        SDL_Delay(16);
+    }
+
+    return result;
+}
+
