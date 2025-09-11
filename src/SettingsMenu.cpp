@@ -1,9 +1,11 @@
 #include "SettingsMenu.hpp"
 #include "CustomCharacter.hpp"
+#include "Settings.hpp"
 #include <sstream>
 #include <cmath>
 #include <iomanip>
 #include <algorithm>
+#include <cstdlib>
 
 // -----------------------------------------------------------------------------
 // ButtonsCluster implementation
@@ -210,7 +212,12 @@ void SettingsSection::draw(SDL_Renderer *renderer, int scale) const {
 QualitySection::QualitySection()
     : SettingsSection("QUALITY"),
       cluster({"LOW", "MEDIUM", "HIGH"}) {
-    cluster.selected = 2; // default to HIGH
+    if (g_settings.quality == 'L')
+        cluster.selected = 0;
+    else if (g_settings.quality == 'M')
+        cluster.selected = 1;
+    else
+        cluster.selected = 2;
 }
 
 void QualitySection::layout(int x, int y, int width, int height, int scale) {
@@ -235,6 +242,10 @@ void QualitySection::draw(SDL_Renderer *renderer, int scale) const {
     cluster.draw(renderer, scale);
 }
 
+char QualitySection::current() const {
+    return cluster.selected == 0 ? 'L' : (cluster.selected == 1 ? 'M' : 'H');
+}
+
 // -----------------------------------------------------------------------------
 // Slider-based sections
 // -----------------------------------------------------------------------------
@@ -252,8 +263,14 @@ MouseSensitivitySection::MouseSensitivitySection()
               vals.push_back(oss.str());
           }
           return vals;
-      }(), 9) // default 1.0
-{}
+      }(), 9) {
+    int idx = static_cast<int>(g_settings.mouse_sensitivity * 10.0f) - 1;
+    if (idx < 0)
+        idx = 0;
+    if (idx >= static_cast<int>(slider.values.size()))
+        idx = static_cast<int>(slider.values.size()) - 1;
+    slider.selected = idx;
+}
 
 void MouseSensitivitySection::layout(int x, int y, int width, int height, int scale) {
     SettingsSection::layout(x, y, width, height, scale);
@@ -275,9 +292,22 @@ void MouseSensitivitySection::draw(SDL_Renderer *renderer, int scale) const {
     slider.draw(renderer);
 }
 
+float MouseSensitivitySection::current() const {
+    return std::strtof(slider.current().c_str(), nullptr);
+}
+
 ResolutionSection::ResolutionSection()
     : SettingsSection("RESOLUTION"),
-      slider({"720x480", "1080x720", "1366x768", "1920x1080"}, 1) {}
+      slider({"720x480", "1080x720", "1366x768", "1920x1080"}, 1) {
+    std::ostringstream oss;
+    oss << g_settings.width << 'x' << g_settings.height;
+    for (std::size_t i = 0; i < slider.values.size(); ++i) {
+        if (slider.values[i] == oss.str()) {
+            slider.selected = static_cast<int>(i);
+            break;
+        }
+    }
+}
 
 void ResolutionSection::layout(int x, int y, int width, int height, int scale) {
     SettingsSection::layout(x, y, width, height, scale);
@@ -297,6 +327,10 @@ void ResolutionSection::draw(SDL_Renderer *renderer, int scale) const {
     CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
 
     slider.draw(renderer);
+}
+
+std::string ResolutionSection::current() const {
+    return slider.current();
 }
 
 // -----------------------------------------------------------------------------
@@ -393,7 +427,22 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
                     if (mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
                         if (btn.action == ButtonAction::Back) {
-                            result = btn.action;
+                            running = false;
+                        } else if (btn.text == "APPLY") {
+                            g_settings.quality = quality.current();
+                            g_settings.mouse_sensitivity =
+                                mouse_sensitivity.current();
+                            std::string cur = resolution.current();
+                            auto x = cur.find('x');
+                            if (x != std::string::npos) {
+                                g_settings.width =
+                                    std::atoi(cur.substr(0, x).c_str());
+                                g_settings.height =
+                                    std::atoi(cur.substr(x + 1).c_str());
+                                SDL_SetWindowSize(window, g_settings.width,
+                                                  g_settings.height);
+                            }
+                            save_settings();
                             running = false;
                         }
                         break;

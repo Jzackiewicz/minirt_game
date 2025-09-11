@@ -92,6 +92,7 @@ class QualitySection : public SettingsSection {
 public:
     QualitySection();
 
+    char current() const;
     void layout(int x, int y, int width, int height, int scale) override;
     void handle_event(const SDL_Event &event) override;
     void draw(SDL_Renderer *renderer, int scale) const override;
@@ -104,6 +105,7 @@ class MouseSensitivitySection : public SettingsSection {
 public:
     MouseSensitivitySection();
 
+    float current() const;
     void layout(int x, int y, int width, int height, int scale) override;
     void handle_event(const SDL_Event &event) override;
     void draw(SDL_Renderer *renderer, int scale) const override;
@@ -116,6 +118,7 @@ class ResolutionSection : public SettingsSection {
 public:
     ResolutionSection();
 
+    std::string current() const;
     void layout(int x, int y, int width, int height, int scale) override;
     void handle_event(const SDL_Event &event) override;
     void draw(SDL_Renderer *renderer, int scale) const override;
