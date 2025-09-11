@@ -1,5 +1,6 @@
 #include "SettingsMenu.hpp"
 #include "CustomCharacter.hpp"
+#include <cstdio>
 
 // -----------------------------------------------------------------------------
 // ButtonsCluster implementation
@@ -119,9 +120,58 @@ void QualitySection::draw(SDL_Renderer *renderer, int scale) const {
 // -----------------------------------------------------------------------------
 
 MouseSensitivitySection::MouseSensitivitySection()
-    : SettingsSection("MOUSE SENSITIVITY") {}
+    : SettingsSection("MOUSE SENSITIVITY"),
+      slider([] {
+          std::vector<std::string> vals;
+          for (int i = 1; i <= 20; ++i) {
+              char buf[16];
+              std::snprintf(buf, sizeof(buf), "%.1f", i / 10.0f);
+              vals.emplace_back(buf);
+          }
+          return vals;
+      }(), 9) {} // default to 1.0
 
-ResolutionSection::ResolutionSection() : SettingsSection("RESOLUTION") {}
+void MouseSensitivitySection::layout(int x, int y, int width, int height, int scale) {
+    SettingsSection::layout(x, y, width, height, scale);
+    slider.layout(content_rect.x, content_rect.y, content_rect.w, content_rect.h, scale);
+}
+
+void MouseSensitivitySection::handle_event(const SDL_Event &event) {
+    slider.handle_event(event);
+}
+
+void MouseSensitivitySection::draw(SDL_Renderer *renderer, int scale) const {
+    SDL_Color white{255, 255, 255, 255};
+    int label_width = CustomCharacter::text_width(label, scale);
+    int label_height = 7 * scale;
+    int label_x = content_rect.x + (content_rect.w - label_width) / 2;
+    int label_y = content_rect.y - label_height - 2 * scale;
+    CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
+    slider.draw(renderer, scale);
+}
+
+ResolutionSection::ResolutionSection()
+    : SettingsSection("RESOLUTION"),
+      slider({"720x480", "1080x720", "1366x768", "1920x1080"}, 3) {}
+
+void ResolutionSection::layout(int x, int y, int width, int height, int scale) {
+    SettingsSection::layout(x, y, width, height, scale);
+    slider.layout(content_rect.x, content_rect.y, content_rect.w, content_rect.h, scale);
+}
+
+void ResolutionSection::handle_event(const SDL_Event &event) {
+    slider.handle_event(event);
+}
+
+void ResolutionSection::draw(SDL_Renderer *renderer, int scale) const {
+    SDL_Color white{255, 255, 255, 255};
+    int label_width = CustomCharacter::text_width(label, scale);
+    int label_height = 7 * scale;
+    int label_x = content_rect.x + (content_rect.w - label_width) / 2;
+    int label_y = content_rect.y - label_height - 2 * scale;
+    CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
+    slider.draw(renderer, scale);
+}
 
 // -----------------------------------------------------------------------------
 // SettingsMenu implementation
@@ -204,8 +254,10 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
                        event.button.button == SDL_BUTTON_LEFT) {
                 int mx = event.button.x;
                 int my = event.button.y;
-                // Quality buttons
+                // Sections
                 quality.handle_event(event);
+                mouse_sensitivity.handle_event(event);
+                resolution.handle_event(event);
 
                 // Bottom buttons
                 for (auto &btn : buttons) {

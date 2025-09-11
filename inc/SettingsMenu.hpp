@@ -5,6 +5,7 @@
 #pragma once
 #include "AMenu.hpp"
 #include <vector>
+#include "Slider.hpp"
 
 struct SDL_Window;
 struct SDL_Renderer;
@@ -68,13 +69,23 @@ public:
 
 // Placeholder sections for future implementation
 class MouseSensitivitySection : public SettingsSection {
+    Slider slider;
+
 public:
     MouseSensitivitySection();
+    void layout(int x, int y, int width, int height, int scale) override;
+    void handle_event(const SDL_Event &event) override;
+    void draw(SDL_Renderer *renderer, int scale) const override;
 };
 
 class ResolutionSection : public SettingsSection {
+    Slider slider;
+
 public:
     ResolutionSection();
+    void layout(int x, int y, int width, int height, int scale) override;
+    void handle_event(const SDL_Event &event) override;
+    void draw(SDL_Renderer *renderer, int scale) const override;
 };
 
 // -----------------------------------------------------------------------------
