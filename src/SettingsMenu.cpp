@@ -67,14 +67,35 @@ Slider::Slider(const std::vector<std::string> &vals, int default_index)
     : values(vals), selected(default_index), dragging(false) {}
 
 void Slider::layout(int x, int y, int width, int height, int scale) {
-    int bar_height = scale * 4;
+    int bar_height = scale * 6;
     if (bar_height < 1)
         bar_height = 1;
-    bar_rect = {x, y + (height - bar_height) / 2, width, bar_height};
-    knob_rect.w = scale * 2;
+    int gap = 2 * scale;
+
+    int max_text_width = 0;
+    for (const auto &v : values) {
+        int w = CustomCharacter::text_width(v, scale);
+        if (w > max_text_width)
+            max_text_width = w;
+    }
+    value_rect.h = bar_height;
+    value_rect.w = max_text_width + 4 * scale;
+
+    bar_rect = {x, y + (height - bar_height) / 2,
+                width - value_rect.w - gap, bar_height};
+    if (bar_rect.w < 1)
+        bar_rect.w = 1;
+
+    value_rect.x = bar_rect.x + bar_rect.w + gap;
+    value_rect.y = bar_rect.y;
+
+    knob_rect.w = scale * 4;
     if (knob_rect.w < 1)
         knob_rect.w = 1;
-    knob_rect.h = bar_rect.h;
+    knob_rect.h = bar_rect.h + 2 * scale;
+    if (knob_rect.h < 1)
+        knob_rect.h = 1;
+
     update_knob();
 }
 
@@ -108,15 +129,15 @@ void Slider::update_knob() {
     if (values.size() > 1)
         t = static_cast<float>(selected) / static_cast<float>(values.size() - 1);
     knob_rect.x = bar_rect.x + static_cast<int>(t * usable_width);
-    knob_rect.y = bar_rect.y;
+    knob_rect.y = bar_rect.y - (knob_rect.h - bar_rect.h) / 2;
 }
 
 void Slider::handle_event(const SDL_Event &event) {
     if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
         int mx = event.button.x;
         int my = event.button.y;
-        SDL_Rect hit_rect = {bar_rect.x - knob_rect.w / 2, bar_rect.y,
-                             bar_rect.w + knob_rect.w, bar_rect.h};
+        SDL_Rect hit_rect = {bar_rect.x - knob_rect.w / 2, knob_rect.y,
+                             bar_rect.w + knob_rect.w, knob_rect.h};
         if (mx >= hit_rect.x && mx < hit_rect.x + hit_rect.w && my >= hit_rect.y &&
             my < hit_rect.y + hit_rect.h) {
             dragging = true;
@@ -143,8 +164,14 @@ void Slider::draw(SDL_Renderer *renderer, int scale) const {
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     SDL_RenderFillRect(renderer, &knob_rect);
 
-    int text_x = bar_rect.x + bar_rect.w + 2 * scale;
-    int text_y = bar_rect.y + (bar_rect.h - 7 * scale) / 2;
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderFillRect(renderer, &value_rect);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &value_rect);
+
+    int text_width = CustomCharacter::text_width(current(), scale);
+    int text_x = value_rect.x + (value_rect.w - text_width) / 2;
+    int text_y = value_rect.y + (value_rect.h - 7 * scale) / 2;
     CustomCharacter::draw_text(renderer, current(), text_x, text_y, white, scale);
 }
 

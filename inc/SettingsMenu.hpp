@@ -39,6 +39,7 @@ public:
     int selected;                    // Currently chosen index
     SDL_Rect bar_rect{};             // Background bar rectangle
     SDL_Rect knob_rect{};            // Draggable knob rectangle
+    SDL_Rect value_rect{};           // Rectangle displaying the current value
     bool dragging;                   // True while the user is dragging the knob
 
     Slider(const std::vector<std::string> &vals, int default_index = 0);
