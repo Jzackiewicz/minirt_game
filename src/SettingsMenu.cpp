@@ -6,7 +6,7 @@
 // -----------------------------------------------------------------------------
 
 ButtonsCluster::ButtonsCluster(const std::vector<std::string> &labels)
-    : selected(-1) {
+    : selected(labels.empty() ? -1 : 0) {
     for (const auto &l : labels) {
         buttons.push_back(Button{l, ButtonAction::None, SDL_Color{0, 0, 0, 255}});
     }
@@ -64,8 +64,9 @@ SettingsSection::SettingsSection(const std::string &text) : label(text) {}
 
 void SettingsSection::layout(int x, int y, int width, int height, int scale) {
     int label_height = 7 * scale;
-    content_rect = {x, y + label_height + scale, width,
-                    height - label_height - scale};
+    int gap = 2 * scale;
+    content_rect = {x, y + label_height + gap, width,
+                    height - label_height - gap};
 }
 
 void SettingsSection::draw(SDL_Renderer *renderer, int scale) const {
@@ -73,7 +74,7 @@ void SettingsSection::draw(SDL_Renderer *renderer, int scale) const {
     int label_width = CustomCharacter::text_width(label, scale);
     int label_height = 7 * scale;
     int label_x = content_rect.x + (content_rect.w - label_width) / 2;
-    int label_y = content_rect.y - label_height - scale;
+    int label_y = content_rect.y - label_height - 2 * scale;
     CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
 
     // Placeholder rectangle for content
@@ -87,11 +88,13 @@ void SettingsSection::draw(SDL_Renderer *renderer, int scale) const {
 
 QualitySection::QualitySection()
     : SettingsSection("QUALITY"),
-      cluster({"LOW", "MEDIUM", "HIGH"}) {}
+      cluster({"LOW", "MEDIUM", "HIGH"}) {
+    cluster.selected = 2; // default to HIGH
+}
 
 void QualitySection::layout(int x, int y, int width, int height, int scale) {
     SettingsSection::layout(x, y, width, height, scale);
-    int gap = scale;
+    int gap = 2 * scale;
     cluster.layout(content_rect.x, content_rect.y, content_rect.w, content_rect.h, gap);
 }
 
@@ -105,7 +108,7 @@ void QualitySection::draw(SDL_Renderer *renderer, int scale) const {
     int label_width = CustomCharacter::text_width(label, scale);
     int label_height = 7 * scale;
     int label_x = content_rect.x + (content_rect.w - label_width) / 2;
-    int label_y = content_rect.y - label_height - scale;
+    int label_y = content_rect.y - label_height - 2 * scale;
     CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
 
     cluster.draw(renderer, scale);
@@ -152,9 +155,9 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
         int title_gap = static_cast<int>(40 * scale_factor);
 
         // Section layout values
-        int section_width = static_cast<int>(400 * scale_factor);
-        int content_height = static_cast<int>(40 * scale_factor);
-        int section_height = content_height + 7 * scale + scale; // content + label + gap
+        int section_width = static_cast<int>(500 * scale_factor);
+        int content_height = static_cast<int>(70 * scale_factor);
+        int section_height = content_height + 7 * scale + 2 * scale; // content + label + gap
         int section_gap = static_cast<int>(30 * scale_factor);
 
         int button_width = static_cast<int>(150 * scale_factor);
