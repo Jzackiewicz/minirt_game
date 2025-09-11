@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cmath>
 #include <iomanip>
+#include <algorithm>
 
 // -----------------------------------------------------------------------------
 // ButtonsCluster implementation
@@ -64,7 +65,7 @@ void ButtonsCluster::draw(SDL_Renderer *renderer, int scale) const {
 // -----------------------------------------------------------------------------
 
 Slider::Slider(const std::vector<std::string> &vals, int default_index)
-    : values(vals), selected(default_index), dragging(false) {}
+    : values(vals), selected(default_index), dragging(false), text_scale(1) {}
 
 void Slider::layout(int x, int y, int width, int height, int scale) {
     int bar_height = scale * 6;
@@ -72,14 +73,15 @@ void Slider::layout(int x, int y, int width, int height, int scale) {
         bar_height = 1;
     int gap = 2 * scale;
 
+    text_scale = std::max(1, scale - 1);
     int max_text_width = 0;
     for (const auto &v : values) {
-        int w = CustomCharacter::text_width(v, scale);
+        int w = CustomCharacter::text_width(v, text_scale);
         if (w > max_text_width)
             max_text_width = w;
     }
     value_rect.h = bar_height;
-    value_rect.w = max_text_width + 4 * scale;
+    value_rect.w = max_text_width + 4 * text_scale;
 
     bar_rect = {x, y + (height - bar_height) / 2,
                 width - value_rect.w - gap, bar_height};
@@ -154,7 +156,7 @@ void Slider::handle_event(const SDL_Event &event) {
     }
 }
 
-void Slider::draw(SDL_Renderer *renderer, int scale) const {
+void Slider::draw(SDL_Renderer *renderer) const {
     SDL_Color white{255, 255, 255, 255};
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderFillRect(renderer, &bar_rect);
@@ -169,10 +171,10 @@ void Slider::draw(SDL_Renderer *renderer, int scale) const {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderDrawRect(renderer, &value_rect);
 
-    int text_width = CustomCharacter::text_width(current(), scale);
+    int text_width = CustomCharacter::text_width(current(), text_scale);
     int text_x = value_rect.x + (value_rect.w - text_width) / 2;
-    int text_y = value_rect.y + (value_rect.h - 7 * scale) / 2;
-    CustomCharacter::draw_text(renderer, current(), text_x, text_y, white, scale);
+    int text_y = value_rect.y + (value_rect.h - 7 * text_scale) / 2;
+    CustomCharacter::draw_text(renderer, current(), text_x, text_y, white, text_scale);
 }
 
 // -----------------------------------------------------------------------------
@@ -270,7 +272,7 @@ void MouseSensitivitySection::draw(SDL_Renderer *renderer, int scale) const {
     int label_y = content_rect.y - label_height - 2 * scale;
     CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
 
-    slider.draw(renderer, scale);
+    slider.draw(renderer);
 }
 
 ResolutionSection::ResolutionSection()
@@ -294,7 +296,7 @@ void ResolutionSection::draw(SDL_Renderer *renderer, int scale) const {
     int label_y = content_rect.y - label_height - 2 * scale;
     CustomCharacter::draw_text(renderer, label, label_x, label_y, white, scale);
 
-    slider.draw(renderer, scale);
+    slider.draw(renderer);
 }
 
 // -----------------------------------------------------------------------------

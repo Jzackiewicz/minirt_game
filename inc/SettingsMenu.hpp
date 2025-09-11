@@ -41,6 +41,7 @@ public:
     SDL_Rect knob_rect{};            // Draggable knob rectangle
     SDL_Rect value_rect{};           // Rectangle displaying the current value
     bool dragging;                   // True while the user is dragging the knob
+    int text_scale;                  // Scale used for value text
 
     Slider(const std::vector<std::string> &vals, int default_index = 0);
 
@@ -51,7 +52,7 @@ public:
     void handle_event(const SDL_Event &event);
 
     // Draw the slider and the currently selected value
-    void draw(SDL_Renderer *renderer, int scale) const;
+    void draw(SDL_Renderer *renderer) const;
 
     const std::string &current() const { return values[selected]; }
 private:
