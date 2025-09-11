@@ -3,6 +3,7 @@
 #include "Parser.hpp"
 #include "Renderer.hpp"
 #include "Scene.hpp"
+#include "Settings.hpp"
 #include <iostream>
 #include <thread>
 
@@ -41,11 +42,20 @@ void run_application(const std::string &scene_path, int width, int height,
 
 	scene.update_beams(materials);
 	scene.build_bvh();
-	RenderSettings render_settings;
-	render_settings.width = width;
-	render_settings.height = height;
-	render_settings.threads = thread_count;
-	render_settings.downscale = downscale;
-	Renderer renderer(scene, camera);
-	renderer.render_window(materials, render_settings, scene_path);
+        RenderSettings render_settings;
+        render_settings.width = width;
+        render_settings.height = height;
+        render_settings.threads = thread_count;
+        render_settings.downscale = downscale;
+        Renderer renderer(scene, camera);
+        g_in_game = true;
+        renderer.render_window(materials, render_settings, scene_path);
+        g_in_game = false;
+        if (!g_reload_scene_path.empty())
+        {
+                std::string tmp = g_reload_scene_path;
+                g_reload_scene_path.clear();
+                run_application(tmp, g_settings.width, g_settings.height,
+                                                g_settings.quality);
+        }
 }
