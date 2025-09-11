@@ -12,6 +12,10 @@ protected:
     std::vector<Button> buttons;
     std::vector<SDL_Color> title_colors;
 
+    // Hooks for derived menus to add custom drawings
+    virtual int extra_height(int scale) const { return 0; }
+    virtual void draw_extra(SDL_Renderer *renderer, int width, int y, int scale) {}
+
 public:
     explicit AMenu(const std::string &t);
     virtual ~AMenu() = default;

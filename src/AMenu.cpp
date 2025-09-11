@@ -1,4 +1,6 @@
 #include "AMenu.hpp"
+#include "LeaderboardMenu.hpp"
+#include "SettingsMenu.hpp"
 
 AMenu::AMenu(const std::string &t) : title(t) {}
 
@@ -19,10 +21,12 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         int title_scale = scale * 2;
         int title_gap = static_cast<int>(80 * scale_factor);
 
+        int extra_h = extra_height(scale);
         int total_buttons_height = static_cast<int>(buttons.size()) * button_height +
                                    (static_cast<int>(buttons.size()) - 1) * button_gap;
         int title_height = 7 * title_scale;
-        int top_margin = (height - title_height - title_gap - total_buttons_height) / 2;
+        int top_margin =
+            (height - title_height - title_gap - extra_h - total_buttons_height) / 2;
         if (top_margin < 0)
             top_margin = 0;
 
@@ -30,7 +34,8 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         int title_y = top_margin;
 
         int center_x = width / 2 - button_width / 2;
-        int start_y = title_y + title_height + title_gap;
+        int extra_y = title_y + title_height + title_gap;
+        int start_y = extra_y + extra_h;
         for (std::size_t i = 0; i < buttons.size(); ++i) {
             buttons[i].rect = {center_x,
                                start_y + static_cast<int>(i) * (button_height + button_gap),
@@ -49,8 +54,11 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                 for (auto &btn : buttons) {
                     if (mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
-                        if (btn.action != ButtonAction::Settings &&
-                            btn.action != ButtonAction::Leaderboard) {
+                        if (btn.action == ButtonAction::Settings) {
+                            SettingsMenu::show(window, renderer, width, height);
+                        } else if (btn.action == ButtonAction::Leaderboard) {
+                            LeaderboardMenu::show(window, renderer, width, height);
+                        } else {
                             result = btn.action;
                             running = false;
                         }
@@ -85,6 +93,8 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
             CustomCharacter::draw_character(renderer, title[i], tx, title_y, c, title_scale);
             tx += (5 + 1) * title_scale;
         }
+
+        draw_extra(renderer, width, extra_y, scale);
 
         for (auto &btn : buttons) {
             bool hover = mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
