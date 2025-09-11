@@ -1,10 +1,9 @@
-
 cmake_minimum_required(VERSION 3.16)
 project(minirt_cpp LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Speed flags (user can tune)
+# Speed flags
 if (MSVC)
     add_compile_options(/O2 /fp:fast /DNOMINMAX)
 else()
@@ -17,8 +16,10 @@ add_executable(minirt ${SRC_FILES})
 find_package(Threads REQUIRED)
 target_include_directories(minirt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 
+# SDL2
 if (WIN32)
     find_package(SDL2 CONFIG REQUIRED)
+    # MinGW/MSYS2: linkuj ZAWSZE z SDL2main + SDL2
     target_link_libraries(minirt PRIVATE SDL2::SDL2main SDL2::SDL2 Threads::Threads)
 else()
     find_package(SDL2 REQUIRED)
