@@ -134,9 +134,11 @@ class SettingsMenu : public AMenu {
 
 public:
     SettingsMenu();
-    static void show(SDL_Window *window, SDL_Renderer *renderer, int width, int height);
+    static void show(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
+                     bool transparent = false);
 
     // Run loop for the settings menu (hides AMenu::run)
-    ButtonAction run(SDL_Window *window, SDL_Renderer *renderer, int width, int height);
+    ButtonAction run(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
+                    bool transparent = false);
 };
 

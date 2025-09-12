@@ -10,6 +10,6 @@ PauseMenu::PauseMenu() : AMenu("PAUSE") {
 
 bool PauseMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height) {
     PauseMenu menu;
-    ButtonAction action = menu.run(window, renderer, width, height);
+    ButtonAction action = menu.run(window, renderer, width, height, true);
     return action == ButtonAction::Resume;
 }

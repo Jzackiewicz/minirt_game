@@ -40,9 +40,10 @@ LeaderboardMenu::LeaderboardMenu() : AMenu("LEADERBOARD"), scores(load_scores("l
     buttons.push_back(Button{"BACK", ButtonAction::Back, SDL_Color{255, 0, 0, 255}});
 }
 
-void LeaderboardMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height) {
+void LeaderboardMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
+                           bool transparent) {
     LeaderboardMenu menu;
-    menu.run(window, renderer, width, height);
+    menu.run(window, renderer, width, height, transparent);
 }
 
 static SDL_Color rank_color(int index) {
@@ -55,10 +56,25 @@ static SDL_Color rank_color(int index) {
     return SDL_Color{255, 255, 255, 255};
 }
 
-ButtonAction LeaderboardMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, int height) {
+ButtonAction LeaderboardMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width,
+                                  int height, bool transparent) {
     bool running = true;
     ButtonAction result = ButtonAction::None;
     SDL_Color white{255, 255, 255, 255};
+
+    SDL_Texture *background = nullptr;
+    if (transparent) {
+        SDL_Surface *surface =
+            SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32);
+        if (surface) {
+            if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                     surface->pixels, surface->pitch) == 0) {
+                background = SDL_CreateTextureFromSurface(renderer, surface);
+            }
+            SDL_FreeSurface(surface);
+        }
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    }
 
     const int name_len = 21; // fixed length for name column
 
@@ -150,8 +166,15 @@ ButtonAction LeaderboardMenu::run(SDL_Window *window, SDL_Renderer *renderer, in
         int mx, my;
         SDL_GetMouseState(&mx, &my);
 
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
+        if (transparent && background) {
+            SDL_RenderCopy(renderer, background, nullptr, nullptr);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 153);
+            SDL_Rect overlay{0, 0, width, height};
+            SDL_RenderFillRect(renderer, &overlay);
+        } else {
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            SDL_RenderClear(renderer);
+        }
 
         // Draw title
         CustomCharacter::draw_text(renderer, title, title_x, title_y, white, title_scale);
@@ -183,5 +206,7 @@ ButtonAction LeaderboardMenu::run(SDL_Window *window, SDL_Renderer *renderer, in
         SDL_Delay(16);
     }
 
+    if (background)
+        SDL_DestroyTexture(background);
     return result;
 }
