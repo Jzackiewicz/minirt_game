@@ -11,8 +11,10 @@ class LeaderboardMenu : public AMenu {
 
 public:
     LeaderboardMenu();
-    static void show(SDL_Window *window, SDL_Renderer *renderer, int width, int height);
+    static void show(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
+                     bool transparent = false);
 
     // Run loop for the leaderboard menu (hides AMenu::run)
-    ButtonAction run(SDL_Window *window, SDL_Renderer *renderer, int width, int height);
+    ButtonAction run(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
+                    bool transparent = false);
 };

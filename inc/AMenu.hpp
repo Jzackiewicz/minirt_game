@@ -17,5 +17,8 @@ public:
     virtual ~AMenu() = default;
 
     // Run the menu loop and return the action corresponding to the selected button
-    ButtonAction run(SDL_Window *window, SDL_Renderer *renderer, int width, int height);
+    // If transparent is true, the current renderer contents are preserved and
+    // a semi-transparent overlay is drawn behind the menu.
+    ButtonAction run(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
+                     bool transparent = false);
 };

@@ -343,16 +343,31 @@ SettingsMenu::SettingsMenu() : AMenu("SETTINGS") {
     buttons.push_back(Button{"APPLY", ButtonAction::None, SDL_Color{0, 255, 0, 255}});
 }
 
-void SettingsMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height) {
+void SettingsMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
+                        bool transparent) {
     SettingsMenu menu;
-    menu.run(window, renderer, width, height);
+    menu.run(window, renderer, width, height, transparent);
 }
 
 ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width,
-                               int height) {
+                               int height, bool transparent) {
     bool running = true;
     ButtonAction result = ButtonAction::None;
     SDL_Color white{255, 255, 255, 255};
+
+    SDL_Texture *background = nullptr;
+    if (transparent) {
+        SDL_Surface *surface =
+            SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32);
+        if (surface) {
+            if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                     surface->pixels, surface->pitch) == 0) {
+                background = SDL_CreateTextureFromSurface(renderer, surface);
+            }
+            SDL_FreeSurface(surface);
+        }
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    }
 
     while (running) {
         SDL_GetWindowSize(window, &width, &height);
@@ -454,8 +469,15 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
         int mx, my;
         SDL_GetMouseState(&mx, &my);
 
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
+        if (transparent && background) {
+            SDL_RenderCopy(renderer, background, nullptr, nullptr);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 153);
+            SDL_Rect overlay{0, 0, width, height};
+            SDL_RenderFillRect(renderer, &overlay);
+        } else {
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            SDL_RenderClear(renderer);
+        }
 
         CustomCharacter::draw_text(renderer, title, title_x, title_y, white, title_scale);
 
@@ -481,6 +503,8 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
         SDL_Delay(16);
     }
 
+    if (background)
+        SDL_DestroyTexture(background);
     return result;
 }
 

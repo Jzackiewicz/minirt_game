@@ -4,10 +4,25 @@
 
 AMenu::AMenu(const std::string &t) : title(t) {}
 
-ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, int height) {
+ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
+                       bool transparent) {
     bool running = true;
     ButtonAction result = ButtonAction::None;
     SDL_Color white{255, 255, 255, 255};
+
+    SDL_Texture *background = nullptr;
+    if (transparent) {
+        SDL_Surface *surface =
+            SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32);
+        if (surface) {
+            if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                     surface->pixels, surface->pitch) == 0) {
+                background = SDL_CreateTextureFromSurface(renderer, surface);
+            }
+            SDL_FreeSurface(surface);
+        }
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    }
 
     while (running) {
         SDL_GetWindowSize(window, &width, &height);
@@ -52,9 +67,25 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                     if (mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
                         if (btn.action == ButtonAction::Settings) {
-                            SettingsMenu::show(window, renderer, width, height);
+                            if (transparent && background) {
+                                SDL_RenderCopy(renderer, background, nullptr, nullptr);
+                                SDL_RenderPresent(renderer);
+                            } else {
+                                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                                SDL_RenderClear(renderer);
+                                SDL_RenderPresent(renderer);
+                            }
+                            SettingsMenu::show(window, renderer, width, height, transparent);
                         } else if (btn.action == ButtonAction::Leaderboard) {
-                            LeaderboardMenu::show(window, renderer, width, height);
+                            if (transparent && background) {
+                                SDL_RenderCopy(renderer, background, nullptr, nullptr);
+                                SDL_RenderPresent(renderer);
+                            } else {
+                                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                                SDL_RenderClear(renderer);
+                                SDL_RenderPresent(renderer);
+                            }
+                            LeaderboardMenu::show(window, renderer, width, height, transparent);
                         } else {
                             result = btn.action;
                             running = false;
@@ -68,8 +99,15 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         int mx, my;
         SDL_GetMouseState(&mx, &my);
 
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
+        if (transparent && background) {
+            SDL_RenderCopy(renderer, background, nullptr, nullptr);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 153);
+            SDL_Rect overlay{0, 0, width, height};
+            SDL_RenderFillRect(renderer, &overlay);
+        } else {
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            SDL_RenderClear(renderer);
+        }
 
         SDL_Color default_colors[] = {
             {0, 0, 255, 255},
@@ -109,5 +147,7 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         SDL_Delay(16);
     }
 
+    if (background)
+        SDL_DestroyTexture(background);
     return result;
 }
