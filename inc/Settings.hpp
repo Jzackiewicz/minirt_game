@@ -9,8 +9,6 @@ struct GameSettings {
 };
 
 extern GameSettings g_settings;
-extern bool g_reload_requested;
-extern std::string g_reload_scene;
 
 void load_settings(const std::string &filename = "settings.yaml");
 void save_settings(const std::string &filename = "settings.yaml");

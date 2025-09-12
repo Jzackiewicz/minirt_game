@@ -429,7 +429,6 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
                         if (btn.action == ButtonAction::Back) {
                             running = false;
                         } else if (btn.text == "APPLY") {
-                            char old_quality = g_settings.quality;
                             g_settings.quality = quality.current();
                             g_settings.mouse_sensitivity =
                                 mouse_sensitivity.current();
@@ -444,9 +443,6 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
                                                   g_settings.height);
                             }
                             save_settings();
-                            if (g_settings.quality != old_quality) {
-                                g_reload_requested = true;
-                            }
                             running = false;
                         }
                         break;

@@ -29,17 +29,6 @@ int main(int argc, char **argv)
         {
                 return 0;
         }
-        std::string current_scene = scene_path;
-        do
-        {
-                g_reload_requested = false;
-                run_application(current_scene, g_settings.width, g_settings.height,
-                                g_settings.quality);
-                if (g_reload_requested && !g_reload_scene.empty())
-                {
-                        current_scene = g_reload_scene;
-                        g_reload_scene.clear();
-                }
-        } while (g_reload_requested);
+        run_application(scene_path, g_settings.width, g_settings.height, g_settings.quality);
         return 0;
 }

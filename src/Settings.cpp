@@ -6,8 +6,6 @@
 #include <algorithm>
 
 GameSettings g_settings{'H', 1.0f, 1080, 720};
-bool g_reload_requested = false;
-std::string g_reload_scene;
 
 static std::string trim(const std::string &s) {
     const char *ws = " \t\n\r";

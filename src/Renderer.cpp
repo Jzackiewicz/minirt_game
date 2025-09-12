@@ -379,16 +379,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         SDL_SetWindowGrab(win, SDL_FALSE);
                         SDL_WarpMouseInWindow(win, W / 2, H / 2);
                         bool resume = PauseMenu::show(win, ren, W, H);
-                        if (g_reload_requested)
-                        {
-                                std::string save = next_save_path(scene_path);
-                                if (Parser::save_rt_file(save, scene, cam, mats))
-                                {
-                                        g_reload_scene = save;
-                                }
-                                st.running = false;
-                        }
-                        else if (resume)
+                        if (resume)
                         {
                                 st.focused = true;
                                 SDL_SetRelativeMouseMode(SDL_TRUE);
