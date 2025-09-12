@@ -1,6 +1,7 @@
 #include "SettingsMenu.hpp"
 #include "CustomCharacter.hpp"
 #include "Settings.hpp"
+#include "LeaderboardMenu.hpp"
 #include <sstream>
 #include <cmath>
 #include <iomanip>
@@ -340,6 +341,8 @@ std::string ResolutionSection::current() const {
 SettingsMenu::SettingsMenu() : AMenu("SETTINGS") {
     // Bottom buttons
     buttons.push_back(Button{"BACK", ButtonAction::Back, SDL_Color{255, 0, 0, 255}});
+    buttons.push_back(Button{"LEADERBOARD", ButtonAction::Leaderboard,
+                             SDL_Color{0, 0, 255, 255}});
     buttons.push_back(Button{"APPLY", ButtonAction::None, SDL_Color{0, 255, 0, 255}});
 }
 
@@ -375,7 +378,8 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
         int button_gap = static_cast<int>(20 * scale_factor);
 
         int total_sections_height = 3 * section_height + 2 * section_gap;
-        int total_bottom_width = 2 * button_width + button_gap;
+        int total_bottom_width = static_cast<int>(buttons.size()) * button_width +
+                                (static_cast<int>(buttons.size()) - 1) * button_gap;
 
         int total_height = title_height + title_gap + total_sections_height + section_gap +
                            button_height;
@@ -428,6 +432,8 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
                         if (btn.action == ButtonAction::Back) {
                             running = false;
+                        } else if (btn.action == ButtonAction::Leaderboard) {
+                            LeaderboardMenu::show(window, renderer, width, height);
                         } else if (btn.text == "APPLY") {
                             g_settings.quality = quality.current();
                             g_settings.mouse_sensitivity =
