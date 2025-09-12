@@ -67,8 +67,24 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                     if (mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
                         if (btn.action == ButtonAction::Settings) {
+                            if (transparent && background) {
+                                SDL_RenderCopy(renderer, background, nullptr, nullptr);
+                                SDL_RenderPresent(renderer);
+                            } else {
+                                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                                SDL_RenderClear(renderer);
+                                SDL_RenderPresent(renderer);
+                            }
                             SettingsMenu::show(window, renderer, width, height, transparent);
                         } else if (btn.action == ButtonAction::Leaderboard) {
+                            if (transparent && background) {
+                                SDL_RenderCopy(renderer, background, nullptr, nullptr);
+                                SDL_RenderPresent(renderer);
+                            } else {
+                                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                                SDL_RenderClear(renderer);
+                                SDL_RenderPresent(renderer);
+                            }
                             LeaderboardMenu::show(window, renderer, width, height, transparent);
                         } else {
                             result = btn.action;
