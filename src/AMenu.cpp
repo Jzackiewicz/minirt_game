@@ -1,4 +1,6 @@
 #include "AMenu.hpp"
+#include "LeaderboardMenu.hpp"
+#include "SettingsMenu.hpp"
 
 AMenu::AMenu(const std::string &t) : title(t) {}
 
@@ -49,8 +51,11 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                 for (auto &btn : buttons) {
                     if (mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
-                        if (btn.action != ButtonAction::Settings &&
-                            btn.action != ButtonAction::Leaderboard) {
+                        if (btn.action == ButtonAction::Settings) {
+                            SettingsMenu::show(window, renderer, width, height);
+                        } else if (btn.action == ButtonAction::Leaderboard) {
+                            LeaderboardMenu::show(window, renderer, width, height);
+                        } else {
                             result = btn.action;
                             running = false;
                         }
