@@ -717,9 +717,16 @@ void Renderer::render_window(std::vector<Material> &mats,
 {
         const int W = rset.width;
         const int H = rset.height;
-        const float scale = std::max(1.0f, rset.downscale);
-        const int RW = std::max(1, static_cast<int>(W / scale));
-        const int RH = std::max(1, static_cast<int>(H / scale));
+        auto quality_scale = [](char q) -> float {
+                if (q == 'M' || q == 'm')
+                        return 1.5f;
+                if (q == 'L' || q == 'l')
+                        return 2.5f;
+                return 1.0f;
+        };
+        float scale = std::max(1.0f, quality_scale(g_settings.quality));
+        int RW = std::max(1, static_cast<int>(W / scale));
+        int RH = std::max(1, static_cast<int>(H / scale));
         const int T = (rset.threads > 0)
                                           ? rset.threads
                                           : (std::thread::hardware_concurrency()
@@ -736,12 +743,28 @@ void Renderer::render_window(std::vector<Material> &mats,
         std::vector<Vec3> framebuffer(RW * RH);
         std::vector<unsigned char> pixels(RW * RH * 3);
         Uint32 last = SDL_GetTicks();
+        char current_quality = g_settings.quality;
 
         while (st.running)
         {
                 Uint32 now = SDL_GetTicks();
                 double dt = (now - last) / 1000.0;
                 last = now;
+
+                if (g_settings.quality != current_quality)
+                {
+                        current_quality = g_settings.quality;
+                        scale = std::max(1.0f, quality_scale(current_quality));
+                        RW = std::max(1, static_cast<int>(W / scale));
+                        RH = std::max(1, static_cast<int>(H / scale));
+                        SDL_DestroyTexture(tex);
+                        tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24,
+                                                                        SDL_TEXTUREACCESS_STREAMING, RW, RH);
+                        if (!tex)
+                                break;
+                        framebuffer.assign(RW * RH, Vec3());
+                        pixels.assign(RW * RH * 3, 0);
+                }
 
                 process_events(st, win, ren, W, H, mats, scene_path);
                 handle_keyboard(st, dt, mats);
