@@ -378,7 +378,10 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         SDL_ShowCursor(SDL_ENABLE);
                         SDL_SetWindowGrab(win, SDL_FALSE);
                         SDL_WarpMouseInWindow(win, W / 2, H / 2);
-                        bool resume = PauseMenu::show(win, ren, W, H);
+                        int current_w = W;
+                        int current_h = H;
+                        SDL_GetWindowSize(win, &current_w, &current_h);
+                        bool resume = PauseMenu::show(win, ren, current_w, current_h);
                         if (resume)
                         {
                                 st.focused = true;
