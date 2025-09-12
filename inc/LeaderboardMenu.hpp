@@ -1,7 +1,7 @@
 #pragma once
 #include "AMenu.hpp"
-#include <utility>
-#include <vector>
+#include <map>
+#include <functional>
 
 struct SDL_Window;
 struct SDL_Renderer;
@@ -9,8 +9,8 @@ struct SDL_Renderer;
 // Menu showing the leaderboard
 class LeaderboardMenu : public AMenu {
 private:
-    // Vector holding pairs of player name and score
-    std::vector<std::pair<std::string, double>> records;
+    // Map storing scores and names ordered by score descending
+    std::map<double, std::string, std::greater<double>> records;
 
     // Load leaderboard records from a YAML file
     void load_records(const std::string &path);

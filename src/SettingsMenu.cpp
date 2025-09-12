@@ -1,6 +1,7 @@
 #include "SettingsMenu.hpp"
 
 SettingsMenu::SettingsMenu() : AMenu("SETTINGS") {
+    buttons.push_back(Button{"LEADERBOARD", ButtonAction::Leaderboard, SDL_Color{0, 0, 255, 255}});
     buttons.push_back(Button{"BACK", ButtonAction::Back, SDL_Color{255, 0, 0, 255}});
 }
 

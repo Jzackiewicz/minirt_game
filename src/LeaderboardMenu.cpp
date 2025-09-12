@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cstdlib>
+#include <algorithm>
 
 namespace {
 static std::string trim(const std::string &s) {
@@ -33,7 +34,7 @@ void LeaderboardMenu::load_records(const std::string &path) {
         std::string name = trim(line.substr(0, pos));
         std::string score_str = trim(line.substr(pos + 1));
         double score = std::strtod(score_str.c_str(), nullptr);
-        records.emplace_back(name, score);
+        records.emplace(score, name);
     }
 }
 
@@ -55,8 +56,9 @@ ButtonAction LeaderboardMenu::run(SDL_Window *window, SDL_Renderer *renderer, in
         int title_gap = static_cast<int>(80 * scale_factor);
         int record_height = 7 * scale;
         int record_gap = static_cast<int>(5 * scale_factor);
-        int total_records_height = static_cast<int>(records.size()) * record_height +
-                                   (static_cast<int>(records.size()) - 1) * record_gap;
+        std::size_t display_count = std::min(records.size(), static_cast<std::size_t>(10));
+        int total_records_height = static_cast<int>(display_count) * record_height +
+                                   (display_count > 0 ? static_cast<int>(display_count - 1) * record_gap : 0);
         int total_buttons_height = static_cast<int>(buttons.size()) * button_height +
                                    (static_cast<int>(buttons.size()) - 1) * button_gap;
         int title_height = 7 * title_scale;
@@ -111,16 +113,19 @@ ButtonAction LeaderboardMenu::run(SDL_Window *window, SDL_Renderer *renderer, in
             tx += (5 + 1) * title_scale;
         }
 
-        for (std::size_t i = 0; i < records.size(); ++i) {
+        int i = 0;
+        for (const auto &entry : records) {
+            if (i >= static_cast<int>(display_count))
+                break;
             std::ostringstream oss;
-            oss << std::fixed << std::setprecision(1) << records[i].second;
+            oss << std::fixed << std::setprecision(1) << entry.first;
             std::string score_str = oss.str();
             std::string idx = std::to_string(i + 1) + ".";
             int idx_width = CustomCharacter::text_width(idx, scale);
-            std::string rest = " " + records[i].first + " " + score_str;
+            std::string rest = " " + entry.second + " " + score_str;
             int line_width = idx_width + CustomCharacter::text_width(rest, scale);
             int line_x = width / 2 - line_width / 2;
-            int line_y = records_start_y + static_cast<int>(i) * (record_height + record_gap);
+            int line_y = records_start_y + i * (record_height + record_gap);
             SDL_Color idx_color = white;
             if (i == 0)
                 idx_color = SDL_Color{255, 215, 0, 255};
@@ -130,6 +135,7 @@ ButtonAction LeaderboardMenu::run(SDL_Window *window, SDL_Renderer *renderer, in
                 idx_color = SDL_Color{205, 127, 50, 255};
             CustomCharacter::draw_text(renderer, idx, line_x, line_y, idx_color, scale);
             CustomCharacter::draw_text(renderer, rest, line_x + idx_width, line_y, white, scale);
+            ++i;
         }
 
         for (auto &btn : buttons) {
