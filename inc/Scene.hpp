@@ -15,11 +15,14 @@ class Scene
 	public:
 	std::vector<HittablePtr> objects;
 	std::vector<PointLight> lights;
-	Ambient ambient{Vec3(1, 1, 1), 0.0};
-	std::shared_ptr<Hittable> accel;
+        Ambient ambient{Vec3(1, 1, 1), 0.0};
+        std::shared_ptr<Hittable> accel;
 
         // Update beam objects and associated lights in the scene.
         void update_beams(const std::vector<Material> &materials);
+
+        // Update goal-scored effects on beam targets.
+        void update_goal_targets(double dt, std::vector<Material> &materials);
 
 	// Build bounding volume hierarchy for static geometry.
 	void build_bvh();

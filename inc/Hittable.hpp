@@ -10,11 +10,12 @@ enum class ShapeType
 	Generic,
 	Sphere,
 	Cube,
-	Cylinder,
-	Cone,
-	Plane,
-	BVH,
-	Beam
+        Cylinder,
+        Cone,
+        Plane,
+        BVH,
+        Beam,
+        BeamTarget
 };
 
 class Material;
