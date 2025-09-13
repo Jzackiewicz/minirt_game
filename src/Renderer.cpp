@@ -270,11 +270,10 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         if (delta.length_squared() > 0)
                                         {
                                                 Vec3 applied = scene.move_with_collision(
-                                                        st.selected_obj, delta);
+                                                        st.selected_obj, delta, mats);
                                                 center += applied;
                                                 if (applied.length_squared() > 0)
                                                 {
-                                                        scene.update_beams(mats);
                                                         scene.build_bvh();
                                                         st.edit_dist =
                                                                 (center - cam.origin).length();
@@ -484,11 +483,10 @@ void Renderer::update_selection(RenderState &st,
                 Vec3 delta = desired - st.edit_pos;
                 if (delta.length_squared() > 0)
                 {
-                        Vec3 applied = scene.move_with_collision(st.selected_obj, delta);
+                        Vec3 applied = scene.move_with_collision(st.selected_obj, delta, mats);
                         st.edit_pos += applied;
                         if (applied.length_squared() > 0)
                         {
-                                scene.update_beams(mats);
                                 scene.build_bvh();
                         }
                 }

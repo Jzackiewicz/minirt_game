@@ -282,7 +282,8 @@ void Scene::build_bvh()
 }
 
 // Move object by delta while preventing collisions.
-Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
+Vec3 Scene::move_with_collision(int index, const Vec3 &delta,
+                                                       const std::vector<Material> &mats)
 {
 	if (!is_movable(index))
 	{
@@ -306,11 +307,13 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
 	axis_deltas[0] = Vec3(delta.x, 0, 0);
 	axis_deltas[1] = Vec3(0, delta.y, 0);
 	axis_deltas[2] = Vec3(0, 0, delta.z);
-	for (const Vec3 &axis_delta : axis_deltas)
-	{
-		attempt_axis_move(index, axis_delta, moved);
-	}
-	return moved;
+        for (const Vec3 &axis_delta : axis_deltas)
+        {
+                attempt_axis_move(index, axis_delta, moved);
+        }
+        if (moved.length_squared() > 0.0)
+                update_beams(mats);
+        return moved;
 }
 
 // Determine whether object is movable.
