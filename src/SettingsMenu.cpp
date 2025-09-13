@@ -456,6 +456,8 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
                                     std::atoi(cur.substr(x + 1).c_str());
                                 SDL_SetWindowSize(window, g_settings.width,
                                                   g_settings.height);
+                                SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED,
+                                                      SDL_WINDOWPOS_CENTERED);
                             }
                             save_settings();
                             running = false;

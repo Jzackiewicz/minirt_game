@@ -10,21 +10,14 @@
 int main(int argc, char **argv)
 {
         std::string scene_path;
-        int width;
-        int height;
-        char quality;
-        bool parsed;
-        parsed = parse_arguments(argc, argv, scene_path, width, height, quality);
-        if (!parsed)
+        if (!parse_arguments(argc, argv, scene_path))
         {
                 return 1;
         }
         load_settings();
-        width = g_settings.width;
-        height = g_settings.height;
-        quality = g_settings.quality;
-        bool play;
-        play = MainMenu::show(width, height);
+        int width = g_settings.width;
+        int height = g_settings.height;
+        bool play = MainMenu::show(width, height);
         if (!play)
         {
                 return 0;
