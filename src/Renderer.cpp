@@ -190,8 +190,8 @@ bool Renderer::init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
                 std::cerr << "SDL_Init Error: " << SDL_GetError() << "\n";
                 return false;
         }
-        win = SDL_CreateWindow("MiniRT", SDL_WINDOWPOS_UNDEFINED,
-                                                   SDL_WINDOWPOS_UNDEFINED, W, H, 0);
+        win = SDL_CreateWindow("MiniRT", SDL_WINDOWPOS_CENTERED,
+                                                   SDL_WINDOWPOS_CENTERED, W, H, 0);
         if (!win)
         {
                 std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << "\n";

@@ -38,28 +38,12 @@ Puzzle game based on miniRT 42School project.
 
 ### Windows
 ```bash
-./build/minirt.exe scenes/[map].rt [width height L|M|H]
+./build/minirt.exe scenes/[map].rt
 ```
 
 ### Linux
 ```bash
-./build/minirt scenes/[map].rt [width height L|M|H]
+./build/minirt scenes/[map].rt
 ```
 
-Optional `width`, `height`, and a final quality argument control the output image size and internal render scale. The renderer automatically uses all available hardware threads. Quality can be specified with `L`, `M`, or `H` (low, medium, high) and defaults to `H`.
-
-For example:
-
-```bash
-./build/minirt scenes/[map].rt 1080 720 L
-```
-
-You can omit the resolution while still supplying quality at the end, or specify resolution and quality together:
-
-```bash
-./build/minirt scenes/[map].rt L
-./build/minirt scenes/[map].rt 1080 720 L
-```
-
-`M` renders at two-thirds resolution (dividing width and height by 1.5) and `L` renders at half resolution (dividing by 2) while scaling the result to the requested window size.
 The `scenes` directory contains sample `.rt` files.
