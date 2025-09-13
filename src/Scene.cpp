@@ -200,33 +200,21 @@ void Scene::build_bvh()
 // Move object by delta while preventing collisions.
 Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
 {
-	if (!is_movable(index))
-	{
-		return Vec3(0, 0, 0);
-	}
+        if (!is_movable(index))
+        {
+                return Vec3(0, 0, 0);
+        }
 
-	HittablePtr object;
-	object = objects[index];
+        HittablePtr object;
+        object = objects[index];
 
-	apply_translation(object, delta);
-	if (!collides(index))
-	{
-		return delta;
-	}
-	apply_translation(object, delta * -1);
-
-	Vec3 moved;
-	moved = Vec3(0, 0, 0);
-
-	Vec3 axis_deltas[3];
-	axis_deltas[0] = Vec3(delta.x, 0, 0);
-	axis_deltas[1] = Vec3(0, delta.y, 0);
-	axis_deltas[2] = Vec3(0, 0, delta.z);
-	for (const Vec3 &axis_delta : axis_deltas)
-	{
-		attempt_axis_move(index, axis_delta, moved);
-	}
-	return moved;
+        apply_translation(object, delta);
+        if (!collides(index))
+        {
+                return delta;
+        }
+        apply_translation(object, delta * -1);
+        return Vec3(0, 0, 0);
 }
 
 // Determine whether object is movable.
@@ -258,29 +246,9 @@ void Scene::apply_translation(const HittablePtr &object, const Vec3 &delta)
 	}
 }
 
-// Try moving object along a single axis, updating moved vector on success.
-void Scene::attempt_axis_move(int index, const Vec3 &axis_delta, Vec3 &moved)
-{
-	if (axis_delta.length_squared() == 0)
-	{
-		return;
-	}
-	HittablePtr object;
-	object = objects[index];
-	apply_translation(object, axis_delta);
-	if (collides(index))
-	{
-		apply_translation(object, axis_delta * -1);
-	}
-	else
-	{
-		moved += axis_delta;
-	}
-}
-
 // Move camera with collision avoidance.
 Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
-						const std::vector<Material> &mats) const
+                                                const std::vector<Material> &mats) const
 {
 	auto blocked = [&](const Vec3 &start, const Vec3 &d)
 	{

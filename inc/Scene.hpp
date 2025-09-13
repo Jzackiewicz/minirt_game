@@ -39,7 +39,6 @@ class Scene
         private:
         bool is_movable(int index) const;
         void apply_translation(const HittablePtr &object, const Vec3 &delta);
-        void attempt_axis_move(int index, const Vec3 &axis_delta, Vec3 &moved);
         void prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
                                                         std::unordered_map<int, int> &id_map);
         void process_beams(const std::vector<Material> &mats,

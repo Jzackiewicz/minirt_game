@@ -482,9 +482,10 @@ void Renderer::update_selection(RenderState &st,
 
                 Vec3 desired = cam.origin + cam.forward * st.edit_dist;
                 Vec3 delta = desired - st.edit_pos;
+                Vec3 applied(0, 0, 0);
                 if (delta.length_squared() > 0)
                 {
-                        Vec3 applied = scene.move_with_collision(st.selected_obj, delta);
+                        applied = scene.move_with_collision(st.selected_obj, delta);
                         st.edit_pos += applied;
                         if (applied.length_squared() > 0)
                         {
@@ -493,10 +494,14 @@ void Renderer::update_selection(RenderState &st,
                         }
                 }
 
-                Vec3 cam_target = st.edit_pos - cam.forward * st.edit_dist;
-                Vec3 cam_delta = cam_target - cam.origin;
-                if (cam_delta.length_squared() > 0)
-                        scene.move_camera(cam, cam_delta, mats);
+                if (applied.length_squared() > 0)
+                {
+                        Vec3 cam_target =
+                                st.edit_pos - cam.forward * st.edit_dist;
+                        Vec3 cam_delta = cam_target - cam.origin;
+                        if (cam_delta.length_squared() > 0)
+                                scene.move_camera(cam, cam_delta, mats);
+                }
                 st.edit_dist = (st.edit_pos - cam.origin).length();
         }
         else
