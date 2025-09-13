@@ -18,7 +18,7 @@
 #include <thread>
 
 static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
-					  const Vec3 &p, const PointLight &L)
+                                          const Vec3 &p, const PointLight &L)
 {
 	Vec3 to_light = L.position - p;
 	double dist_to_light = to_light.length();
@@ -42,24 +42,60 @@ static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
 			return true;
 		}
 	}
-	return false;
+        return false;
+}
+
+static bool hit_light(const Scene &scene, const Ray &r, Vec3 &col, double &t)
+{
+        const double radius = 0.2;
+        bool hit = false;
+        double closest = t;
+        for (const auto &L : scene.lights)
+        {
+                double proj = Vec3::dot(L.position - r.orig, r.dir);
+                if (proj < 0.0 || proj >= closest)
+                        continue;
+                Vec3 p = r.at(proj);
+                Vec3 diff = L.position - p;
+                if (diff.length_squared() > radius * radius)
+                        continue;
+                if (L.cutoff_cos > -1.0)
+                {
+                        Vec3 spot_dir = (p - L.position).normalized();
+                        if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
+                                continue;
+                }
+                closest = proj;
+                col = Vec3(L.color.x * L.intensity, L.color.y * L.intensity,
+                                   L.color.z * L.intensity);
+                hit = true;
+        }
+        if (hit)
+                t = closest;
+        return hit;
 }
 
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
-					  const Ray &r, std::mt19937 &rng,
-					  std::uniform_real_distribution<double> &dist,
-					  int depth = 0)
+                                          const Ray &r, std::mt19937 &rng,
+                                          std::uniform_real_distribution<double> &dist,
+                                          int depth = 0)
 {
-	if (depth > 10)
-		return Vec3(0.0, 0.0, 0.0);
-	HitRecord rec;
-	if (!scene.hit(r, 1e-4, 1e9, rec))
-	{
-		return Vec3(0.0, 0.0, 0.0);
-	}
-	const Material &m = mats[rec.material_id];
-	Vec3 eye = (r.dir * -1.0).normalized();
-	Vec3 base = m.base_color;
+        if (depth > 10)
+                return Vec3(0.0, 0.0, 0.0);
+        HitRecord rec;
+        bool hit_obj = scene.hit(r, 1e-4, 1e9, rec);
+        double t_light = hit_obj ? rec.t : 1e9;
+        Vec3 lcol;
+        if (hit_light(scene, r, lcol, t_light))
+        {
+                if (!hit_obj || t_light < rec.t)
+                        return lcol;
+        }
+        if (!hit_obj)
+                return Vec3(0.0, 0.0, 0.0);
+        const Material &m = mats[rec.material_id];
+        Vec3 eye = (r.dir * -1.0).normalized();
+        Vec3 base = m.base_color;
 	Vec3 col = m.color;
 	if (m.checkered)
 	{
