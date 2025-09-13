@@ -47,3 +47,15 @@ Puzzle game based on miniRT 42School project.
 ```
 
 The `scenes` directory contains sample `.rt` files.
+
+## Soft shadows
+
+Point lights support soft shadows by giving them a radius. In scene files the
+radius can be specified as an optional value after the light color:
+
+```
+L 0,5,0 1.0 255,255,255,255 2.0
+```
+
+When the radius is greater than zero the renderer casts multiple shadow rays and
+blends the result to produce softer penumbra.

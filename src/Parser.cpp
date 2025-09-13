@@ -136,12 +136,18 @@ static void parse_light(std::istringstream &iss, Scene &scene)
 {
         std::string s_pos, s_intens, s_rgb;
         iss >> s_pos >> s_intens >> s_rgb;
+        std::string s_radius;
+        double radius = 0.0;
+        if (iss >> s_radius)
+                to_double(s_radius, radius);
         Vec3 p, rgb;
         double inten = 1.0;
         double a = 255;
         if (parse_triple(s_pos, p) && to_double(s_intens, inten) &&
                 parse_rgba(s_rgb, rgb, a))
-                scene.lights.emplace_back(p, rgb_to_unit(rgb), inten);
+                scene.lights.emplace_back(p, rgb_to_unit(rgb), inten,
+                                                   std::vector<int>{}, -1, Vec3(0, 0, 0),
+                                                   -1.0, -1.0, false, radius);
 }
 
 // Parse sphere definition line.

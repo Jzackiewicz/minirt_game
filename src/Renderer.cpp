@@ -17,32 +17,61 @@
 #include <string>
 #include <thread>
 
-static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
-					  const Vec3 &p, const PointLight &L)
+static Vec3 random_in_unit_sphere(std::mt19937 &rng,
+                                                          std::uniform_real_distribution<double> &dist)
 {
-	Vec3 to_light = L.position - p;
-	double dist_to_light = to_light.length();
-	if (L.range > 0.0 && dist_to_light > L.range)
-		return false;
-	Vec3 dir = to_light.normalized();
-	Ray shadow_ray(p + dir * 1e-4, dir);
-	HitRecord tmp;
-	for (const auto &obj : scene.objects)
-	{
-		if (obj->is_beam())
-			continue;
-		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
-					  obj->object_id) != L.ignore_ids.end())
-			continue;
-		const Material &m = mats[obj->material_id];
-		if (m.alpha < 1.0)
-			continue;
-		if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
-		{
-			return true;
-		}
-	}
-	return false;
+        for (;;)
+        {
+                Vec3 p(dist(rng) * 2.0 - 1.0, dist(rng) * 2.0 - 1.0,
+                               dist(rng) * 2.0 - 1.0);
+                if (p.length_squared() <= 1.0)
+                        return p;
+        }
+}
+
+static double shadow_factor(const Scene &scene,
+                                                   const std::vector<Material> &mats,
+                                                   const Vec3 &p, const PointLight &L,
+                                                   std::mt19937 &rng,
+                                                   std::uniform_real_distribution<double> &dist)
+{
+        Vec3 to_light = L.position - p;
+        double dist_to_light = to_light.length();
+        if (L.range > 0.0 && dist_to_light > L.range)
+                return 0.0;
+        int samples = (L.radius > 0.0) ? 16 : 1;
+        int blocked = 0;
+        for (int i = 0; i < samples; ++i)
+        {
+                Vec3 target = L.position;
+                if (L.radius > 0.0)
+                        target += random_in_unit_sphere(rng, dist) * L.radius;
+                Vec3 dir = target - p;
+                double max_d = dir.length();
+                dir = dir / max_d;
+                Ray shadow_ray(p + dir * 1e-4, dir);
+                HitRecord tmp;
+                bool hit = false;
+                for (const auto &obj : scene.objects)
+                {
+                        if (obj->is_beam())
+                                continue;
+                        if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                                  obj->object_id) != L.ignore_ids.end())
+                                continue;
+                        const Material &m = mats[obj->material_id];
+                        if (m.alpha < 1.0)
+                                continue;
+                        if (obj->hit(shadow_ray, 1e-4, max_d - 1e-4, tmp))
+                        {
+                                hit = true;
+                                break;
+                        }
+                }
+                if (hit)
+                        ++blocked;
+        }
+        return static_cast<double>(blocked) / samples;
 }
 
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
@@ -78,33 +107,35 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
 					  rec.object_id) != L.ignore_ids.end())
 			continue;
-		Vec3 to_light = L.position - rec.p;
-		double dist = to_light.length();
-		if (L.range > 0.0 && dist > L.range)
-			continue;
-		Vec3 ldir = to_light / dist;
-		if (L.cutoff_cos > -1.0)
-		{
-			Vec3 spot_dir = (rec.p - L.position).normalized();
-			if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
-				continue;
-		}
-		if (in_shadow(scene, mats, rec.p, L))
-			continue;
-		double atten = 1.0;
-		if (L.range > 0.0)
-			atten = std::max(0.0, 1.0 - dist / L.range);
-		double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
-		Vec3 h = (ldir + eye).normalized();
-		double spec =
-			std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
-			m.specular_k;
-		sum += Vec3(col.x * L.color.x * L.intensity * diff * atten +
-						L.color.x * spec * atten,
-					col.y * L.color.y * L.intensity * diff * atten +
-						L.color.y * spec * atten,
-					col.z * L.color.z * L.intensity * diff * atten +
-						L.color.z * spec * atten);
+                Vec3 to_light = L.position - rec.p;
+                double light_dist = to_light.length();
+                if (L.range > 0.0 && light_dist > L.range)
+                        continue;
+                Vec3 ldir = to_light / light_dist;
+                if (L.cutoff_cos > -1.0)
+                {
+                        Vec3 spot_dir = (rec.p - L.position).normalized();
+                        if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
+                                continue;
+                }
+                double shadow = shadow_factor(scene, mats, rec.p, L, rng, dist);
+                if (shadow >= 1.0)
+                        continue;
+                double atten = 1.0;
+                if (L.range > 0.0)
+                        atten = std::max(0.0, 1.0 - light_dist / L.range);
+                double diff = std::max(0.0, Vec3::dot(rec.normal, ldir)) *
+                                              (1.0 - shadow);
+                Vec3 h = (ldir + eye).normalized();
+                double spec =
+                        std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
+                        m.specular_k * (1.0 - shadow);
+                sum += Vec3(col.x * L.color.x * L.intensity * diff * atten +
+                                                L.color.x * spec * atten,
+                                        col.y * L.color.y * L.intensity * diff * atten +
+                                                L.color.y * spec * atten,
+                                        col.z * L.color.z * L.intensity * diff * atten +
+                                                L.color.z * spec * atten);
 	}
 	if (m.mirror)
 	{
