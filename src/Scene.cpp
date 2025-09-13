@@ -182,6 +182,71 @@ void Scene::remap_light_ids(const std::unordered_map<int, int> &id_map)
         }
 }
 
+// Reflect directional and spotlight lights off mirror surfaces.
+void Scene::reflect_lights(const std::vector<Material> &mats)
+{
+        struct LightSeg
+        {
+                PointLight L;
+                double start;
+                double total;
+                int depth;
+        };
+
+        std::vector<LightSeg> to_process;
+        to_process.reserve(lights.size());
+        for (const auto &L : lights)
+                to_process.push_back({L, 0.0, L.range, 0});
+
+        lights.clear();
+        const int max_bounce = 10;
+        for (size_t i = 0; i < to_process.size(); ++i)
+        {
+                LightSeg seg = to_process[i];
+                PointLight &L = seg.L;
+                lights.push_back(L);
+                if (L.range == 0.0 || L.direction.length_squared() == 0.0 ||
+                        seg.depth >= max_bounce)
+                        continue;
+                Ray forward(L.position, L.direction.normalized());
+                HitRecord tmp, hit_rec;
+                bool hit_any = false;
+                double closest = (L.range > 0.0) ? L.range : 1e9;
+                for (auto &obj : objects)
+                {
+                        if (obj->is_beam())
+                                continue;
+                        if (L.attached_id == obj->object_id)
+                                continue;
+                        if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                                  obj->object_id) != L.ignore_ids.end())
+                                continue;
+                        if (obj->hit(forward, 1e-4, closest, tmp))
+                        {
+                                closest = tmp.t;
+                                hit_rec = tmp;
+                                hit_any = true;
+                        }
+                }
+                if (!hit_any || !mats[hit_rec.material_id].mirror)
+                        continue;
+                double new_start = seg.start + closest;
+                double remain = (seg.total > 0.0) ? seg.total - new_start : -1.0;
+                if (seg.total > 0.0 && remain <= 1e-4)
+                        continue;
+                Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
+                Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
+                double intensity = L.intensity;
+                if (seg.total > 0.0)
+                        intensity *= std::max(0.0, remain / seg.total);
+                std::vector<int> ignore = L.ignore_ids;
+                ignore.push_back(hit_rec.object_id);
+                PointLight new_light(refl_orig, L.color, intensity, ignore, -1,
+                                                         refl_dir, L.cutoff_cos, remain);
+                to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
+        }
+}
+
 // Remove finished beam segments and spawn new beams for reflections.
 void Scene::update_beams(const std::vector<Material> &mats)
 {
@@ -190,6 +255,7 @@ void Scene::update_beams(const std::vector<Material> &mats)
         prepare_beam_roots(roots, id_map);
         process_beams(mats, roots, id_map);
         remap_light_ids(id_map);
+        reflect_lights(mats);
 }
 
 void Scene::update_goal_targets(double dt, std::vector<Material> &mats)

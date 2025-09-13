@@ -49,4 +49,5 @@ class Scene
                                                std::vector<std::shared_ptr<Laser>> &roots,
                                                std::unordered_map<int, int> &id_map);
         void remap_light_ids(const std::unordered_map<int, int> &id_map);
+        void reflect_lights(const std::vector<Material> &mats);
 };
