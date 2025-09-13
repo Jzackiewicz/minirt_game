@@ -2,10 +2,12 @@
 #include <utility>
 
 PointLight::PointLight(const Vec3 &p, const Vec3 &c, double i,
-					   std::vector<int> ignore_ids, int attached_id,
-					   const Vec3 &dir, double cutoff, double range)
-	: position(p), color(c), intensity(i), ignore_ids(std::move(ignore_ids)),
-	  attached_id(attached_id), direction(dir), cutoff_cos(cutoff), range(range)
+                                           std::vector<int> ignore_ids, int attached_id,
+                                           const Vec3 &dir, double cutoff, double range,
+                                           bool reflected)
+        : position(p), color(c), intensity(i), ignore_ids(std::move(ignore_ids)),
+          attached_id(attached_id), direction(dir), cutoff_cos(cutoff), range(range),
+          reflected(reflected)
 {
 }
 
