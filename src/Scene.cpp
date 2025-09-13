@@ -287,20 +287,20 @@ Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
 		double len = d.length();
 		if (len <= 0.0)
 			return false;
-		Ray r(start, d / len);
-		HitRecord tmp;
-		for (const auto &obj : objects)
-		{
-			if (obj->is_beam())
-				continue;
-			const Material &mat = mats[obj->material_id];
-			if (mat.alpha < 1.0)
-				continue;
-			if (obj->hit(r, 1e-4, len, tmp))
-				return true;
-		}
-		return false;
-	};
+                Ray r(start, d / len);
+                HitRecord tmp;
+                for (const auto &obj : objects)
+                {
+                        if (obj->is_beam())
+                                continue;
+                        const Material &mat = mats[obj->material_id];
+                        if (mat.alpha < 1.0 && !obj->blocks_when_transparent())
+                                continue;
+                        if (obj->hit(r, 1e-4, len, tmp))
+                                return true;
+                }
+                return false;
+        };
 
 	Vec3 start = cam.origin;
 	if (!blocked(start, delta))

@@ -9,4 +9,5 @@ public:
     bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const override;
     bool bounding_box(AABB &out) const override { return Sphere::bounding_box(out); }
     void translate(const Vec3 &delta) override;
+    bool blocks_when_transparent() const override { return true; }
 };
