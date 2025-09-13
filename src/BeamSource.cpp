@@ -5,8 +5,8 @@ BeamSource::BeamSource(const Vec3 &c, const Vec3 &dir,
                                            const std::shared_ptr<Laser> &bm, double mid_radius,
                                            int oid, int mat_big, int mat_mid, int mat_small)
        : Sphere(c, mid_radius * 2.0, oid, mat_big),
-         mid(c, mid_radius, -oid - 1, mat_mid),
-         inner(c, mid_radius * 0.5, -oid - 2, mat_small), beam(bm)
+         mid(c, mid_radius * 1.5, -oid - 1, mat_mid),
+         inner(c, mid_radius, -oid - 2, mat_small), beam(bm)
 {
         (void)dir;
 }

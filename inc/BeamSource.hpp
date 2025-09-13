@@ -18,7 +18,8 @@ class BeamSource : public Sphere
 	{
 		return Sphere::bounding_box(out);
 	}
-	void translate(const Vec3 &delta) override;
-	void rotate(const Vec3 &axis, double angle) override;
-	Vec3 spot_direction() const override;
+        void translate(const Vec3 &delta) override;
+        void rotate(const Vec3 &axis, double angle) override;
+        Vec3 spot_direction() const override;
+        bool blocks_when_transparent() const override { return true; }
 };
