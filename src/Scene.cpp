@@ -250,6 +250,7 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
 // Remove finished beam segments and spawn new beams for reflections.
 void Scene::update_beams(const std::vector<Material> &mats)
 {
+        materials_ref = &mats;
         std::vector<std::shared_ptr<Laser>> roots;
         std::unordered_map<int, int> id_map;
         prepare_beam_roots(roots, id_map);
@@ -306,11 +307,13 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
 	axis_deltas[0] = Vec3(delta.x, 0, 0);
 	axis_deltas[1] = Vec3(0, delta.y, 0);
 	axis_deltas[2] = Vec3(0, 0, delta.z);
-	for (const Vec3 &axis_delta : axis_deltas)
-	{
-		attempt_axis_move(index, axis_delta, moved);
-	}
-	return moved;
+        for (const Vec3 &axis_delta : axis_deltas)
+        {
+                attempt_axis_move(index, axis_delta, moved);
+        }
+        if (moved.length_squared() > 0 && materials_ref)
+                update_beams(*materials_ref);
+        return moved;
 }
 
 // Determine whether object is movable.

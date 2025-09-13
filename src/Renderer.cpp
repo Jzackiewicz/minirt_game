@@ -274,7 +274,6 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                 center += applied;
                                                 if (applied.length_squared() > 0)
                                                 {
-                                                        scene.update_beams(mats);
                                                         scene.build_bvh();
                                                         st.edit_dist =
                                                                 (center - cam.origin).length();
@@ -488,7 +487,6 @@ void Renderer::update_selection(RenderState &st,
                         st.edit_pos += applied;
                         if (applied.length_squared() > 0)
                         {
-                                scene.update_beams(mats);
                                 scene.build_bvh();
                         }
                 }

@@ -25,7 +25,7 @@ class Scene
         void update_goal_targets(double dt, std::vector<Material> &materials);
 
 	// Build bounding volume hierarchy for static geometry.
-	void build_bvh();
+        void build_bvh();
 
 	// Test a ray against all objects.
 	bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
@@ -50,4 +50,7 @@ class Scene
                                                std::unordered_map<int, int> &id_map);
         void remap_light_ids(const std::unordered_map<int, int> &id_map);
         void reflect_lights(const std::vector<Material> &mats);
+
+        // Cached pointer to materials for automatic light updates on moves.
+        const std::vector<Material> *materials_ref = nullptr;
 };
