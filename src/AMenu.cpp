@@ -1,6 +1,7 @@
 #include "AMenu.hpp"
 #include "SettingsMenu.hpp"
 #include "LeaderboardMenu.hpp"
+#include <algorithm>
 
 AMenu::AMenu(const std::string &t) : title(t) {}
 
@@ -59,6 +60,17 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
             if (event.type == SDL_QUIT) {
                 running = false;
                 result = ButtonAction::Quit;
+            } else if (event.type == SDL_KEYDOWN &&
+                       event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                auto resume_btn = std::find_if(buttons.begin(), buttons.end(),
+                                               [](const Button &b) {
+                                                   return b.action ==
+                                                          ButtonAction::Resume;
+                                               });
+                if (resume_btn != buttons.end()) {
+                    result = ButtonAction::Resume;
+                    running = false;
+                }
             } else if (event.type == SDL_MOUSEBUTTONDOWN &&
                        event.button.button == SDL_BUTTON_LEFT) {
                 int mx = event.button.x;

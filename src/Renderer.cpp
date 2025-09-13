@@ -744,6 +744,12 @@ void Renderer::render_window(std::vector<Material> &mats,
                 return;
 
         RenderState st;
+        st.focused = true;
+        SDL_SetRelativeMouseMode(SDL_TRUE);
+        SDL_ShowCursor(SDL_DISABLE);
+        SDL_SetWindowGrab(win, SDL_TRUE);
+        SDL_WarpMouseInWindow(win, W / 2, H / 2);
+
         std::vector<Vec3> framebuffer(RW * RH);
         std::vector<unsigned char> pixels(RW * RH * 3);
         Uint32 last = SDL_GetTicks();
