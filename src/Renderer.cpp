@@ -350,9 +350,9 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         double step = e.wheel.y * SCROLL_STEP;
                         if (st.edit_mode)
                         {
-                                st.edit_dist += step;
-                                if (st.edit_dist < 0.1)
-                                        st.edit_dist = 0.1;
+                                st.edit_dist = std::clamp(st.edit_dist + step,
+                                                           OBJECT_MIN_DIST,
+                                                           OBJECT_MAX_DIST);
                         }
                         else if (st.focused)
                         {
@@ -486,17 +486,18 @@ void Renderer::update_selection(RenderState &st,
                 {
                         Vec3 applied = scene.move_with_collision(st.selected_obj, delta);
                         st.edit_pos += applied;
-                        cam.origin = st.edit_pos - cam.forward * st.edit_dist;
                         if (applied.length_squared() > 0)
                         {
                                 scene.update_beams(mats);
                                 scene.build_bvh();
                         }
                 }
-                else
-                {
-                        cam.origin = st.edit_pos - cam.forward * st.edit_dist;
-                }
+
+                Vec3 cam_target = st.edit_pos - cam.forward * st.edit_dist;
+                Vec3 cam_delta = cam_target - cam.origin;
+                if (cam_delta.length_squared() > 0)
+                        scene.move_camera(cam, cam_delta, mats);
+                st.edit_dist = (st.edit_pos - cam.origin).length();
         }
         else
         {
