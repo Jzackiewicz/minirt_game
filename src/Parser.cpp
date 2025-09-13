@@ -1,5 +1,6 @@
 #include "Parser.hpp"
 #include "Beam.hpp"
+#include "BeamTarget.hpp"
 #include "Cone.hpp"
 #include "Cube.hpp"
 #include "Cylinder.hpp"
@@ -324,6 +325,46 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
         }
 }
 
+// Parse beam target definition line.
+static void parse_beam_target(std::istringstream &iss, Scene &scene, int &oid,
+                                                          int &mid, std::vector<Material> &mats)
+{
+        std::string s_pos, s_rgb, s_r;
+        iss >> s_pos >> s_rgb >> s_r;
+        std::string s_move;
+        if (!(iss >> s_move))
+                s_move = "IM";
+        Vec3 c, rgb;
+        double R = 1.0;
+        double a = 255;
+        if (parse_triple(s_pos, c) && parse_rgba(s_rgb, rgb, a) && to_double(s_r, R))
+        {
+                Vec3 unit = rgb_to_unit(rgb);
+
+                mats.emplace_back();
+                mats.back().color = Vec3(0.0, 0.0, 0.0);
+                mats.back().base_color = mats.back().color;
+                mats.back().alpha = 0.33;
+                int big_mat = mid++;
+
+                mats.emplace_back();
+                mats.back().color = unit * 0.5;
+                mats.back().base_color = mats.back().color;
+                mats.back().alpha = 0.67;
+                int mid_mat = mid++;
+
+                mats.emplace_back();
+                mats.back().color = unit;
+                mats.back().base_color = unit;
+                mats.back().alpha = 1.0;
+                int small_mat = mid++;
+
+                auto bt = std::make_shared<BeamTarget>(c, R, oid++, big_mat, mid_mat, small_mat);
+                bt->movable = (s_move == "M");
+                scene.objects.push_back(bt);
+        }
+}
+
 // Parse cone definition line.
 static void parse_cone(std::istringstream &iss, Scene &scene, int &oid, int &mid,
                                            std::vector<Material> &mats)
@@ -397,6 +438,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                         parse_cube(iss, outScene, oid, mid, materials);
                 else if (id == "bm")
                         parse_beam(iss, outScene, oid, mid, materials);
+                else if (id == "bt")
+                        parse_beam_target(iss, outScene, oid, mid, materials);
                 else if (id == "co")
                         parse_cone(iss, outScene, oid, mid, materials);
                 // TODO: textures...
