@@ -281,8 +281,9 @@ void Scene::build_bvh()
 	accel = std::make_shared<BVHNode>(objs, 0, objs.size());
 }
 
-// Move object by delta while preventing collisions.
-Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
+// Move object by delta while preventing collisions and update lights.
+Vec3 Scene::move_with_collision(int index, const Vec3 &delta,
+                                                      const std::vector<Material> &mats)
 {
 	if (!is_movable(index))
 	{
@@ -292,25 +293,28 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
 	HittablePtr object;
 	object = objects[index];
 
-	apply_translation(object, delta);
-	if (!collides(index))
-	{
-		return delta;
-	}
-	apply_translation(object, delta * -1);
+        apply_translation(object, delta);
+        Vec3 moved(0, 0, 0);
+        if (!collides(index))
+        {
+                moved = delta;
+        }
+        else
+        {
+                apply_translation(object, delta * -1);
 
-	Vec3 moved;
-	moved = Vec3(0, 0, 0);
-
-	Vec3 axis_deltas[3];
-	axis_deltas[0] = Vec3(delta.x, 0, 0);
-	axis_deltas[1] = Vec3(0, delta.y, 0);
-	axis_deltas[2] = Vec3(0, 0, delta.z);
-	for (const Vec3 &axis_delta : axis_deltas)
-	{
-		attempt_axis_move(index, axis_delta, moved);
-	}
-	return moved;
+                Vec3 axis_deltas[3];
+                axis_deltas[0] = Vec3(delta.x, 0, 0);
+                axis_deltas[1] = Vec3(0, delta.y, 0);
+                axis_deltas[2] = Vec3(0, 0, delta.z);
+                for (const Vec3 &axis_delta : axis_deltas)
+                {
+                        attempt_axis_move(index, axis_delta, moved);
+                }
+        }
+        if (moved.length_squared() > 0)
+                update_beams(mats);
+        return moved;
 }
 
 // Determine whether object is movable.

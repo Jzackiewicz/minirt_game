@@ -34,7 +34,8 @@ class Scene
 	bool collides(int index) const;
 
 	// Move object while preventing collisions.
-	Vec3 move_with_collision(int index, const Vec3 &delta);
+        Vec3 move_with_collision(int index, const Vec3 &delta,
+                                                 const std::vector<Material> &materials);
 
 	// Move camera while avoiding obstacles.
         Vec3 move_camera(Camera &cam, const Vec3 &delta,
