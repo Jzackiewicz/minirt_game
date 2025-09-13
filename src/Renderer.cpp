@@ -412,18 +412,31 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
         if (st.edit_mode)
         {
                 double cam_speed = CAMERA_MOVE_SPEED * dt;
+                Vec3 intended(0, 0, 0);
                 if (state[SDL_SCANCODE_W])
-                        scene.move_camera(cam, forward_xz * cam_speed, mats);
+                        intended += forward_xz * cam_speed;
                 if (state[SDL_SCANCODE_S])
-                        scene.move_camera(cam, forward_xz * -cam_speed, mats);
+                        intended += forward_xz * -cam_speed;
                 if (state[SDL_SCANCODE_A])
-                        scene.move_camera(cam, right_xz * -cam_speed, mats);
+                        intended += right_xz * -cam_speed;
                 if (state[SDL_SCANCODE_D])
-                        scene.move_camera(cam, right_xz * cam_speed, mats);
+                        intended += right_xz * cam_speed;
                 if (state[SDL_SCANCODE_SPACE])
-                        scene.move_camera(cam, Vec3(0, 1, 0) * cam_speed, mats);
+                        intended += Vec3(0, 1, 0) * cam_speed;
                 if (state[SDL_SCANCODE_LCTRL])
-                        scene.move_camera(cam, Vec3(0, -1, 0) * cam_speed, mats);
+                        intended += Vec3(0, -1, 0) * cam_speed;
+
+                if (intended.length_squared() > 0)
+                {
+                        Vec3 applied = scene.move_with_collision(st.selected_obj, intended);
+                        if (applied.length_squared() > 0)
+                        {
+                                st.edit_pos += applied;
+                                scene.move_camera(cam, applied, mats);
+                                scene.update_beams(mats);
+                                scene.build_bvh();
+                        }
+                }
 
                 double rot_speed = OBJECT_ROTATE_SPEED * dt;
                 bool changed = false;
@@ -482,9 +495,10 @@ void Renderer::update_selection(RenderState &st,
 
                 Vec3 desired = cam.origin + cam.forward * st.edit_dist;
                 Vec3 delta = desired - st.edit_pos;
+                Vec3 applied(0, 0, 0);
                 if (delta.length_squared() > 0)
                 {
-                        Vec3 applied = scene.move_with_collision(st.selected_obj, delta);
+                        applied = scene.move_with_collision(st.selected_obj, delta);
                         st.edit_pos += applied;
                         if (applied.length_squared() > 0)
                         {
@@ -495,7 +509,7 @@ void Renderer::update_selection(RenderState &st,
 
                 Vec3 cam_target = st.edit_pos - cam.forward * st.edit_dist;
                 Vec3 cam_delta = cam_target - cam.origin;
-                if (cam_delta.length_squared() > 0)
+                if (applied.length_squared() > 0 && cam_delta.length_squared() > 0)
                         scene.move_camera(cam, cam_delta, mats);
                 st.edit_dist = (st.edit_pos - cam.origin).length();
         }
