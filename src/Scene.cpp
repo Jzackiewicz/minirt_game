@@ -26,8 +26,8 @@ void Scene::prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
         static_lights.reserve(lights.size());
         for (const auto &L : lights)
         {
-                bool keep = true;
-                if (L.attached_id >= 0)
+                bool keep = !L.reflected;
+                if (keep && L.attached_id >= 0)
                 {
                         auto it = std::find_if(objects.begin(), objects.end(),
                                                                    [&](const HittablePtr &o)
@@ -242,7 +242,7 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
                 std::vector<int> ignore = L.ignore_ids;
                 ignore.push_back(hit_rec.object_id);
                 PointLight new_light(refl_orig, L.color, intensity, ignore, -1,
-                                                         refl_dir, L.cutoff_cos, remain);
+                                                         refl_dir, L.cutoff_cos, remain, true);
                 to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
         }
 }
