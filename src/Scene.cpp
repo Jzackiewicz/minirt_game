@@ -3,6 +3,7 @@
 #include "Collision.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
+#include "BeamTarget.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -71,6 +72,9 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                               std::vector<std::shared_ptr<Laser>> &roots,
                                               std::unordered_map<int, int> &id_map)
 {
+        for (auto &obj : objects)
+                if (obj->shape_type() == ShapeType::BeamTarget)
+                        std::static_pointer_cast<BeamTarget>(obj)->goal_active = false;
         int next_oid = static_cast<int>(objects.size());
         std::vector<std::shared_ptr<Laser>> to_process = roots;
         class PendingLight
@@ -109,6 +113,13 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 if (hit_any)
                 {
                         bm->length = closest;
+                        if (hit_rec.object_id >= 0 &&
+                                hit_rec.object_id < static_cast<int>(objects.size()))
+                        {
+                                auto hit_obj = objects[hit_rec.object_id];
+                                if (hit_obj->shape_type() == ShapeType::BeamTarget)
+                                        std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
+                        }
                         if (mats[hit_rec.material_id].mirror)
                         {
                                 double new_start = bm->start + closest;
@@ -179,6 +190,13 @@ void Scene::update_beams(const std::vector<Material> &mats)
         prepare_beam_roots(roots, id_map);
         process_beams(mats, roots, id_map);
         remap_light_ids(id_map);
+}
+
+void Scene::update_goal_targets(double dt, std::vector<Material> &mats)
+{
+        for (auto &obj : objects)
+                if (obj->shape_type() == ShapeType::BeamTarget)
+                        std::static_pointer_cast<BeamTarget>(obj)->update_goal(dt, mats);
 }
 
 // Construct a bounding volume hierarchy for faster ray queries.

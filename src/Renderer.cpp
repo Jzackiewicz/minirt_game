@@ -772,6 +772,7 @@ void Renderer::render_window(std::vector<Material> &mats,
 
                 process_events(st, win, ren, W, H, mats, scene_path);
                 handle_keyboard(st, dt, mats);
+                scene.update_goal_targets(dt, mats);
                 update_selection(st, mats);
                 render_frame(st, ren, tex, framebuffer, pixels, RW, RH, W, H, T,
                                          mats);
