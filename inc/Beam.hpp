@@ -12,5 +12,6 @@ class Beam
        std::shared_ptr<BeamSource> source;
        Beam(const Vec3 &origin, const Vec3 &dir, double ray_radius,
                 double length, double intensity, int base_oid, int laser_mat,
-                int big_mat, int mid_mat, int small_mat);
+                int big_mat, int mid_mat, int small_mat,
+                bool with_laser = true);
 };
