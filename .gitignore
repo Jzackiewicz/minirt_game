@@ -20,4 +20,6 @@ cmake-build-*/
 *.png
 *.jpg
 *.jpeg
-*.yaml
+
+settings.yaml
+*.rt
