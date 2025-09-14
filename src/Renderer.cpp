@@ -294,12 +294,13 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 st.rotating = false;
                         }
                 }
-                else if (e.type == SDL_MOUSEBUTTONDOWN &&
-                                 e.button.button == SDL_BUTTON_RIGHT)
-                {
-                        if (st.edit_mode)
-                                st.rotating = true;
-                }
+               else if (e.type == SDL_MOUSEBUTTONDOWN &&
+                                e.button.button == SDL_BUTTON_RIGHT)
+               {
+                       if (st.edit_mode &&
+                           scene.objects[st.selected_obj]->rotatable)
+                               st.rotating = true;
+               }
                 else if (e.type == SDL_MOUSEBUTTONUP &&
                                  e.button.button == SDL_BUTTON_RIGHT)
                 {
@@ -427,24 +428,29 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
 
                 double rot_speed = OBJECT_ROTATE_SPEED * dt;
                 bool changed = false;
-                if (state[SDL_SCANCODE_Q])
-                {
-                        scene.objects[st.selected_obj]->rotate(cam.forward, -rot_speed);
-                        if (scene.collides(st.selected_obj))
-                                scene.objects[st.selected_obj]->rotate(cam.forward,
-                                                                                                      rot_speed);
-                        else
-                                changed = true;
-                }
-                if (state[SDL_SCANCODE_E])
-                {
-                        scene.objects[st.selected_obj]->rotate(cam.forward, rot_speed);
-                        if (scene.collides(st.selected_obj))
-                                scene.objects[st.selected_obj]->rotate(cam.forward,
-                                                                                                      -rot_speed);
-                        else
-                                changed = true;
-                }
+               if (scene.objects[st.selected_obj]->rotatable)
+               {
+                       if (state[SDL_SCANCODE_Q])
+                       {
+                               scene.objects[st.selected_obj]->rotate(cam.forward,
+                                                                        -rot_speed);
+                               if (scene.collides(st.selected_obj))
+                                       scene.objects[st.selected_obj]->rotate(
+                                               cam.forward, rot_speed);
+                               else
+                                       changed = true;
+                       }
+                       if (state[SDL_SCANCODE_E])
+                       {
+                               scene.objects[st.selected_obj]->rotate(cam.forward,
+                                                                        rot_speed);
+                               if (scene.collides(st.selected_obj))
+                                       scene.objects[st.selected_obj]->rotate(
+                                               cam.forward, -rot_speed);
+                               else
+                                       changed = true;
+                       }
+               }
                 if (changed)
                 {
                         scene.update_beams(mats);

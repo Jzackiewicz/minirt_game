@@ -270,9 +270,19 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
 {
        std::string s_intens, s_pos, s_dir, s_rgb, s_r, s_L;
        iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_r >> s_L;
-        std::string s_move;
-        if (!(iss >> s_move))
-                s_move = "IM";
+       std::string s_move = "IM";
+       std::string s_rot = "R";
+       std::string s_laser = "L";
+       std::string flag;
+       while (iss >> flag)
+       {
+               if (flag == "M" || flag == "IM")
+                       s_move = flag;
+               else if (flag == "R" || flag == "NR")
+                       s_rot = flag;
+               else if (flag == "L" || flag == "NL")
+                       s_laser = flag;
+       }
        Vec3 o, dir, rgb;
        double ray_radius = 0.1, L = 1.0, intensity = 0.75;
         double a = 255;
@@ -308,20 +318,36 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 mats.back().alpha = 1.0;
                 int small_mat = mid++;
 
+               bool laser_on = (s_laser != "NL");
                auto bm = std::make_shared<Beam>(o, dir_norm, ray_radius, L,
-                                                                                        intensity, oid, beam_mat,
-                                                                                        big_mat, mid_mat, small_mat);
-                oid += 2;
-                bm->source->movable = (s_move == "M");
-                scene.objects.push_back(bm->laser);
-                scene.objects.push_back(bm->source);
-                const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-                scene.lights.emplace_back(
-                        o, unit, intensity,
-                        std::vector<int>{bm->laser->object_id,
-                                                         bm->source->object_id,
-                                                         bm->source->mid.object_id},
-                        bm->source->object_id, dir_norm, cone_cos, L);
+                                                                                       intensity, oid, beam_mat,
+                                                                                       big_mat, mid_mat, small_mat,
+                                                                                       laser_on);
+               bm->source->movable = (s_move == "M");
+               bm->source->rotatable = (s_rot == "R");
+               const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+                if (laser_on)
+                {
+                        scene.objects.push_back(bm->laser);
+                        scene.objects.push_back(bm->source);
+                        scene.lights.emplace_back(
+                                o, unit, intensity,
+                                std::vector<int>{bm->laser->object_id,
+                                                                 bm->source->object_id,
+                                                                 bm->source->mid.object_id},
+                                bm->source->object_id, dir_norm, cone_cos, L);
+                        oid += 2;
+                }
+                else
+                {
+                        scene.objects.push_back(bm->source);
+                        scene.lights.emplace_back(
+                                o, unit, intensity,
+                                std::vector<int>{bm->source->object_id,
+                                                                 bm->source->mid.object_id},
+                                bm->source->object_id, dir_norm, cone_cos, L);
+                        ++oid;
+                }
         }
 }
 
