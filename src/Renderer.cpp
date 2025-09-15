@@ -5,6 +5,12 @@
 #include "Parser.hpp"
 #include "PauseMenu.hpp"
 #include "Laser.hpp"
+#include "Plane.hpp"
+#include "Sphere.hpp"
+#include "Cube.hpp"
+#include "Cone.hpp"
+#include "Cylinder.hpp"
+#include "CustomCharacter.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -215,6 +221,7 @@ struct Renderer::RenderState
         int selected_mat = -1;
         double edit_dist = 0.0;
         Vec3 edit_pos;
+        int spawn_key = -1;
 };
 
 /// Initialize SDL window, renderer and texture objects.
@@ -319,6 +326,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         st.edit_pos = center;
                                 }
                                 st.edit_mode = true;
+                                st.spawn_key = -1;
                         }
                         else if (st.edit_mode)
                         {
@@ -328,6 +336,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 st.selected_obj = st.selected_mat = -1;
                                 st.edit_mode = false;
                                 st.rotating = false;
+                                st.spawn_key = -1;
                         }
                 }
                 else if (e.type == SDL_MOUSEBUTTONDOWN &&
@@ -341,6 +350,21 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 {
                         st.rotating = false;
                 }
+                else if (g_developer_mode && st.edit_mode &&
+                                 e.type == SDL_MOUSEBUTTONDOWN &&
+                                 e.button.button == SDL_BUTTON_MIDDLE)
+                {
+                        int mid = st.selected_mat;
+                        mats[mid].checkered = false;
+                        mats[mid].color = mats[mid].base_color;
+                        scene.objects.erase(scene.objects.begin() + st.selected_obj);
+                        scene.update_beams(mats);
+                        scene.build_bvh();
+                        st.selected_obj = st.selected_mat = -1;
+                        st.edit_mode = false;
+                        st.rotating = false;
+                        st.spawn_key = -1;
+                }
                 else if (st.focused && e.type == SDL_MOUSEMOTION)
                 {
                         if (st.edit_mode && st.rotating)
@@ -351,7 +375,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 if (yaw != 0.0)
                                 {
                                         scene.objects[st.selected_obj]->rotate(cam.up, yaw);
-                                        if (scene.collides(st.selected_obj))
+                                        if (!g_developer_mode && scene.collides(st.selected_obj))
                                                 scene.objects[st.selected_obj]->rotate(
                                                         cam.up, -yaw);
                                         else
@@ -362,7 +386,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 {
                                         scene.objects[st.selected_obj]->rotate(cam.right,
                                                                                                           pitch);
-                                        if (scene.collides(st.selected_obj))
+                                        if (!g_developer_mode && scene.collides(st.selected_obj))
                                                 scene.objects[st.selected_obj]->rotate(
                                                         cam.right, -pitch);
                                         else
@@ -386,16 +410,60 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         double step = e.wheel.y * SCROLL_STEP;
                         if (st.edit_mode)
                         {
-                                st.edit_dist = std::clamp(st.edit_dist + step,
+                                if (g_developer_mode)
+                                {
+                                        auto obj = scene.objects[st.selected_obj];
+                                        double factor = 1.0 + step;
+                                        if (factor > 0.1)
+                                        {
+                                                switch (obj->shape_type())
+                                                {
+                                                case ShapeType::Sphere:
+                                                {
+                                                        auto sp = std::static_pointer_cast<Sphere>(obj);
+                                                        sp->radius = std::max(0.1, sp->radius * factor);
+                                                        break;
+                                                }
+                                                case ShapeType::Cube:
+                                                {
+                                                        auto cu = std::static_pointer_cast<Cube>(obj);
+                                                        cu->half = cu->half * factor;
+                                                        break;
+                                                }
+                                                case ShapeType::Cone:
+                                                {
+                                                        auto co = std::static_pointer_cast<Cone>(obj);
+                                                        co->radius = std::max(0.1, co->radius * factor);
+                                                        co->height = std::max(0.1, co->height * factor);
+                                                        break;
+                                                }
+                                                case ShapeType::Cylinder:
+                                                {
+                                                        auto cy = std::static_pointer_cast<Cylinder>(obj);
+                                                        cy->radius = std::max(0.1, cy->radius * factor);
+                                                        cy->height = std::max(0.1, cy->height * factor);
+                                                        break;
+                                                }
+                                                default:
+                                                        break;
+                                                }
+                                                scene.update_beams(mats);
+                                                scene.build_bvh();
+                                        }
+                                }
+                                else
+                                {
+                                        st.edit_dist = std::clamp(st.edit_dist + step,
                                                            OBJECT_MIN_DIST,
                                                            OBJECT_MAX_DIST);
+                                }
                         }
                         else if (st.focused)
                         {
                                 scene.move_camera(cam, cam.up * step, mats);
                         }
                 }
-                else if (st.focused && e.type == SDL_KEYDOWN &&
+                else if (g_developer_mode && st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_C)
                 {
                         scene.update_beams(mats);
@@ -405,6 +473,64 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 std::cout << "Saved scene to: " << save << "\n";
                         else
                                 std::cerr << "Failed to save scene to: " << save << "\n";
+                }
+                else if (g_developer_mode && st.focused && e.type == SDL_KEYDOWN &&
+                                 (e.key.keysym.scancode == SDL_SCANCODE_1 ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_2 ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_3 ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_4 ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_5))
+                {
+                        if (st.edit_mode)
+                        {
+                                if (st.spawn_key == e.key.keysym.scancode)
+                                {
+                                        int mid = st.selected_mat;
+                                        mats[mid].checkered = false;
+                                        mats[mid].color = mats[mid].base_color;
+                                        scene.objects.erase(scene.objects.begin() + st.selected_obj);
+                                        scene.update_beams(mats);
+                                        scene.build_bvh();
+                                        st.selected_obj = st.selected_mat = -1;
+                                        st.edit_mode = false;
+                                        st.rotating = false;
+                                        st.spawn_key = -1;
+                                }
+                        }
+                        else
+                        {
+                                int oid = static_cast<int>(scene.objects.size());
+                                int mid = static_cast<int>(mats.size());
+                                Material m;
+                                m.color = m.base_color = Vec3(0.5, 0.5, 0.5);
+                                m.alpha = 1.0;
+                                m.mirror = true;
+                                mats.push_back(m);
+                                Vec3 pos = cam.origin + cam.forward * 3.0;
+                                HittablePtr obj;
+                                if (e.key.keysym.scancode == SDL_SCANCODE_1)
+                                        obj = std::make_shared<Plane>(pos, Vec3(0, 1, 0), oid, mid);
+                                else if (e.key.keysym.scancode == SDL_SCANCODE_2)
+                                        obj = std::make_shared<Sphere>(pos, 1.0, oid, mid);
+                                else if (e.key.keysym.scancode == SDL_SCANCODE_3)
+                                        obj = std::make_shared<Cube>(pos, cam.up, 1.0, 1.0, 1.0, oid, mid);
+                                else if (e.key.keysym.scancode == SDL_SCANCODE_4)
+                                        obj = std::make_shared<Cone>(pos, cam.up, 1.0, 2.0, oid, mid);
+                                else
+                                        obj = std::make_shared<Cylinder>(pos, cam.up, 1.0, 2.0, oid, mid);
+                                obj->movable = true;
+                                scene.objects.push_back(obj);
+                                scene.update_beams(mats);
+                                scene.build_bvh();
+                                st.selected_obj = oid;
+                                st.selected_mat = mid;
+                                mats[mid].checkered = true;
+                                st.edit_mode = true;
+                                st.rotating = false;
+                                st.edit_pos = pos;
+                                st.edit_dist = (pos - cam.origin).length();
+                                st.spawn_key = e.key.keysym.scancode;
+                        }
                 }
                 else if (st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
@@ -466,7 +592,7 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
                 if (state[SDL_SCANCODE_Q])
                 {
                         scene.objects[st.selected_obj]->rotate(cam.forward, -rot_speed);
-                        if (scene.collides(st.selected_obj))
+                        if (!g_developer_mode && scene.collides(st.selected_obj))
                                 scene.objects[st.selected_obj]->rotate(cam.forward,
                                                                                                       rot_speed);
                         else
@@ -475,7 +601,7 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
                 if (state[SDL_SCANCODE_E])
                 {
                         scene.objects[st.selected_obj]->rotate(cam.forward, rot_speed);
-                        if (scene.collides(st.selected_obj))
+                        if (!g_developer_mode && scene.collides(st.selected_obj))
                                 scene.objects[st.selected_obj]->rotate(cam.forward,
                                                                                                       -rot_speed);
                         else
@@ -691,6 +817,20 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         const int ch_size = 10;
         SDL_RenderDrawLine(ren, cx - ch_size, cy, cx + ch_size, cy);
         SDL_RenderDrawLine(ren, cx, cy - ch_size, cx, cy + ch_size);
+        if (g_developer_mode)
+        {
+                SDL_Color red{255, 0, 0, 255};
+                int scale = 2;
+                const char *legend[] = {"1-PLANE",  "2-SPHERE",   "3-CUBE",
+                                         "4-CONE",  "5-CYLINDER", "SCROLL-SIZE",
+                                         "MCLICK-DEL"};
+                for (int i = 0; i < 7; ++i)
+                        CustomCharacter::draw_text(ren, legend[i], 5,
+                                                    5 + i * (7 * scale + 2), red, scale);
+                std::string text = "DEVELOPER MODE";
+                int tw = CustomCharacter::text_width(text, scale);
+                CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
+        }
         SDL_RenderPresent(ren);
 }
 

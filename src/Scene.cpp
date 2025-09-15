@@ -4,6 +4,7 @@
 #include "Laser.hpp"
 #include "Plane.hpp"
 #include "BeamTarget.hpp"
+#include "Settings.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -306,33 +307,39 @@ void Scene::build_bvh()
 // Move object by delta while preventing collisions.
 Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
 {
-	if (!is_movable(index))
-	{
-		return Vec3(0, 0, 0);
-	}
+        if (!is_movable(index))
+        {
+                return Vec3(0, 0, 0);
+        }
 
-	HittablePtr object;
-	object = objects[index];
+        HittablePtr object;
+        object = objects[index];
 
-	apply_translation(object, delta);
-	if (!collides(index))
-	{
-		return delta;
-	}
-	apply_translation(object, delta * -1);
+        if (g_developer_mode)
+        {
+                apply_translation(object, delta);
+                return delta;
+        }
 
-	Vec3 moved;
-	moved = Vec3(0, 0, 0);
+        apply_translation(object, delta);
+        if (!collides(index))
+        {
+                return delta;
+        }
+        apply_translation(object, delta * -1);
 
-	Vec3 axis_deltas[3];
-	axis_deltas[0] = Vec3(delta.x, 0, 0);
-	axis_deltas[1] = Vec3(0, delta.y, 0);
-	axis_deltas[2] = Vec3(0, 0, delta.z);
-	for (const Vec3 &axis_delta : axis_deltas)
-	{
-		attempt_axis_move(index, axis_delta, moved);
-	}
-	return moved;
+        Vec3 moved;
+        moved = Vec3(0, 0, 0);
+
+        Vec3 axis_deltas[3];
+        axis_deltas[0] = Vec3(delta.x, 0, 0);
+        axis_deltas[1] = Vec3(0, delta.y, 0);
+        axis_deltas[2] = Vec3(0, 0, delta.z);
+        for (const Vec3 &axis_delta : axis_deltas)
+        {
+                attempt_axis_move(index, axis_delta, moved);
+        }
+        return moved;
 }
 
 // Determine whether object is movable.
@@ -386,13 +393,19 @@ void Scene::attempt_axis_move(int index, const Vec3 &axis_delta, Vec3 &moved)
 
 // Move camera with collision avoidance.
 Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
-						const std::vector<Material> &mats) const
+                                                const std::vector<Material> &mats) const
 {
-	auto blocked = [&](const Vec3 &start, const Vec3 &d)
-	{
-		double len = d.length();
-		if (len <= 0.0)
-			return false;
+        if (g_developer_mode)
+        {
+                cam.move(delta);
+                return delta;
+        }
+
+        auto blocked = [&](const Vec3 &start, const Vec3 &d)
+        {
+                double len = d.length();
+                if (len <= 0.0)
+                        return false;
                 Ray r(start, d / len);
                 HitRecord tmp;
                 for (const auto &obj : objects)
@@ -408,28 +421,28 @@ Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
                 return false;
         };
 
-	Vec3 start = cam.origin;
-	if (!blocked(start, delta))
-	{
-		cam.move(delta);
-		return delta;
-	}
+        Vec3 start = cam.origin;
+        if (!blocked(start, delta))
+        {
+                cam.move(delta);
+                return delta;
+        }
 
-	Vec3 moved(0, 0, 0);
-	Vec3 axes[3] = {Vec3(delta.x, 0, 0), Vec3(0, delta.y, 0),
-					Vec3(0, 0, delta.z)};
-	for (const Vec3 &ax : axes)
-	{
-		if (ax.length_squared() == 0)
-			continue;
-		if (!blocked(start, ax))
-		{
-			cam.move(ax);
-			start += ax;
-			moved += ax;
-		}
-	}
-	return moved;
+        Vec3 moved(0, 0, 0);
+        Vec3 axes[3] = {Vec3(delta.x, 0, 0), Vec3(0, delta.y, 0),
+                                        Vec3(0, 0, delta.z)};
+        for (const Vec3 &ax : axes)
+        {
+                if (ax.length_squared() == 0)
+                        continue;
+                if (!blocked(start, ax))
+                {
+                        cam.move(ax);
+                        start += ax;
+                        moved += ax;
+                }
+        }
+        return moved;
 }
 
 // Check if object at index intersects any other object.

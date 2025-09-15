@@ -2,6 +2,7 @@
 #include "SettingsMenu.hpp"
 #include "LeaderboardMenu.hpp"
 #include <algorithm>
+#include "Settings.hpp"
 
 AMenu::AMenu(const std::string &t) : title(t) {}
 
@@ -154,7 +155,12 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
             int text_y = btn.rect.y + (btn.rect.h - 7 * scale) / 2;
             CustomCharacter::draw_text(renderer, btn.text, text_x, text_y, white, scale);
         }
-
+        if (g_developer_mode) {
+            SDL_Color red{255, 0, 0, 255};
+            std::string text = "DEVELOPER MODE";
+            int tw = CustomCharacter::text_width(text, scale);
+            CustomCharacter::draw_text(renderer, text, width - tw - 5, 5, red, scale);
+        }
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
     }

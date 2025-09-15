@@ -9,6 +9,7 @@ struct GameSettings {
 };
 
 extern GameSettings g_settings;
+extern bool g_developer_mode;
 
 void load_settings(const std::string &filename = "settings.yaml");
 void save_settings(const std::string &filename = "settings.yaml");
