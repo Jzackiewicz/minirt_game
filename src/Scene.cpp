@@ -120,7 +120,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
                         }
-                        if (mats[hit_rec.material_id].mirror)
+                        const Material &hit_mat = mats[hit_rec.material_id];
+                        if (hit_mat.mirror)
                         {
                                 double new_start = bm->start + closest;
                                 double new_len = bm->total_length - new_start;
@@ -132,6 +133,26 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                refl_orig, refl_dir, new_len,
                                                bm->light_intensity, 0, bm->material_id,
                                                new_start, bm->total_length);
+                                        new_bm->color = bm->color;
+                                        new_bm->source = bm->source;
+                                        to_process.push_back(new_bm);
+                                        pending_lights.push_back({new_bm, hit_rec.object_id});
+                                }
+                        }
+                        else if (hit_mat.alpha < 1.0)
+                        {
+                                double new_start = bm->start + closest;
+                                double new_len = bm->total_length - new_start;
+                                if (new_len > 1e-4)
+                                {
+                                        Vec3 pass_orig = forward.at(closest) + forward.dir * 1e-4;
+                                        Vec3 new_color = (bm->color + hit_mat.base_color) * 0.5;
+                                        double new_intens =
+                                                bm->light_intensity * (1.0 - hit_mat.alpha);
+                                       auto new_bm = std::make_shared<Laser>(
+                                               pass_orig, forward.dir, new_len, new_intens, 0,
+                                               bm->material_id, new_start, bm->total_length);
+                                        new_bm->color = new_color;
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
                                         pending_lights.push_back({new_bm, hit_rec.object_id});
@@ -143,7 +164,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
         for (const auto &pl : pending_lights)
         {
                 auto bm = pl.beam;
-                Vec3 light_col = mats[bm->material_id].base_color;
+                Vec3 light_col = bm->color;
                 const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
                 double remain = bm->total_length - bm->start;
                 double ratio =

@@ -5,7 +5,8 @@
 Laser::Laser(const Vec3 &origin, const Vec3 &dir, double len,
                          double intensity, int oid, int mid, double s, double total)
        : path(origin, dir.normalized()), radius(0.1), length(len), start(s),
-         total_length(total < 0 ? len : total), light_intensity(intensity)
+         total_length(total < 0 ? len : total), light_intensity(intensity),
+         color(1.0, 1.0, 1.0)
 {
         object_id = oid;
         material_id = mid;

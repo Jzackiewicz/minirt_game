@@ -315,7 +315,7 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                auto bm = std::make_shared<Beam>(o, dir_norm, ray_radius, L,
                                                                                         intensity, oid, beam_mat,
                                                                                         big_mat, mid_mat, small_mat,
-                                                                                        with_laser);
+                                                                                        with_laser, unit);
                 if (with_laser)
                 {
                         oid += 2;
