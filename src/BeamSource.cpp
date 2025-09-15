@@ -2,11 +2,13 @@
 #include <cmath>
 
 BeamSource::BeamSource(const Vec3 &c, const Vec3 &dir,
-                                           const std::shared_ptr<Laser> &bm, double mid_radius,
-                                           int oid, int mat_big, int mat_mid, int mat_small)
+                                           const std::shared_ptr<Laser> &bm,
+                                           const std::shared_ptr<LightRay> &lt,
+                                           double mid_radius, int oid, int mat_big,
+                                           int mat_mid, int mat_small)
        : Sphere(c, mid_radius * 2.0, oid, mat_big),
          mid(c, mid_radius * 1.5, -oid - 1, mat_mid),
-         inner(c, mid_radius, -oid - 2, mat_small), beam(bm)
+         inner(c, mid_radius, -oid - 2, mat_small), beam(bm), light(lt)
 {
         (void)dir;
 }
@@ -29,10 +31,12 @@ bool BeamSource::hit(const Ray &r, double tmin, double tmax,
 		closest = tmp.t;
 		rec = tmp;
 	}
-	if (inner.hit(r, tmin, closest, tmp))
-	{
-		Vec3 beam_dir = beam ? beam->path.dir : Vec3(0, 0, 1);
-		Vec3 to_hit = (tmp.p - inner.center).normalized();
+        if (inner.hit(r, tmin, closest, tmp))
+        {
+                Vec3 beam_dir = beam
+                                        ? beam->path.dir
+                                        : (light ? light->ray.dir : Vec3(0, 0, 1));
+                Vec3 to_hit = (tmp.p - inner.center).normalized();
 		const double hole_cos = std::sqrt(1.0 - 0.25 * 0.25);
 		if (Vec3::dot(beam_dir, to_hit) < hole_cos)
 		{
@@ -49,8 +53,10 @@ void BeamSource::translate(const Vec3 &delta)
 	Sphere::translate(delta);
 	mid.translate(delta);
 	inner.translate(delta);
-	if (beam)
-		beam->path.orig += delta;
+        if (beam)
+                beam->path.orig += delta;
+        if (light)
+                light->ray.orig += delta;
 }
 
 void BeamSource::rotate(const Vec3 &ax, double angle)
@@ -62,11 +68,18 @@ void BeamSource::rotate(const Vec3 &ax, double angle)
 		return v * c + Vec3::cross(axis, v) * s +
 			   axis * Vec3::dot(axis, v) * (1 - c);
 	};
-	if (beam)
-		beam->path.dir = rotate_vec(beam->path.dir, ax, angle).normalized();
+        if (beam)
+                beam->path.dir = rotate_vec(beam->path.dir, ax, angle).normalized();
+        if (light)
+                light->ray.dir =
+                        rotate_vec(light->ray.dir, ax, angle).normalized();
 }
 
 Vec3 BeamSource::spot_direction() const
 {
-	return beam ? beam->path.dir : Vec3(0, 0, 1);
+        if (beam)
+                return beam->path.dir;
+        if (light)
+                return light->ray.dir;
+        return Vec3(0, 0, 1);
 }
