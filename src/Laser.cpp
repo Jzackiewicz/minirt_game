@@ -3,9 +3,11 @@
 #include <cmath>
 
 Laser::Laser(const Vec3 &origin, const Vec3 &dir, double len,
-                         double intensity, int oid, int mid, double s, double total)
+                         double intensity, int oid, int mid, double s, double total,
+                         const Vec3 &col)
        : path(origin, dir.normalized()), radius(0.1), length(len), start(s),
-         total_length(total < 0 ? len : total), light_intensity(intensity)
+         total_length(total < 0 ? len : total), light_intensity(intensity),
+         color(col)
 {
         object_id = oid;
         material_id = mid;

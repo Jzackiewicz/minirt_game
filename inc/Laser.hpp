@@ -1,6 +1,7 @@
 #pragma once
 #include "Hittable.hpp"
 #include "Ray.hpp"
+#include "Vec3.hpp"
 #include <memory>
 
 class Laser : public Hittable
@@ -10,11 +11,13 @@ class Laser : public Hittable
        const double radius;
        double length;
 	double start;
-	double total_length;
-	double light_intensity;
-	std::weak_ptr<Hittable> source;
+       double total_length;
+        double light_intensity;
+        Vec3 color;
+        std::weak_ptr<Hittable> source;
        Laser(const Vec3 &origin, const Vec3 &dir, double length, double intensity,
-                 int oid, int mid, double start = 0.0, double total = -1.0);
+                 int oid, int mid, double start = 0.0, double total = -1.0,
+                 const Vec3 &col = Vec3(1, 1, 1));
 
 	bool hit(const Ray &r, double tmin, double tmax,
 			 HitRecord &rec) const override;

@@ -4,6 +4,7 @@
 #include "Settings.hpp"
 #include "Parser.hpp"
 #include "PauseMenu.hpp"
+#include "Laser.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -17,32 +18,46 @@
 #include <string>
 #include <thread>
 
-static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
-					  const Vec3 &p, const PointLight &L)
+static Vec3 mix_colors(const Vec3 &light, const Vec3 &obj)
 {
-	Vec3 to_light = L.position - p;
-	double dist_to_light = to_light.length();
-	if (L.range > 0.0 && dist_to_light > L.range)
-		return false;
-	Vec3 dir = to_light.normalized();
-	Ray shadow_ray(p + dir * 1e-4, dir);
-	HitRecord tmp;
-	for (const auto &obj : scene.objects)
-	{
-		if (obj->is_beam())
-			continue;
-		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
-					  obj->object_id) != L.ignore_ids.end())
-			continue;
-		const Material &m = mats[obj->material_id];
-		if (m.alpha < 1.0)
-			continue;
-		if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
-		{
-			return true;
-		}
-	}
-	return false;
+        if (std::fabs(light.x - light.y) < 1e-3 &&
+                std::fabs(light.y - light.z) < 1e-3)
+                return obj;
+        return Vec3((light.x + obj.x) * 0.5, (light.y + obj.y) * 0.5,
+                             (light.z + obj.z) * 0.5);
+}
+
+static Vec3 filter_light(const Scene &scene, const std::vector<Material> &mats,
+                                          const Vec3 &p, const PointLight &L)
+{
+        Vec3 to_light = L.position - p;
+        double dist_to_light = to_light.length();
+        if (L.range > 0.0 && dist_to_light > L.range)
+                return Vec3(0, 0, 0);
+        Vec3 dir = to_light.normalized();
+        Ray ray(p + dir * 1e-4, dir);
+        Vec3 color = L.color;
+        double remaining = dist_to_light - 1e-4;
+        HitRecord tmp;
+        while (scene.hit(ray, 1e-4, remaining, tmp))
+        {
+                auto obj = scene.objects[tmp.object_id];
+                if (obj->is_beam() ||
+                        std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                          obj->object_id) != L.ignore_ids.end())
+                {
+                        ray.orig = tmp.p + dir * 1e-4;
+                        remaining -= tmp.t;
+                        continue;
+                }
+                const Material &m = mats[tmp.material_id];
+                if (m.alpha >= 1.0 || obj->blocks_when_transparent())
+                        return Vec3(0, 0, 0);
+                color = mix_colors(color, m.base_color);
+                ray.orig = tmp.p + dir * 1e-4;
+                remaining -= tmp.t;
+        }
+        return color;
 }
 
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
@@ -57,19 +72,26 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	{
 		return Vec3(0.0, 0.0, 0.0);
 	}
-	const Material &m = mats[rec.material_id];
-	Vec3 eye = (r.dir * -1.0).normalized();
-	Vec3 base = m.base_color;
-	Vec3 col = m.color;
-	if (m.checkered)
-	{
-		Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
-		int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
-				   static_cast<int>(std::floor(rec.p.y * 5)) +
-				   static_cast<int>(std::floor(rec.p.z * 5))) &
-				  1;
-		col = chk ? base : inv;
-	}
+        const Material &m = mats[rec.material_id];
+        Vec3 eye = (r.dir * -1.0).normalized();
+        Vec3 base = m.base_color;
+        Vec3 col = m.color;
+        if (rec.object_id >= 0 &&
+                rec.object_id < static_cast<int>(scene.objects.size()) &&
+                scene.objects[rec.object_id]->is_beam())
+        {
+                auto bm = std::static_pointer_cast<Laser>(scene.objects[rec.object_id]);
+                base = col = bm->color;
+        }
+        else if (m.checkered)
+        {
+                Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
+                int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
+                                   static_cast<int>(std::floor(rec.p.y * 5)) +
+                                   static_cast<int>(std::floor(rec.p.z * 5))) &
+                                  1;
+                col = chk ? base : inv;
+        }
 	Vec3 sum(col.x * scene.ambient.color.x * scene.ambient.intensity,
 			 col.y * scene.ambient.color.y * scene.ambient.intensity,
 			 col.z * scene.ambient.color.z * scene.ambient.intensity);
@@ -78,33 +100,34 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
 					  rec.object_id) != L.ignore_ids.end())
 			continue;
-		Vec3 to_light = L.position - rec.p;
-		double dist = to_light.length();
-		if (L.range > 0.0 && dist > L.range)
-			continue;
-		Vec3 ldir = to_light / dist;
-		if (L.cutoff_cos > -1.0)
-		{
-			Vec3 spot_dir = (rec.p - L.position).normalized();
-			if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
-				continue;
-		}
-		if (in_shadow(scene, mats, rec.p, L))
-			continue;
-		double atten = 1.0;
-		if (L.range > 0.0)
-			atten = std::max(0.0, 1.0 - dist / L.range);
-		double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
-		Vec3 h = (ldir + eye).normalized();
-		double spec =
-			std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
-			m.specular_k;
-		sum += Vec3(col.x * L.color.x * L.intensity * diff * atten +
-						L.color.x * spec * atten,
-					col.y * L.color.y * L.intensity * diff * atten +
-						L.color.y * spec * atten,
-					col.z * L.color.z * L.intensity * diff * atten +
-						L.color.z * spec * atten);
+                Vec3 to_light = L.position - rec.p;
+                double dist = to_light.length();
+                if (L.range > 0.0 && dist > L.range)
+                        continue;
+                Vec3 ldir = to_light / dist;
+                if (L.cutoff_cos > -1.0)
+                {
+                        Vec3 spot_dir = (rec.p - L.position).normalized();
+                        if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
+                                continue;
+                }
+                Vec3 lcolor = filter_light(scene, mats, rec.p, L);
+                if (lcolor.length_squared() == 0.0)
+                        continue;
+                double atten = 1.0;
+                if (L.range > 0.0)
+                        atten = std::max(0.0, 1.0 - dist / L.range);
+                double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
+                Vec3 h = (ldir + eye).normalized();
+                double spec =
+                        std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
+                        m.specular_k;
+                sum += Vec3(col.x * lcolor.x * L.intensity * diff * atten +
+                                                lcolor.x * spec * atten,
+                                        col.y * lcolor.y * L.intensity * diff * atten +
+                                                lcolor.y * spec * atten,
+                                        col.z * lcolor.z * L.intensity * diff * atten +
+                                                lcolor.z * spec * atten);
 	}
 	if (m.mirror)
 	{
@@ -121,13 +144,14 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 		double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
 		alpha *= (1.0 - tpos);
 	}
-	if (alpha < 1.0)
-	{
-		Ray next(rec.p + r.dir * 1e-4, r.dir);
-		Vec3 behind = trace_ray(scene, mats, next, rng, dist, depth + 1);
-		return sum * alpha + behind * (1.0 - alpha);
-	}
-	return sum;
+        if (alpha < 1.0)
+        {
+                Ray next(rec.p + r.dir * 1e-4, r.dir);
+                Vec3 behind = trace_ray(scene, mats, next, rng, dist, depth + 1);
+                Vec3 filtered = mix_colors(behind, col);
+                return sum * alpha + filtered * (1.0 - alpha);
+        }
+        return sum;
 }
 
 static std::string next_save_path(const std::string &orig)

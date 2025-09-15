@@ -16,6 +16,15 @@ inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
         return v - n * (2.0 * Vec3::dot(v, n));
 }
 
+inline Vec3 mix_colors(const Vec3 &light, const Vec3 &obj)
+{
+        if (std::fabs(light.x - light.y) < 1e-3 &&
+                std::fabs(light.y - light.z) < 1e-3)
+                return obj;
+        return Vec3((light.x + obj.x) * 0.5, (light.y + obj.y) * 0.5,
+                             (light.z + obj.z) * 0.5);
+}
+
 } // namespace
 
 // Remove lights attached to beam segments and collect root laser objects.
@@ -88,7 +97,11 @@ void Scene::process_beams(const std::vector<Material> &mats,
         {
                 auto bm = to_process[i];
                 if (i < roots.size())
+                {
                         id_map[bm->object_id] = next_oid;
+                        bm->color = mats[bm->material_id].base_color;
+                        pending_lights.push_back({bm, -1});
+                }
                 bm->object_id = next_oid++;
                 objects.push_back(bm);
 
@@ -120,7 +133,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
                         }
-                        if (mats[hit_rec.material_id].mirror)
+                        const Material &hit_mat = mats[hit_rec.material_id];
+                        if (hit_mat.mirror)
                         {
                                 double new_start = bm->start + closest;
                                 double new_len = bm->total_length - new_start;
@@ -131,7 +145,25 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                        auto new_bm = std::make_shared<Laser>(
                                                refl_orig, refl_dir, new_len,
                                                bm->light_intensity, 0, bm->material_id,
-                                               new_start, bm->total_length);
+                                               new_start, bm->total_length, bm->color);
+                                        new_bm->source = bm->source;
+                                        to_process.push_back(new_bm);
+                                        pending_lights.push_back({new_bm, hit_rec.object_id});
+                                }
+                        }
+                        else if (hit_mat.alpha < 1.0 &&
+                                 !objects[hit_rec.object_id]->blocks_when_transparent())
+                        {
+                                double new_start = bm->start + closest;
+                                double new_len = bm->total_length - new_start;
+                                if (new_len > 1e-4)
+                                {
+                                        Vec3 new_origin = forward.at(closest) + forward.dir * 1e-4;
+                                        Vec3 new_col = mix_colors(bm->color, hit_mat.base_color);
+                                       auto new_bm = std::make_shared<Laser>(
+                                               new_origin, forward.dir, new_len,
+                                               bm->light_intensity, 0, bm->material_id,
+                                               new_start, bm->total_length, new_col);
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
                                         pending_lights.push_back({new_bm, hit_rec.object_id});
@@ -143,7 +175,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
         for (const auto &pl : pending_lights)
         {
                 auto bm = pl.beam;
-                Vec3 light_col = mats[bm->material_id].base_color;
+                Vec3 light_col = bm->color;
                 const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
                 double remain = bm->total_length - bm->start;
                 double ratio =
