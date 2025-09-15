@@ -347,6 +347,20 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 {
                         st.rotating = false;
                 }
+                else if (g_developer_mode && st.edit_mode &&
+                                 e.type == SDL_MOUSEBUTTONDOWN &&
+                                 e.button.button == SDL_BUTTON_MIDDLE)
+                {
+                        int mid = st.selected_mat;
+                        mats[mid].checkered = false;
+                        mats[mid].color = mats[mid].base_color;
+                        scene.objects.erase(scene.objects.begin() + st.selected_obj);
+                        scene.update_beams(mats);
+                        scene.build_bvh();
+                        st.selected_obj = st.selected_mat = -1;
+                        st.edit_mode = false;
+                        st.rotating = false;
+                }
                 else if (st.focused && e.type == SDL_MOUSEMOTION)
                 {
                         if (st.edit_mode && st.rotating)
@@ -357,7 +371,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 if (yaw != 0.0)
                                 {
                                         scene.objects[st.selected_obj]->rotate(cam.up, yaw);
-                                        if (scene.collides(st.selected_obj))
+                                        if (!g_developer_mode && scene.collides(st.selected_obj))
                                                 scene.objects[st.selected_obj]->rotate(
                                                         cam.up, -yaw);
                                         else
@@ -368,7 +382,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 {
                                         scene.objects[st.selected_obj]->rotate(cam.right,
                                                                                                           pitch);
-                                        if (scene.collides(st.selected_obj))
+                                        if (!g_developer_mode && scene.collides(st.selected_obj))
                                                 scene.objects[st.selected_obj]->rotate(
                                                         cam.right, -pitch);
                                         else
@@ -554,7 +568,7 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
                 if (state[SDL_SCANCODE_Q])
                 {
                         scene.objects[st.selected_obj]->rotate(cam.forward, -rot_speed);
-                        if (scene.collides(st.selected_obj))
+                        if (!g_developer_mode && scene.collides(st.selected_obj))
                                 scene.objects[st.selected_obj]->rotate(cam.forward,
                                                                                                       rot_speed);
                         else
@@ -563,7 +577,7 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
                 if (state[SDL_SCANCODE_E])
                 {
                         scene.objects[st.selected_obj]->rotate(cam.forward, rot_speed);
-                        if (scene.collides(st.selected_obj))
+                        if (!g_developer_mode && scene.collides(st.selected_obj))
                                 scene.objects[st.selected_obj]->rotate(cam.forward,
                                                                                                       -rot_speed);
                         else
@@ -783,9 +797,10 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         {
                 SDL_Color red{255, 0, 0, 255};
                 int scale = 2;
-                const char *legend[] = {"1-PLANE", "2-SPHERE", "3-CUBE",
-                                         "4-CONE", "5-CYLINDER"};
-                for (int i = 0; i < 5; ++i)
+                const char *legend[] = {"1-PLANE",  "2-SPHERE",   "3-CUBE",
+                                         "4-CONE",  "5-CYLINDER", "SCROLL-SIZE",
+                                         "MCLICK-DEL"};
+                for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
                                                     5 + i * (7 * scale + 2), red, scale);
                 std::string text = "DEVELOPER MODE";
