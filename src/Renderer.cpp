@@ -221,6 +221,7 @@ struct Renderer::RenderState
         int selected_mat = -1;
         double edit_dist = 0.0;
         Vec3 edit_pos;
+        int spawn_key = -1;
 };
 
 /// Initialize SDL window, renderer and texture objects.
@@ -325,6 +326,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         st.edit_pos = center;
                                 }
                                 st.edit_mode = true;
+                                st.spawn_key = -1;
                         }
                         else if (st.edit_mode)
                         {
@@ -334,6 +336,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 st.selected_obj = st.selected_mat = -1;
                                 st.edit_mode = false;
                                 st.rotating = false;
+                                st.spawn_key = -1;
                         }
                 }
                 else if (e.type == SDL_MOUSEBUTTONDOWN &&
@@ -360,6 +363,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         st.selected_obj = st.selected_mat = -1;
                         st.edit_mode = false;
                         st.rotating = false;
+                        st.spawn_key = -1;
                 }
                 else if (st.focused && e.type == SDL_MOUSEMOTION)
                 {
@@ -477,36 +481,56 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                   e.key.keysym.scancode == SDL_SCANCODE_4 ||
                                   e.key.keysym.scancode == SDL_SCANCODE_5))
                 {
-                        int oid = static_cast<int>(scene.objects.size());
-                        int mid = static_cast<int>(mats.size());
-                        Material m;
-                        m.color = m.base_color = Vec3(0.5, 0.5, 0.5);
-                        m.alpha = 1.0;
-                        m.mirror = true;
-                        mats.push_back(m);
-                        Vec3 pos = cam.origin + cam.forward * 3.0;
-                        HittablePtr obj;
-                        if (e.key.keysym.scancode == SDL_SCANCODE_1)
-                                obj = std::make_shared<Plane>(pos, Vec3(0, 1, 0), oid, mid);
-                        else if (e.key.keysym.scancode == SDL_SCANCODE_2)
-                                obj = std::make_shared<Sphere>(pos, 1.0, oid, mid);
-                        else if (e.key.keysym.scancode == SDL_SCANCODE_3)
-                                obj = std::make_shared<Cube>(pos, cam.up, 1.0, 1.0, 1.0, oid, mid);
-                        else if (e.key.keysym.scancode == SDL_SCANCODE_4)
-                                obj = std::make_shared<Cone>(pos, cam.up, 1.0, 2.0, oid, mid);
+                        if (st.edit_mode)
+                        {
+                                if (st.spawn_key == e.key.keysym.scancode)
+                                {
+                                        int mid = st.selected_mat;
+                                        mats[mid].checkered = false;
+                                        mats[mid].color = mats[mid].base_color;
+                                        scene.objects.erase(scene.objects.begin() + st.selected_obj);
+                                        scene.update_beams(mats);
+                                        scene.build_bvh();
+                                        st.selected_obj = st.selected_mat = -1;
+                                        st.edit_mode = false;
+                                        st.rotating = false;
+                                        st.spawn_key = -1;
+                                }
+                        }
                         else
-                                obj = std::make_shared<Cylinder>(pos, cam.up, 1.0, 2.0, oid, mid);
-                        obj->movable = true;
-                        scene.objects.push_back(obj);
-                        scene.update_beams(mats);
-                        scene.build_bvh();
-                        st.selected_obj = oid;
-                        st.selected_mat = mid;
-                        mats[mid].checkered = true;
-                        st.edit_mode = true;
-                        st.rotating = false;
-                        st.edit_pos = pos;
-                        st.edit_dist = (pos - cam.origin).length();
+                        {
+                                int oid = static_cast<int>(scene.objects.size());
+                                int mid = static_cast<int>(mats.size());
+                                Material m;
+                                m.color = m.base_color = Vec3(0.5, 0.5, 0.5);
+                                m.alpha = 1.0;
+                                m.mirror = true;
+                                mats.push_back(m);
+                                Vec3 pos = cam.origin + cam.forward * 3.0;
+                                HittablePtr obj;
+                                if (e.key.keysym.scancode == SDL_SCANCODE_1)
+                                        obj = std::make_shared<Plane>(pos, Vec3(0, 1, 0), oid, mid);
+                                else if (e.key.keysym.scancode == SDL_SCANCODE_2)
+                                        obj = std::make_shared<Sphere>(pos, 1.0, oid, mid);
+                                else if (e.key.keysym.scancode == SDL_SCANCODE_3)
+                                        obj = std::make_shared<Cube>(pos, cam.up, 1.0, 1.0, 1.0, oid, mid);
+                                else if (e.key.keysym.scancode == SDL_SCANCODE_4)
+                                        obj = std::make_shared<Cone>(pos, cam.up, 1.0, 2.0, oid, mid);
+                                else
+                                        obj = std::make_shared<Cylinder>(pos, cam.up, 1.0, 2.0, oid, mid);
+                                obj->movable = true;
+                                scene.objects.push_back(obj);
+                                scene.update_beams(mats);
+                                scene.build_bvh();
+                                st.selected_obj = oid;
+                                st.selected_mat = mid;
+                                mats[mid].checkered = true;
+                                st.edit_mode = true;
+                                st.rotating = false;
+                                st.edit_pos = pos;
+                                st.edit_dist = (pos - cam.origin).length();
+                                st.spawn_key = e.key.keysym.scancode;
+                        }
                 }
                 else if (st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
