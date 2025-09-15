@@ -5,6 +5,7 @@
 #include "Parser.hpp"
 #include "PauseMenu.hpp"
 #include "Laser.hpp"
+#include "ColorUtils.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -17,11 +18,6 @@
 #include <random>
 #include <string>
 #include <thread>
-
-static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b)
-{
-        return Vec3((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, (a.z + b.z) * 0.5);
-}
 
 static bool light_through(const Scene &scene, const std::vector<Material> &mats,
                                                 const Vec3 &p, const PointLight &L,

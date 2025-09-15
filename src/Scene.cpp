@@ -4,6 +4,7 @@
 #include "Laser.hpp"
 #include "Plane.hpp"
 #include "BeamTarget.hpp"
+#include "ColorUtils.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -146,7 +147,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 if (new_len > 1e-4)
                                 {
                                         Vec3 pass_orig = forward.at(closest) + forward.dir * 1e-4;
-                                        Vec3 new_color = (bm->color + hit_mat.base_color) * 0.5;
+                                        Vec3 new_color = mix_colors(bm->color, hit_mat.base_color);
                                         double new_intens =
                                                 bm->light_intensity * (1.0 - hit_mat.alpha);
                                        auto new_bm = std::make_shared<Laser>(
