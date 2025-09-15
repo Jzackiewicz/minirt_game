@@ -17,32 +17,35 @@
 #include <string>
 #include <thread>
 
-static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
-					  const Vec3 &p, const PointLight &L)
+static Vec3 light_through(const Scene &scene, const std::vector<Material> &mats,
+                                           const Vec3 &p, const PointLight &L)
 {
-	Vec3 to_light = L.position - p;
-	double dist_to_light = to_light.length();
-	if (L.range > 0.0 && dist_to_light > L.range)
-		return false;
-	Vec3 dir = to_light.normalized();
-	Ray shadow_ray(p + dir * 1e-4, dir);
-	HitRecord tmp;
-	for (const auto &obj : scene.objects)
-	{
-		if (obj->is_beam())
-			continue;
-		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
-					  obj->object_id) != L.ignore_ids.end())
-			continue;
-		const Material &m = mats[obj->material_id];
-		if (m.alpha < 1.0)
-			continue;
-		if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
-		{
-			return true;
-		}
-	}
-	return false;
+        Vec3 to_light = L.position - p;
+        double dist_to_light = to_light.length();
+        if (L.range > 0.0 && dist_to_light > L.range)
+                return Vec3(0.0, 0.0, 0.0);
+        Vec3 dir = to_light.normalized();
+        Ray shadow_ray(p + dir * 1e-4, dir);
+        HitRecord tmp;
+        Vec3 col = L.color;
+        double intensity = L.intensity;
+        for (const auto &obj : scene.objects)
+        {
+                if (obj->is_beam())
+                        continue;
+                if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                          obj->object_id) != L.ignore_ids.end())
+                        continue;
+                if (!obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
+                        continue;
+                const Material &m = mats[obj->material_id];
+                if (m.alpha >= 1.0)
+                        return Vec3(0.0, 0.0, 0.0);
+                double pass = 1.0 - m.alpha;
+                col = (col + m.base_color) * 0.5;
+                intensity *= pass;
+        }
+        return col * intensity;
 }
 
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
@@ -73,39 +76,37 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	Vec3 sum(col.x * scene.ambient.color.x * scene.ambient.intensity,
 			 col.y * scene.ambient.color.y * scene.ambient.intensity,
 			 col.z * scene.ambient.color.z * scene.ambient.intensity);
-	for (const auto &L : scene.lights)
-	{
-		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
-					  rec.object_id) != L.ignore_ids.end())
-			continue;
-		Vec3 to_light = L.position - rec.p;
-		double dist = to_light.length();
-		if (L.range > 0.0 && dist > L.range)
-			continue;
-		Vec3 ldir = to_light / dist;
-		if (L.cutoff_cos > -1.0)
-		{
-			Vec3 spot_dir = (rec.p - L.position).normalized();
-			if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
-				continue;
-		}
-		if (in_shadow(scene, mats, rec.p, L))
-			continue;
-		double atten = 1.0;
-		if (L.range > 0.0)
-			atten = std::max(0.0, 1.0 - dist / L.range);
-		double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
-		Vec3 h = (ldir + eye).normalized();
-		double spec =
-			std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
-			m.specular_k;
-		sum += Vec3(col.x * L.color.x * L.intensity * diff * atten +
-						L.color.x * spec * atten,
-					col.y * L.color.y * L.intensity * diff * atten +
-						L.color.y * spec * atten,
-					col.z * L.color.z * L.intensity * diff * atten +
-						L.color.z * spec * atten);
-	}
+        for (const auto &L : scene.lights)
+        {
+                if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                          rec.object_id) != L.ignore_ids.end())
+                        continue;
+                Vec3 to_light = L.position - rec.p;
+                double dist = to_light.length();
+                if (L.range > 0.0 && dist > L.range)
+                        continue;
+                Vec3 ldir = to_light / dist;
+                if (L.cutoff_cos > -1.0)
+                {
+                        Vec3 spot_dir = (rec.p - L.position).normalized();
+                        if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
+                                continue;
+                }
+                Vec3 lcol = light_through(scene, mats, rec.p, L);
+                if (lcol.length_squared() == 0.0)
+                        continue;
+                double atten = 1.0;
+                if (L.range > 0.0)
+                        atten = std::max(0.0, 1.0 - dist / L.range);
+                double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
+                Vec3 h = (ldir + eye).normalized();
+                double spec =
+                        std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
+                        m.specular_k;
+                sum += Vec3(col.x * lcol.x * diff * atten + lcol.x * spec * atten,
+                                        col.y * lcol.y * diff * atten + lcol.y * spec * atten,
+                                        col.z * lcol.z * diff * atten + lcol.z * spec * atten);
+        }
 	if (m.mirror)
 	{
 		Vec3 refl_dir =
