@@ -4,6 +4,7 @@
 #include "Laser.hpp"
 #include "Plane.hpp"
 #include "BeamTarget.hpp"
+#include "BeamSource.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -92,58 +93,92 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 bm->object_id = next_oid++;
                 objects.push_back(bm);
 
+                bm->color = mats[bm->material_id].base_color;
+                Vec3 beam_col = bm->color;
                 Ray forward(bm->path.orig, bm->path.dir);
-                HitRecord tmp, hit_rec;
-                bool hit_any = false;
-                double closest = bm->length;
-                for (auto &other : objects)
+                double remaining = bm->length;
+                double travelled = 0.0;
+                bool blocked = false;
+                HitRecord hit_rec{};
+                std::shared_ptr<Hittable> hit_obj;
+                while (remaining > 1e-4)
                 {
-                        if (other.get() == bm.get())
-                                continue;
-                        if (auto src = bm->source.lock())
-                                if (other.get() == src.get())
-                                        continue;
-                        if (other->hit(forward, 1e-4, closest, tmp))
+                        HitRecord tmp;
+                        bool hit_any = false;
+                        double closest = remaining;
+                        for (auto &other : objects)
                         {
-                                closest = tmp.t;
-                                hit_rec = tmp;
-                                hit_any = true;
+                                if (other.get() == bm.get())
+                                        continue;
+                                if (auto src = bm->source.lock())
+                                        if (other.get() == src.get())
+                                                continue;
+                                if (other->hit(forward, 1e-4, closest, tmp))
+                                {
+                                        closest = tmp.t;
+                                        hit_rec = tmp;
+                                        hit_any = true;
+                                        hit_obj = other;
+                                }
                         }
-                }
-                if (hit_any)
-                {
-                        bm->length = closest;
+                        if (!hit_any)
+                                break;
+                        const Material &mat = mats[hit_rec.material_id];
+                        if (mat.alpha < 1.0 && !hit_obj->blocks_when_transparent())
+                        {
+                                beam_col = beam_col * (1.0 - mat.alpha) +
+                                                   mat.base_color * mat.alpha;
+                                forward.orig = forward.at(closest) +
+                                                               forward.dir * 1e-4;
+                                remaining -= closest;
+                                travelled += closest;
+                                continue;
+                        }
+                        travelled += closest;
+                        bm->length = travelled;
+                        blocked = true;
                         if (hit_rec.object_id >= 0 &&
                                 hit_rec.object_id < static_cast<int>(objects.size()))
                         {
-                                auto hit_obj = objects[hit_rec.object_id];
-                                if (hit_obj->shape_type() == ShapeType::BeamTarget)
-                                        std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
+                                auto ho = objects[hit_rec.object_id];
+                                if (ho->shape_type() == ShapeType::BeamTarget)
+                                        std::static_pointer_cast<BeamTarget>(ho)->start_goal();
                         }
                         if (mats[hit_rec.material_id].mirror)
                         {
-                                double new_start = bm->start + closest;
+                                double new_start = bm->start + travelled;
                                 double new_len = bm->total_length - new_start;
                                 if (new_len > 1e-4)
                                 {
                                         Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
-                                        Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
-                                       auto new_bm = std::make_shared<Laser>(
-                                               refl_orig, refl_dir, new_len,
-                                               bm->light_intensity, 0, bm->material_id,
-                                               new_start, bm->total_length);
+                                        Vec3 refl_orig = forward.at(closest) +
+                                                         refl_dir * 1e-4;
+                                        auto new_bm = std::make_shared<Laser>(
+                                                refl_orig, refl_dir, new_len,
+                                                bm->light_intensity, 0, bm->material_id,
+                                                new_start, bm->total_length, beam_col);
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
                                         pending_lights.push_back({new_bm, hit_rec.object_id});
                                 }
                         }
+                        break;
                 }
-        }
+                bm->color = beam_col;
+                if (!blocked)
+                        bm->length = travelled + remaining;
+                if (auto src = bm->source.lock())
+                {
+                        auto bsrc = std::static_pointer_cast<BeamSource>(src);
+                        if (bsrc->light)
+                                bsrc->light->color = beam_col;
+                }
+         }
 
         for (const auto &pl : pending_lights)
         {
                 auto bm = pl.beam;
-                Vec3 light_col = mats[bm->material_id].base_color;
+                Vec3 light_col = bm->color;
                 const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
                 double remain = bm->total_length - bm->start;
                 double ratio =

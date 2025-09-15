@@ -17,32 +17,47 @@
 #include <string>
 #include <thread>
 
-static bool in_shadow(const Scene &scene, const std::vector<Material> &mats,
-					  const Vec3 &p, const PointLight &L)
+static Vec3 filter_light(const Scene &scene, const std::vector<Material> &mats,
+                                          const Vec3 &p, const PointLight &L)
 {
-	Vec3 to_light = L.position - p;
-	double dist_to_light = to_light.length();
-	if (L.range > 0.0 && dist_to_light > L.range)
-		return false;
-	Vec3 dir = to_light.normalized();
-	Ray shadow_ray(p + dir * 1e-4, dir);
-	HitRecord tmp;
-	for (const auto &obj : scene.objects)
-	{
-		if (obj->is_beam())
-			continue;
-		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
-					  obj->object_id) != L.ignore_ids.end())
-			continue;
-		const Material &m = mats[obj->material_id];
-		if (m.alpha < 1.0)
-			continue;
-		if (obj->hit(shadow_ray, 1e-4, dist_to_light - 1e-4, tmp))
-		{
-			return true;
-		}
-	}
-	return false;
+        Vec3 to_light = L.position - p;
+        double dist_to_light = to_light.length();
+        if (L.range > 0.0 && dist_to_light > L.range)
+                return Vec3(0.0, 0.0, 0.0);
+        Vec3 dir = to_light.normalized();
+        Ray shadow_ray(p + dir * 1e-4, dir);
+        Vec3 result = L.color;
+        double remaining = dist_to_light;
+        while (remaining > 1e-4)
+        {
+                HitRecord tmp;
+                bool hit_any = false;
+                double closest = remaining - 1e-4;
+                Hittable const *hit_obj = nullptr;
+                for (const auto &obj : scene.objects)
+                {
+                        if (obj->is_beam())
+                                continue;
+                        if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                                  obj->object_id) != L.ignore_ids.end())
+                                continue;
+                        if (obj->hit(shadow_ray, 1e-4, closest, tmp))
+                        {
+                                closest = tmp.t;
+                                hit_any = true;
+                                hit_obj = obj.get();
+                        }
+                }
+                if (!hit_any)
+                        break;
+                const Material &m = mats[tmp.material_id];
+                if (m.alpha >= 1.0 || hit_obj->blocks_when_transparent())
+                        return Vec3(0.0, 0.0, 0.0);
+                result = result * (1.0 - m.alpha) + m.base_color * m.alpha;
+                shadow_ray.orig = shadow_ray.at(closest) + dir * 1e-4;
+                remaining -= closest;
+        }
+        return result;
 }
 
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
@@ -89,22 +104,23 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 			if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
 				continue;
 		}
-		if (in_shadow(scene, mats, rec.p, L))
-			continue;
-		double atten = 1.0;
-		if (L.range > 0.0)
-			atten = std::max(0.0, 1.0 - dist / L.range);
-		double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
-		Vec3 h = (ldir + eye).normalized();
-		double spec =
-			std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
-			m.specular_k;
-		sum += Vec3(col.x * L.color.x * L.intensity * diff * atten +
-						L.color.x * spec * atten,
-					col.y * L.color.y * L.intensity * diff * atten +
-						L.color.y * spec * atten,
-					col.z * L.color.z * L.intensity * diff * atten +
-						L.color.z * spec * atten);
+                Vec3 light_col = filter_light(scene, mats, rec.p, L);
+                if (light_col.length_squared() == 0.0)
+                        continue;
+                double atten = 1.0;
+                if (L.range > 0.0)
+                        atten = std::max(0.0, 1.0 - dist / L.range);
+                double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
+                Vec3 h = (ldir + eye).normalized();
+                double spec =
+                        std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
+                        m.specular_k;
+                sum += Vec3(col.x * light_col.x * L.intensity * diff * atten +
+                                                light_col.x * spec * atten,
+                                        col.y * light_col.y * L.intensity * diff * atten +
+                                                light_col.y * spec * atten,
+                                        col.z * light_col.z * L.intensity * diff * atten +
+                                                light_col.z * spec * atten);
 	}
 	if (m.mirror)
 	{
