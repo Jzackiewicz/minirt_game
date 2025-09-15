@@ -645,9 +645,16 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                 SDL_SetRenderDrawColor(ren, 0, 255, 0, 255);
                         for (const auto &e : edges)
                                 SDL_RenderDrawLine(ren, pts[e[0]].x, pts[e[0]].y,
-                                                                                   pts[e[1]].x, pts[e[1]].y);
+                                                                                  pts[e[1]].x, pts[e[1]].y);
                 }
         }
+        // Draw crosshair at the center of the screen
+        SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
+        int cx = W / 2;
+        int cy = H / 2;
+        const int ch_size = 10;
+        SDL_RenderDrawLine(ren, cx - ch_size, cy, cx + ch_size, cy);
+        SDL_RenderDrawLine(ren, cx, cy - ch_size, cx, cy + ch_size);
         SDL_RenderPresent(ren);
 }
 
