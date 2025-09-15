@@ -273,6 +273,9 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_laser;
+        if (!(iss >> s_laser))
+                s_laser = "L";
        Vec3 o, dir, rgb;
        double ray_radius = 0.1, L = 1.0, intensity = 0.75;
         double a = 255;
@@ -308,20 +311,37 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 mats.back().alpha = 1.0;
                 int small_mat = mid++;
 
+               bool with_laser = (s_laser != "NL");
                auto bm = std::make_shared<Beam>(o, dir_norm, ray_radius, L,
                                                                                         intensity, oid, beam_mat,
-                                                                                        big_mat, mid_mat, small_mat);
-                oid += 2;
-                bm->source->movable = (s_move == "M");
-                scene.objects.push_back(bm->laser);
-                scene.objects.push_back(bm->source);
-                const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
-                scene.lights.emplace_back(
-                        o, unit, intensity,
-                        std::vector<int>{bm->laser->object_id,
-                                                         bm->source->object_id,
-                                                         bm->source->mid.object_id},
-                        bm->source->object_id, dir_norm, cone_cos, L);
+                                                                                        big_mat, mid_mat, small_mat,
+                                                                                        with_laser);
+                if (with_laser)
+                {
+                        oid += 2;
+                        bm->source->movable = (s_move == "M");
+                        scene.objects.push_back(bm->laser);
+                        scene.objects.push_back(bm->source);
+                        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+                        scene.lights.emplace_back(
+                                o, unit, intensity,
+                                std::vector<int>{bm->laser->object_id,
+                                                             bm->source->object_id,
+                                                             bm->source->mid.object_id},
+                                bm->source->object_id, dir_norm, cone_cos, L);
+                }
+                else
+                {
+                        oid += 1;
+                        bm->source->movable = (s_move == "M");
+                        scene.objects.push_back(bm->source);
+                        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+                        scene.lights.emplace_back(
+                                o, unit, intensity,
+                                std::vector<int>{bm->source->object_id,
+                                                             bm->source->mid.object_id},
+                                bm->source->object_id, dir_norm, cone_cos, L);
+                }
         }
 }
 
@@ -506,12 +526,13 @@ bool Parser::save_rt_file(const std::string &path, const Scene &scene,
 			std::string move = "IM";
 			if (auto src = bm->source.lock(); src && src->movable)
 				move = "M";
-			out << "bm " << bm->light_intensity << ' '
-				<< vec_to_str(bm->path.orig) << ' ' << vec_to_str(bm->path.dir)
-				<< ' ' << rgba_to_str(m.base_color, m.alpha) << ' '
-				<< bm->radius << ' ' << bm->total_length << ' ' << move << '\n';
-		}
-	}
+                        out << "bm " << bm->light_intensity << ' '
+                                << vec_to_str(bm->path.orig) << ' ' << vec_to_str(bm->path.dir)
+                                << ' ' << rgba_to_str(m.base_color, m.alpha) << ' '
+                                << bm->radius << ' ' << bm->total_length << ' ' << move
+                                << ' ' << 'L' << '\n';
+                }
+        }
 
 	for (const auto &obj : scene.objects)
 	{
