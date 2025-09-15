@@ -355,6 +355,12 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
     ButtonAction result = ButtonAction::None;
     SDL_Color white{255, 255, 255, 255};
 
+    // Developer mode sequence tracking
+    const SDL_Scancode dev_seq[4] = {SDL_SCANCODE_D, SDL_SCANCODE_U,
+                                    SDL_SCANCODE_P, SDL_SCANCODE_A};
+    int dev_index = 0;
+    Uint32 dev_start = 0;
+
     SDL_Texture *background = nullptr;
     if (transparent) {
         SDL_Surface *surface =
@@ -422,6 +428,24 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_KEYDOWN) {
+                Uint32 now = SDL_GetTicks();
+                if (dev_index == 0) {
+                    if (event.key.keysym.scancode == dev_seq[0]) {
+                        dev_start = now;
+                        dev_index = 1;
+                    }
+                } else {
+                    if (now - dev_start > 2000 ||
+                        event.key.keysym.scancode != dev_seq[dev_index]) {
+                        dev_index = 0;
+                    } else if (++dev_index == 4) {
+                        g_developer_mode = !g_developer_mode;
+                        dev_index = 0;
+                    }
+                }
+            }
+
             if (event.type == SDL_QUIT) {
                 running = false;
                 result = ButtonAction::Quit;
@@ -500,7 +524,12 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
             int text_y = btn.rect.y + (btn.rect.h - 7 * scale) / 2;
             CustomCharacter::draw_text(renderer, btn.text, text_x, text_y, white, scale);
         }
-
+        if (g_developer_mode) {
+            SDL_Color red{255, 0, 0, 255};
+            std::string text = "DEVELOPER MODE";
+            int tw = CustomCharacter::text_width(text, scale);
+            CustomCharacter::draw_text(renderer, text, width - tw - 5, 5, red, scale);
+        }
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
     }

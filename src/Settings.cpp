@@ -6,6 +6,7 @@
 #include <algorithm>
 
 GameSettings g_settings{'H', 1.0f, 1080, 720};
+bool g_developer_mode = false;
 
 static std::string trim(const std::string &s) {
     const char *ws = " \t\n\r";
