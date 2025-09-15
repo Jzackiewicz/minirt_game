@@ -152,6 +152,9 @@ ButtonAction LeaderboardMenu::run(SDL_Window *window, SDL_Renderer *renderer, in
             if (event.type == SDL_QUIT) {
                 running = false;
                 result = ButtonAction::Quit;
+            } else if (event.type == SDL_KEYDOWN &&
+                       event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                running = false;
             } else if (event.type == SDL_MOUSEBUTTONDOWN &&
                        event.button.button == SDL_BUTTON_LEFT) {
                 int mx = event.button.x;

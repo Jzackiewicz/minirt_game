@@ -444,6 +444,9 @@ ButtonAction SettingsMenu::run(SDL_Window *window, SDL_Renderer *renderer, int w
                         dev_index = 0;
                     }
                 }
+                if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                    running = false;
+                }
             }
 
             if (event.type == SDL_QUIT) {
