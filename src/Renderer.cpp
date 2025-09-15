@@ -902,8 +902,8 @@ void Renderer::render_window(std::vector<Material> &mats,
                                                          const RenderSettings &rset,
                                                          const std::string &scene_path)
 {
-        const int W = rset.width;
-        const int H = rset.height;
+        int W = rset.width;
+        int H = rset.height;
         auto quality_scale = [](char q) -> float {
                 if (q == 'M' || q == 'm')
                         return 1.5f;
@@ -944,19 +944,49 @@ void Renderer::render_window(std::vector<Material> &mats,
                 double dt = (now - last) / 1000.0;
                 last = now;
 
+                int actual_w = W;
+                int actual_h = H;
+                SDL_GetWindowSize(win, &actual_w, &actual_h);
+                actual_w = std::max(1, actual_w);
+                actual_h = std::max(1, actual_h);
+                bool resolution_changed = (actual_w != W) || (actual_h != H);
+                if (resolution_changed)
+                {
+                        W = actual_w;
+                        H = actual_h;
+                        cam.aspect = static_cast<double>(W) /
+                                                 static_cast<double>(H);
+                }
+
+                bool quality_changed = false;
                 if (g_settings.quality != current_quality)
                 {
                         current_quality = g_settings.quality;
                         scale = std::max(1.0f, quality_scale(current_quality));
-                        RW = std::max(1, static_cast<int>(W / scale));
-                        RH = std::max(1, static_cast<int>(H / scale));
-                        SDL_DestroyTexture(tex);
-                        tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24,
-                                                                        SDL_TEXTUREACCESS_STREAMING, RW, RH);
-                        if (!tex)
-                                break;
+                        quality_changed = true;
+                }
+
+                if (quality_changed || resolution_changed)
+                {
+                        int new_RW = std::max(1, static_cast<int>(W / scale));
+                        int new_RH = std::max(1, static_cast<int>(H / scale));
+                        if (new_RW != RW || new_RH != RH)
+                        {
+                                SDL_Texture *new_tex =
+                                        SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24,
+                                                                          SDL_TEXTUREACCESS_STREAMING, new_RW,
+                                                                          new_RH);
+                                if (!new_tex)
+                                        break;
+                                SDL_DestroyTexture(tex);
+                                tex = new_tex;
+                                RW = new_RW;
+                                RH = new_RH;
+                        }
                         framebuffer.assign(RW * RH, Vec3());
                         pixels.assign(RW * RH * 3, 0);
+                        if (resolution_changed && st.focused)
+                                SDL_WarpMouseInWindow(win, W / 2, H / 2);
                 }
 
                 process_events(st, win, ren, W, H, mats, scene_path);
