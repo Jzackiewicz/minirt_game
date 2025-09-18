@@ -3,6 +3,7 @@
 #include "Collision.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
+#include "BeamSource.hpp"
 #include "BeamTarget.hpp"
 #include "Settings.hpp"
 #include <algorithm>
@@ -15,6 +16,114 @@ namespace
 inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
 {
         return v - n * (2.0 * Vec3::dot(v, n));
+}
+
+constexpr double PI = 3.14159265358979323846;
+
+static bool hit_is_scorable(const HittablePtr &obj, const HitRecord &rec)
+{
+        if (!obj)
+                return false;
+        if (auto source = std::dynamic_pointer_cast<BeamSource>(obj))
+        {
+                if (rec.object_id == source->object_id)
+                        return source->scorable;
+                if (rec.object_id == source->mid.object_id)
+                        return source->mid.scorable;
+                if (rec.object_id == source->inner.object_id)
+                        return source->inner.scorable;
+                return source->scorable;
+        }
+        if (auto target = std::dynamic_pointer_cast<BeamTarget>(obj))
+        {
+                if (rec.object_id == target->object_id)
+                        return target->scorable;
+                if (rec.object_id == target->mid.object_id)
+                        return target->mid.scorable;
+                if (rec.object_id == target->inner.object_id)
+                        return target->inner.scorable;
+                return target->scorable;
+        }
+        return obj->scorable;
+}
+
+static bool trace_light_sample(const Scene &scene, const std::vector<Material> &mats,
+                                                          const Ray &ray)
+{
+        Ray current(ray.orig, ray.dir);
+        for (int depth = 0; depth < 16; ++depth)
+        {
+                bool hit_any = false;
+                double closest = 1e9;
+                HitRecord tmp;
+                HittablePtr hit_obj;
+                for (const auto &obj : scene.objects)
+                {
+                        if (obj->is_beam())
+                                continue;
+                        if (obj->hit(current, 1e-4, closest, tmp))
+                        {
+                                hit_any = true;
+                                closest = tmp.t;
+                                hit_obj = obj;
+                        }
+                }
+                if (!hit_any)
+                        return false;
+                if (hit_is_scorable(hit_obj, tmp))
+                        return true;
+                bool transparent = false;
+                if (tmp.material_id >= 0 &&
+                        tmp.material_id < static_cast<int>(mats.size()))
+                {
+                        const Material &mat = mats[tmp.material_id];
+                        if (mat.alpha < 1.0 && !hit_obj->blocks_when_transparent())
+                                transparent = true;
+                }
+                if (!transparent)
+                        return false;
+                current.orig = current.at(closest) + current.dir * 1e-4;
+        }
+        return false;
+}
+
+static double compute_light_area(const Scene &scene,
+                                                           const std::vector<Material> &mats,
+                                                           const LightRay &light,
+                                                           int samples_per_axis)
+{
+        if (light.radius <= 0.0 || samples_per_axis <= 0)
+                return 0.0;
+        Vec3 dir = light.ray.dir.normalized();
+        Vec3 helper = (std::fabs(dir.x) < 0.9) ? Vec3(1, 0, 0) : Vec3(0, 1, 0);
+        Vec3 axis_u = Vec3::cross(dir, helper);
+        if (axis_u.length_squared() < 1e-12)
+                axis_u = Vec3::cross(dir, Vec3(0, 0, 1));
+        axis_u = axis_u.normalized();
+        Vec3 axis_v = Vec3::cross(dir, axis_u).normalized();
+        double radius = light.radius;
+        double total = 0.0;
+        double hits = 0.0;
+        for (int iy = 0; iy < samples_per_axis; ++iy)
+        {
+                for (int ix = 0; ix < samples_per_axis; ++ix)
+                {
+                        double su = ((double)ix + 0.5) / samples_per_axis * 2.0 - 1.0;
+                        double sv = ((double)iy + 0.5) / samples_per_axis * 2.0 - 1.0;
+                        double x = su * radius;
+                        double y = sv * radius;
+                        if (x * x + y * y > radius * radius)
+                                continue;
+                        total += 1.0;
+                        Vec3 origin = light.ray.orig + axis_u * x + axis_v * y;
+                        Ray sample(origin + dir * 1e-4, dir);
+                        if (trace_light_sample(scene, mats, sample))
+                                hits += 1.0;
+                }
+        }
+        if (total <= 0.0)
+                return 0.0;
+        return (hits / total) * (PI * radius * radius);
 }
 
 } // namespace
@@ -446,6 +555,23 @@ Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
                 }
         }
         return moved;
+}
+
+double Scene::compute_score(const std::vector<Material> &materials,
+                                                   int samples_per_axis) const
+{
+        if (samples_per_axis <= 0)
+                return 0.0;
+        double total = 0.0;
+        for (const auto &obj : objects)
+        {
+                auto source = std::dynamic_pointer_cast<BeamSource>(obj);
+                if (!source || !source->light)
+                        continue;
+                total += compute_light_area(*this, materials, *source->light,
+                                                                         samples_per_axis);
+        }
+        return total;
 }
 
 // Check if object at index intersects any other object.
