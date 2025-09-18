@@ -155,6 +155,9 @@ static void parse_sphere(std::istringstream &iss, Scene &scene, int &oid, int &m
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_score;
+        if (!(iss >> s_score))
+                s_score = "S";
         Vec3 c, rgb;
         double r = 1.0;
         double a = 255;
@@ -162,6 +165,7 @@ static void parse_sphere(std::istringstream &iss, Scene &scene, int &oid, int &m
         {
                 auto s = std::make_shared<Sphere>(c, r, oid++, mid);
                 s->movable = (s_move == "M");
+                s->scorable = (s_score == "S");
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
@@ -184,12 +188,16 @@ static void parse_plane(std::istringstream &iss, Scene &scene, int &oid, int &mi
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_score;
+        if (!(iss >> s_score))
+                s_score = "S";
         Vec3 p, n, rgb;
         double a = 255;
         if (parse_triple(s_p, p) && parse_triple(s_n, n) && parse_rgba(s_rgb, rgb, a))
         {
                 auto pl = std::make_shared<Plane>(p, n, oid++, mid);
                 pl->movable = (s_move == "M");
+                pl->scorable = (s_score == "S");
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
@@ -212,6 +220,9 @@ static void parse_cylinder(std::istringstream &iss, Scene &scene, int &oid, int 
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_score;
+        if (!(iss >> s_score))
+                s_score = "S";
         Vec3 c, dir, rgb;
         double d = 1.0, h = 1.0;
         double a = 255;
@@ -221,6 +232,7 @@ static void parse_cylinder(std::istringstream &iss, Scene &scene, int &oid, int 
                 auto cy =
                         std::make_shared<Cylinder>(c, dir, d / 2.0, h, oid++, mid);
                 cy->movable = (s_move == "M");
+                cy->scorable = (s_score == "S");
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
@@ -243,6 +255,9 @@ static void parse_cube(std::istringstream &iss, Scene &scene, int &oid, int &mid
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_score;
+        if (!(iss >> s_score))
+                s_score = "S";
         Vec3 c, orient, rgb;
         double L = 1.0, W = 1.0, H = 1.0;
         double alpha = 255;
@@ -253,6 +268,7 @@ static void parse_cube(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 auto cu =
                         std::make_shared<Cube>(c, orient, L, W, H, oid++, mid);
                 cu->movable = (s_move == "M");
+                cu->scorable = (s_score == "S");
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
@@ -275,12 +291,15 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
         std::string s_laser;
         if (!(iss >> s_laser))
                 s_laser = "L";
+        std::string s_score;
+        if (!(iss >> s_score))
+                s_score = "S";
        Vec3 o, dir, rgb;
        double ray_radius = 0.1, L = 1.0, intensity = 0.75;
         double a = 255;
-       if (to_double(s_intens, intensity) && parse_triple(s_pos, o) &&
-               parse_triple(s_dir, dir) && parse_rgba(s_rgb, rgb, a) &&
-               to_double(s_r, ray_radius) && to_double(s_L, L))
+        if (to_double(s_intens, intensity) && parse_triple(s_pos, o) &&
+                parse_triple(s_dir, dir) && parse_rgba(s_rgb, rgb, a) &&
+                to_double(s_r, ray_radius) && to_double(s_L, L))
         {
                 Vec3 unit = rgb_to_unit(rgb);
                 mats.emplace_back();
@@ -315,10 +334,17 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                                                                                         intensity, oid, beam_mat,
                                                                                         big_mat, mid_mat, small_mat,
                                                                                         with_laser, unit);
+                bool scorable = (s_score == "S");
+                bool movable = (s_move == "M");
+                bm->source->movable = movable;
+                bm->source->scorable = scorable;
+                bm->source->mid.scorable = scorable;
+                bm->source->inner.scorable = scorable;
+                if (bm->laser)
+                        bm->laser->scorable = scorable;
                 if (with_laser)
                 {
                         oid += 2;
-                        bm->source->movable = (s_move == "M");
                         scene.objects.push_back(bm->laser);
                         scene.objects.push_back(bm->source);
                         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
@@ -332,7 +358,6 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 else
                 {
                         oid += 1;
-                        bm->source->movable = (s_move == "M");
                         scene.objects.push_back(bm->source);
                         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
                         scene.lights.emplace_back(
@@ -353,6 +378,9 @@ static void parse_beam_target(std::istringstream &iss, Scene &scene, int &oid,
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_score;
+        if (!(iss >> s_score))
+                s_score = "S";
         Vec3 c, rgb;
         double R = 1.0;
         double a = 255;
@@ -380,6 +408,9 @@ static void parse_beam_target(std::istringstream &iss, Scene &scene, int &oid,
 
                 auto bt = std::make_shared<BeamTarget>(c, R, oid++, big_mat, mid_mat, small_mat);
                 bt->movable = (s_move == "M");
+                bt->scorable = (s_score == "S");
+                bt->mid.scorable = bt->scorable;
+                bt->inner.scorable = bt->scorable;
                 scene.objects.push_back(bt);
         }
 }
@@ -396,6 +427,9 @@ static void parse_cone(std::istringstream &iss, Scene &scene, int &oid, int &mid
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_score;
+        if (!(iss >> s_score))
+                s_score = "S";
         Vec3 c, dir, rgb;
         double d = 1.0, h = 1.0;
         double a = 255;
@@ -405,6 +439,7 @@ static void parse_cone(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 auto co =
                         std::make_shared<Cone>(c, dir, d / 2.0, h, oid++, mid);
                 co->movable = (s_move == "M");
+                co->scorable = (s_score == "S");
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;

@@ -118,7 +118,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 hit_rec.object_id < static_cast<int>(objects.size()))
                         {
                                 auto hit_obj = objects[hit_rec.object_id];
-                                if (hit_obj->shape_type() == ShapeType::BeamTarget)
+                                if (hit_obj->shape_type() == ShapeType::BeamTarget &&
+                                        hit_obj->scorable)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
                         }
                         const Material &hit_mat = mats[hit_rec.material_id];
@@ -135,6 +136,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                bm->light_intensity, 0, bm->material_id,
                                                new_start, bm->total_length);
                                         new_bm->color = bm->color;
+                                        new_bm->scorable = bm->scorable;
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
                                         pending_lights.push_back({new_bm, hit_rec.object_id});
@@ -155,6 +157,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                pass_orig, forward.dir, new_len, new_intens, 0,
                                                bm->material_id, new_start, bm->total_length);
                                         new_bm->color = new_color;
+                                        new_bm->scorable = bm->scorable;
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
                                         pending_lights.push_back({new_bm, hit_rec.object_id});
