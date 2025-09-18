@@ -918,7 +918,8 @@ double Renderer::compute_score(const std::vector<Material> &mats)
                 ShapeType type = obj->shape_type();
                 if (type == ShapeType::Sphere || type == ShapeType::BeamTarget)
                 {
-                        if (auto sphere = std::dynamic_pointer_cast<Sphere>(obj))
+                        const Sphere *sphere = static_cast<const Sphere *>(obj.get());
+                        if (sphere)
                                 total += sample_sphere_lit_area(scene, mats, *sphere);
                 }
         }
