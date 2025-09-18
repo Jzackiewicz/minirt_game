@@ -3,6 +3,7 @@
 #include "Config.hpp"
 #include "Settings.hpp"
 #include "Parser.hpp"
+#include "MapSaver.hpp"
 #include "PauseMenu.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
@@ -433,7 +434,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 {
                         scene.update_beams(mats);
                         scene.build_bvh();
-                        if (Parser::save_rt_file(scene_path, scene, cam, mats))
+                        if (MapSaver::save(scene_path, scene, cam, mats))
                                 std::cout << "Saved scene to: " << scene_path << "\n";
                         else
                                 std::cerr << "Failed to save scene to: " << scene_path
