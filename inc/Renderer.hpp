@@ -40,7 +40,8 @@ class Renderer
                                           std::vector<Vec3> &framebuffer,
                                           std::vector<unsigned char> &pixels, int RW,
                                           int RH, int W, int H, int T,
-                                          std::vector<Material> &mats);
+                                          std::vector<Material> &mats, double score);
+        double estimate_lit_area(const std::vector<Material> &mats) const;
         Scene &scene;
         Camera &cam;
 };

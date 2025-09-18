@@ -36,9 +36,10 @@ class HitRecord
 class Hittable
 {
 	public:
-	bool movable = false;
-	int object_id = 0;
-	int material_id = 0;
+        bool movable = false;
+        bool countable = false;
+        int object_id = 0;
+        int material_id = 0;
 	virtual ~Hittable() = default;
 	virtual bool hit(const Ray &r, double tmin, double tmax,
 					 HitRecord &rec) const = 0;

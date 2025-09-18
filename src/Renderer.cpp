@@ -15,11 +15,14 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cstdint>
 #include <cmath>
+#include <iomanip>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <random>
 #include <string>
 #include <thread>
@@ -78,9 +81,9 @@ static bool light_through(const Scene &scene, const std::vector<Material> &mats,
 }
 
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
-					  const Ray &r, std::mt19937 &rng,
-					  std::uniform_real_distribution<double> &dist,
-					  int depth = 0)
+                                          const Ray &r, std::mt19937 &rng,
+                                          std::uniform_real_distribution<double> &dist,
+                                          int depth = 0)
 {
 	if (depth > 10)
 		return Vec3(0.0, 0.0, 0.0);
@@ -172,6 +175,202 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	return sum;
 }
 
+struct SurfaceSample
+{
+        Vec3 point;
+        Vec3 normal;
+};
+
+static void build_basis(const Vec3 &axis, Vec3 &u, Vec3 &v)
+{
+        Vec3 helper = (std::fabs(axis.x) > 0.9) ? Vec3(0, 1, 0) : Vec3(1, 0, 0);
+        u = Vec3::cross(axis, helper).normalized();
+        v = Vec3::cross(axis, u).normalized();
+}
+
+static double sphere_area(const Sphere &s)
+{
+        return 4.0 * M_PI * s.radius * s.radius;
+}
+
+static bool sample_sphere_surface(const Sphere &s, std::mt19937 &rng,
+                                                                 std::uniform_real_distribution<double> &dist,
+                                                                 SurfaceSample &sample)
+{
+        double z = dist(rng) * 2.0 - 1.0;
+        double phi = dist(rng) * 2.0 * M_PI;
+        double r = std::sqrt(std::max(0.0, 1.0 - z * z));
+        Vec3 dir(r * std::cos(phi), r * std::sin(phi), z);
+        sample.normal = dir;
+        sample.point = s.center + dir * s.radius;
+        return true;
+}
+
+static double cube_area(const Cube &cu)
+{
+        double L = cu.half.x * 2.0;
+        double W = cu.half.y * 2.0;
+        double H = cu.half.z * 2.0;
+        return 2.0 * (L * W + L * H + W * H);
+}
+
+static bool sample_cube_surface(const Cube &cu, std::mt19937 &rng,
+                                                                std::uniform_real_distribution<double> &dist,
+                                                                SurfaceSample &sample)
+{
+        double halfs[3] = {cu.half.x, cu.half.y, cu.half.z};
+        Vec3 axes[3] = {cu.axis[0], cu.axis[1], cu.axis[2]};
+        double face_areas[6] = {4.0 * halfs[1] * halfs[2], 4.0 * halfs[1] * halfs[2],
+                                                        4.0 * halfs[0] * halfs[2], 4.0 * halfs[0] * halfs[2],
+                                                        4.0 * halfs[0] * halfs[1], 4.0 * halfs[0] * halfs[1]};
+        double total_area = 0.0;
+        for (double a : face_areas)
+                total_area += a;
+        if (total_area <= 0.0)
+                return false;
+        double pick = dist(rng) * total_area;
+        int face = 0;
+        while (face < 6 && pick > face_areas[face])
+        {
+                pick -= face_areas[face];
+                ++face;
+        }
+        if (face >= 6)
+                face = 5;
+        int axis_index = face / 2;
+        double sign = (face % 2 == 0) ? -1.0 : 1.0;
+        int axis_u = (axis_index + 1) % 3;
+        int axis_v = (axis_index + 2) % 3;
+        double u = (dist(rng) * 2.0 - 1.0) * halfs[axis_u];
+        double v = (dist(rng) * 2.0 - 1.0) * halfs[axis_v];
+        sample.point = cu.center + axes[axis_index] * (sign * halfs[axis_index]) +
+                       axes[axis_u] * u + axes[axis_v] * v;
+        sample.normal = (axes[axis_index] * sign).normalized();
+        return true;
+}
+
+static double cylinder_area(const Cylinder &cy)
+{
+        double lateral = 2.0 * M_PI * cy.radius * cy.height;
+        double caps = 2.0 * M_PI * cy.radius * cy.radius;
+        return lateral + caps;
+}
+
+static bool sample_cylinder_surface(const Cylinder &cy, std::mt19937 &rng,
+                                                                   std::uniform_real_distribution<double> &dist,
+                                                                   SurfaceSample &sample)
+{
+        Vec3 u, v;
+        build_basis(cy.axis, u, v);
+        double lateral_area = 2.0 * M_PI * cy.radius * cy.height;
+        double cap_area = M_PI * cy.radius * cy.radius;
+        double total = lateral_area + 2.0 * cap_area;
+        if (total <= 0.0)
+                return false;
+        double pick = dist(rng) * total;
+        if (pick < lateral_area)
+        {
+                double theta = dist(rng) * 2.0 * M_PI;
+                double h = (dist(rng) - 0.5) * cy.height;
+                Vec3 radial = std::cos(theta) * u + std::sin(theta) * v;
+                sample.point = cy.center + cy.axis * h + radial * cy.radius;
+                sample.normal = radial;
+                return true;
+        }
+        pick -= lateral_area;
+        Vec3 center = cy.center + cy.axis * (cy.height * 0.5);
+        Vec3 normal = cy.axis;
+        if (pick >= cap_area)
+        {
+                center = cy.center - cy.axis * (cy.height * 0.5);
+                normal = normal * -1.0;
+                pick -= cap_area;
+        }
+        double r = std::sqrt(dist(rng)) * cy.radius;
+        double theta = dist(rng) * 2.0 * M_PI;
+        Vec3 radial = std::cos(theta) * u + std::sin(theta) * v;
+        sample.point = center + radial * r;
+        sample.normal = normal;
+        return true;
+}
+
+static double cone_area(const Cone &co)
+{
+        double slant = std::sqrt(co.radius * co.radius + co.height * co.height);
+        return M_PI * co.radius * (co.radius + slant);
+}
+
+static bool sample_cone_surface(const Cone &co, std::mt19937 &rng,
+                                                               std::uniform_real_distribution<double> &dist,
+                                                               SurfaceSample &sample)
+{
+        double base_area = M_PI * co.radius * co.radius;
+        double slant = std::sqrt(co.radius * co.radius + co.height * co.height);
+        double lateral_area = M_PI * co.radius * slant;
+        double total = lateral_area + base_area;
+        if (total <= 0.0)
+                return false;
+        Vec3 u, v;
+        build_basis(co.axis, u, v);
+        Vec3 apex = co.center + co.axis * (co.height * 0.5);
+        Vec3 base_center = co.center - co.axis * (co.height * 0.5);
+        Vec3 down = (-1.0) * co.axis;
+        double pick = dist(rng) * total;
+        if (pick < lateral_area)
+        {
+                double theta = dist(rng) * 2.0 * M_PI;
+                double sl = std::sqrt(std::max(dist(rng), 1e-6)) * slant;
+                double y = (sl / slant) * co.height;
+                double local_radius = (co.height > 1e-6) ? (y / co.height) * co.radius : 0.0;
+                Vec3 radial_dir = std::cos(theta) * u + std::sin(theta) * v;
+                Vec3 radial = radial_dir * local_radius;
+                Vec3 axial = down * y;
+                sample.point = apex + axial + radial;
+                double k = (co.height > 1e-6) ? (co.radius / co.height) : 0.0;
+                Vec3 normal = radial - down * (k * k * y);
+                if (normal.length_squared() < 1e-12)
+                        normal = radial_dir;
+                else
+                        normal = normal.normalized();
+                sample.normal = normal;
+                return true;
+        }
+        double r = std::sqrt(dist(rng)) * co.radius;
+        double theta = dist(rng) * 2.0 * M_PI;
+        Vec3 radial = std::cos(theta) * u + std::sin(theta) * v;
+        sample.point = base_center + radial * r;
+        sample.normal = down;
+        return true;
+}
+
+static double object_surface_area(const Hittable &obj)
+{
+        if (auto sphere = dynamic_cast<const Sphere *>(&obj))
+                return sphere_area(*sphere);
+        if (auto cube = dynamic_cast<const Cube *>(&obj))
+                return cube_area(*cube);
+        if (auto cylinder = dynamic_cast<const Cylinder *>(&obj))
+                return cylinder_area(*cylinder);
+        if (auto cone = dynamic_cast<const Cone *>(&obj))
+                return cone_area(*cone);
+        return 0.0;
+}
+
+static bool sample_surface_point(const Hittable &obj, std::mt19937 &rng,
+                                                             std::uniform_real_distribution<double> &dist,
+                                                             SurfaceSample &sample)
+{
+        if (auto sphere = dynamic_cast<const Sphere *>(&obj))
+                return sample_sphere_surface(*sphere, rng, dist, sample);
+        if (auto cube = dynamic_cast<const Cube *>(&obj))
+                return sample_cube_surface(*cube, rng, dist, sample);
+        if (auto cylinder = dynamic_cast<const Cylinder *>(&obj))
+                return sample_cylinder_surface(*cylinder, rng, dist, sample);
+        if (auto cone = dynamic_cast<const Cone *>(&obj))
+                return sample_cone_surface(*cone, rng, dist, sample);
+        return false;
+}
+
 static std::string next_save_path(const std::string &orig)
 {
 	namespace fs = std::filesystem;
@@ -208,6 +407,58 @@ static std::string next_save_path(const std::string &orig)
 }
 
 Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
+
+double Renderer::estimate_lit_area(const std::vector<Material> &mats) const
+{
+        double total = 0.0;
+        std::uniform_real_distribution<double> dist(0.0, 1.0);
+        for (const auto &obj : scene.objects)
+        {
+                if (!obj->countable)
+                        continue;
+                if (obj->is_beam())
+                        continue;
+                double area = object_surface_area(*obj);
+                if (area <= 0.0)
+                        continue;
+                int samples = std::clamp(static_cast<int>(area * 4.0), 32, 512);
+                std::mt19937 rng(static_cast<uint32_t>(obj->object_id * 73856093) + 1337u);
+                SurfaceSample sample;
+                int lit_count = 0;
+                for (int i = 0; i < samples; ++i)
+                {
+                        if (!sample_surface_point(*obj, rng, dist, sample))
+                                continue;
+                        bool lit = false;
+                        for (const auto &L : scene.lights)
+                        {
+                                if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                                          obj->object_id) != L.ignore_ids.end())
+                                        continue;
+                                Vec3 to_light = L.position - sample.point;
+                                double len = to_light.length();
+                                if (len <= 1e-6)
+                                        continue;
+                                Vec3 dir = to_light / len;
+                                if (Vec3::dot(sample.normal, dir) <= 1e-6)
+                                        continue;
+                                Vec3 color;
+                                double intensity;
+                                if (light_through(scene, mats, sample.point, L, color, intensity) &&
+                                        intensity > 1e-6)
+                                {
+                                        lit = true;
+                                        break;
+                                }
+                        }
+                        if (lit)
+                                ++lit_count;
+                }
+                if (samples > 0)
+                        total += area * (static_cast<double>(lit_count) / samples);
+        }
+        return total;
+}
 
 struct Renderer::RenderState
 {
@@ -697,7 +948,7 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                                        std::vector<Vec3> &framebuffer,
                                                        std::vector<unsigned char> &pixels,
                                                        int RW, int RH, int W, int H, int T,
-                                                       std::vector<Material> &mats)
+                                                       std::vector<Material> &mats, double score)
 {
         std::atomic<int> next_row{0};
         auto worker = [&]()
@@ -817,6 +1068,13 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         const int ch_size = 10;
         SDL_RenderDrawLine(ren, cx - ch_size, cy, cx + ch_size, cy);
         SDL_RenderDrawLine(ren, cx, cy - ch_size, cx, cy + ch_size);
+        SDL_Color score_color{255, 255, 255, 255};
+        const int score_scale = 2;
+        std::ostringstream score_stream;
+        score_stream << "SCORE: " << std::fixed << std::setprecision(1) << score;
+        CustomCharacter::draw_text(ren, score_stream.str(), 5, 5, score_color,
+                                   score_scale);
+        int legend_start_y = 5 + score_scale * 7 + 6;
         if (g_developer_mode)
         {
                 SDL_Color red{255, 0, 0, 255};
@@ -826,7 +1084,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    legend_start_y + i * (7 * scale + 2), red,
+                                                    scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
@@ -993,8 +1252,9 @@ void Renderer::render_window(std::vector<Material> &mats,
                 handle_keyboard(st, dt, mats);
                 scene.update_goal_targets(dt, mats);
                 update_selection(st, mats);
+                double score = estimate_lit_area(mats);
                 render_frame(st, ren, tex, framebuffer, pixels, RW, RH, W, H, T,
-                                         mats);
+                                         mats, score);
         }
 
         SDL_DestroyTexture(tex);
