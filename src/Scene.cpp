@@ -131,10 +131,11 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 {
                                         Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
                                         Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
-                                       auto new_bm = std::make_shared<Laser>(
-                                               refl_orig, refl_dir, new_len,
-                                               bm->light_intensity, 0, bm->material_id,
-                                               new_start, bm->total_length);
+                                        auto new_bm = std::make_shared<Laser>(
+                                                refl_orig, refl_dir, new_len,
+                                                bm->light_intensity, 0, bm->material_id,
+                                                new_start, bm->total_length,
+                                                bm->radius);
                                         new_bm->color = bm->color;
                                         new_bm->scorable = bm->scorable;
                                         new_bm->source = bm->source;
@@ -153,9 +154,10 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                          hit_mat.base_color * hit_mat.alpha;
                                         double new_intens =
                                                 bm->light_intensity * (1.0 - hit_mat.alpha);
-                                       auto new_bm = std::make_shared<Laser>(
-                                               pass_orig, forward.dir, new_len, new_intens, 0,
-                                               bm->material_id, new_start, bm->total_length);
+                                        auto new_bm = std::make_shared<Laser>(
+                                                pass_orig, forward.dir, new_len, new_intens, 0,
+                                                bm->material_id, new_start, bm->total_length,
+                                                bm->radius);
                                         new_bm->color = new_color;
                                         new_bm->scorable = bm->scorable;
                                         new_bm->source = bm->source;
@@ -177,7 +179,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 lights.emplace_back(bm->path.orig, light_col,
                                                         bm->light_intensity * ratio,
                                                         std::vector<int>{bm->object_id, pl.hit_id},
-                                                        bm->object_id, bm->path.dir, cone_cos, bm->length);
+                                                        bm->object_id, bm->path.dir, cone_cos,
+                                                        bm->length, false, true, bm->radius);
         }
 }
 
@@ -268,7 +271,8 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
                 std::vector<int> ignore = L.ignore_ids;
                 ignore.push_back(hit_rec.object_id);
                 PointLight new_light(refl_orig, L.color, intensity, ignore, -1,
-                                                         refl_dir, L.cutoff_cos, remain, true);
+                                                         refl_dir, L.cutoff_cos, remain, true,
+                                                         L.beam_light, L.beam_radius);
                 to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
         }
 }

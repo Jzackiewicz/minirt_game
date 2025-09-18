@@ -353,7 +353,8 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                                 std::vector<int>{bm->laser->object_id,
                                                              bm->source->object_id,
                                                              bm->source->mid.object_id},
-                                bm->source->object_id, dir_norm, cone_cos, L);
+                                bm->source->object_id, dir_norm, cone_cos, L,
+                                false, true, ray_radius);
                 }
                 else
                 {
@@ -364,7 +365,8 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                                 o, unit, intensity,
                                 std::vector<int>{bm->source->object_id,
                                                              bm->source->mid.object_id},
-                                bm->source->object_id, dir_norm, cone_cos, L);
+                                bm->source->object_id, dir_norm, cone_cos, L,
+                                false, true, ray_radius);
                 }
         }
 }

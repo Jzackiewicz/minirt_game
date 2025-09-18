@@ -41,6 +41,7 @@ class Renderer
                                           std::vector<unsigned char> &pixels, int RW,
                                           int RH, int W, int H, int T,
                                           std::vector<Material> &mats);
+        double compute_score(const std::vector<Material> &mats);
         Scene &scene;
         Camera &cam;
 };

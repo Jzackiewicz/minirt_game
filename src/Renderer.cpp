@@ -19,6 +19,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <random>
 #include <string>
 #include <thread>
@@ -171,6 +172,96 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	return sum;
 }
 
+static double beam_light_contribution(const Scene &scene,
+                                                                         const std::vector<Material> &mats,
+                                                                         const Vec3 &point,
+                                                                         const Vec3 &normal,
+                                                                         int object_id)
+{
+        double best = 0.0;
+        for (const auto &L : scene.lights)
+        {
+                if (!L.beam_light)
+                        continue;
+                if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(), object_id) !=
+                                L.ignore_ids.end())
+                        continue;
+                Vec3 from_light = point - L.position;
+                double dist_sq = from_light.length_squared();
+                if (dist_sq <= 1e-8)
+                        continue;
+                double dist = std::sqrt(dist_sq);
+                Vec3 spot_dir = from_light / dist;
+                if (L.cutoff_cos > -1.0 &&
+                                Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
+                        continue;
+                if (L.direction.length_squared() > 0.0)
+                {
+                        Vec3 dir = L.direction.normalized();
+                        double along = Vec3::dot(from_light, dir);
+                        if (along < 0.0)
+                                continue;
+                        if (L.range > 0.0 && along > L.range)
+                                continue;
+                        if (L.beam_radius > 0.0)
+                        {
+                                Vec3 radial = from_light - dir * along;
+                                if (radial.length_squared() > L.beam_radius * L.beam_radius)
+                                        continue;
+                        }
+                }
+                else
+                {
+                        continue;
+                }
+                Vec3 to_light = L.position - point;
+                Vec3 ldir = to_light / dist;
+                double ndotl = Vec3::dot(normal, ldir);
+                if (ndotl <= 0.0)
+                        continue;
+                Vec3 tmp_color;
+                double tmp_intensity;
+                if (!light_through(scene, mats, point, L, tmp_color, tmp_intensity))
+                        continue;
+                if (ndotl > best)
+                        best = ndotl;
+        }
+        return best;
+}
+
+static double sample_sphere_lit_area(const Scene &scene,
+                                                                         const std::vector<Material> &mats,
+                                                                         const Sphere &sphere)
+{
+        if (sphere.radius <= 0.0)
+                return 0.0;
+        const int lat_steps = 12;
+        const int lon_steps = 24;
+        double dphi = M_PI / lat_steps;
+        double dtheta = 2.0 * M_PI / lon_steps;
+        double total = 0.0;
+        for (int i = 0; i < lat_steps; ++i)
+        {
+                double phi = (i + 0.5) * dphi;
+                double sin_phi = std::sin(phi);
+                double cos_phi = std::cos(phi);
+                double area_factor = sphere.radius * sphere.radius * sin_phi * dphi * dtheta;
+                for (int j = 0; j < lon_steps; ++j)
+                {
+                        double theta = (j + 0.5) * dtheta;
+                        double sin_theta = std::sin(theta);
+                        double cos_theta = std::cos(theta);
+                        Vec3 normal(sin_phi * cos_theta, cos_phi, sin_phi * sin_theta);
+                        Vec3 point = sphere.center + normal * sphere.radius;
+                        double contrib = beam_light_contribution(scene, mats, point, normal,
+                                                                                           sphere.object_id);
+                        if (contrib > 0.0)
+                                total += contrib * area_factor;
+                }
+        }
+        return total;
+}
+
 Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
 
 struct Renderer::RenderState
@@ -187,6 +278,7 @@ struct Renderer::RenderState
         Vec3 edit_pos;
         int spawn_key = -1;
         double fps = 0.0;
+        double score = 0.0;
 };
 
 /// Initialize SDL window, renderer and texture objects.
@@ -713,6 +805,13 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
+        SDL_Color score_color{255, 255, 255, 255};
+        int score_scale = 2;
+        char score_buf[64];
+        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.5f", st.score);
+        CustomCharacter::draw_text(ren, score_buf, 5, 5, score_color, score_scale);
+        int score_height = 7 * score_scale;
+        int legend_start_y = 5 + score_height + 4;
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -791,7 +890,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    legend_start_y + i * (7 * scale + 2),
+                                                    red, scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
@@ -808,9 +908,26 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_RenderPresent(ren);
 }
 
+double Renderer::compute_score(const std::vector<Material> &mats)
+{
+        double total = 0.0;
+        for (const auto &obj : scene.objects)
+        {
+                if (!obj->scorable || obj->is_beam())
+                        continue;
+                ShapeType type = obj->shape_type();
+                if (type == ShapeType::Sphere || type == ShapeType::BeamTarget)
+                {
+                        if (auto sphere = std::dynamic_pointer_cast<Sphere>(obj))
+                                total += sample_sphere_lit_area(scene, mats, *sphere);
+                }
+        }
+        return total;
+}
+
 void Renderer::render_ppm(const std::string &path,
-						  const std::vector<Material> &mats,
-						  const RenderSettings &rset)
+                                                  const std::vector<Material> &mats,
+                                                  const RenderSettings &rset)
 {
 	const float scale = std::max(1.0f, rset.downscale);
 	const int W = std::max(1, static_cast<int>(rset.width / scale));
@@ -971,6 +1088,7 @@ void Renderer::render_window(std::vector<Material> &mats,
                 handle_keyboard(st, dt, mats);
                 scene.update_goal_targets(dt, mats);
                 update_selection(st, mats);
+                st.score = compute_score(mats);
                 render_frame(st, ren, tex, framebuffer, pixels, RW, RH, W, H, T,
                                          mats);
         }
