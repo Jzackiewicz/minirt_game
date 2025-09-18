@@ -750,6 +750,13 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
+        SDL_Color white{255, 255, 255, 255};
+        int score_scale = 2;
+        double score_value = std::max(0.0, scene.current_score());
+        char score_buf[64];
+        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.1f", score_value);
+        CustomCharacter::draw_text(ren, score_buf, 5, 5, white, score_scale);
+        int overlay_offset_y = 5 + 7 * score_scale + 5;
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -822,25 +829,26 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         if (g_developer_mode)
         {
                 SDL_Color red{255, 0, 0, 255};
-                int scale = 2;
+                int dev_scale = 2;
                 const char *legend[] = {"1-PLANE",  "2-SPHERE",   "3-CUBE",
                                          "4-CONE",  "5-CYLINDER", "SCROLL-SIZE",
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    overlay_offset_y + i * (7 * dev_scale + 2),
+                                                    red, dev_scale);
                 std::string text = "DEVELOPER MODE";
-                int tw = CustomCharacter::text_width(text, scale);
-                CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
+                int tw = CustomCharacter::text_width(text, dev_scale);
+                CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, dev_scale);
                 double fps_value = std::min(st.fps, 9999.9);
                 char fps_buf[32];
                 std::snprintf(fps_buf, sizeof(fps_buf), "FPS: %.1f", fps_value);
                 std::string fps_text(fps_buf);
-                int fps_w = CustomCharacter::text_width(fps_text, scale);
-                int fps_h = 7 * scale;
+                int fps_w = CustomCharacter::text_width(fps_text, dev_scale);
+                int fps_h = 7 * dev_scale;
                 int fps_x = std::max(0, W - fps_w - 5);
                 int fps_y = std::max(0, H - fps_h - 5);
-                CustomCharacter::draw_text(ren, fps_text, fps_x, fps_y, red, scale);
+                CustomCharacter::draw_text(ren, fps_text, fps_x, fps_y, red, dev_scale);
         }
         SDL_RenderPresent(ren);
 }

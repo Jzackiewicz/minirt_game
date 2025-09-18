@@ -73,6 +73,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                               std::vector<std::shared_ptr<Laser>> &roots,
                                               std::unordered_map<int, int> &id_map)
 {
+        double total_lit_area = 0.0;
         for (auto &obj : objects)
                 if (obj->shape_type() == ShapeType::BeamTarget)
                         std::static_pointer_cast<BeamTarget>(obj)->goal_active = false;
@@ -120,6 +121,16 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 auto hit_obj = objects[hit_rec.object_id];
                                 if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
+                                if (!hit_obj->is_beam() && hit_obj->countable)
+                                {
+                                        double cos_theta = std::abs(
+                                                Vec3::dot(hit_rec.normal, forward.dir * -1.0));
+                                        const double eps = 1e-6;
+                                        if (cos_theta < eps)
+                                                cos_theta = eps;
+                                        double area = M_PI * bm->radius * bm->radius / cos_theta;
+                                        total_lit_area += area;
+                                }
                         }
                         const Material &hit_mat = mats[hit_rec.material_id];
                         if (hit_mat.mirror)
@@ -176,6 +187,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                         std::vector<int>{bm->object_id, pl.hit_id},
                                                         bm->object_id, bm->path.dir, cone_cos, bm->length);
         }
+        score = total_lit_area;
 }
 
 // Remap light references after objects have been reindexed.
@@ -286,6 +298,11 @@ void Scene::update_goal_targets(double dt, std::vector<Material> &mats)
         for (auto &obj : objects)
                 if (obj->shape_type() == ShapeType::BeamTarget)
                         std::static_pointer_cast<BeamTarget>(obj)->update_goal(dt, mats);
+}
+
+double Scene::current_score() const
+{
+        return score;
 }
 
 // Construct a bounding volume hierarchy for faster ray queries.
