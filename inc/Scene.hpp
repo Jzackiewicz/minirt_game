@@ -36,9 +36,12 @@ class Scene
 	// Move object while preventing collisions.
 	Vec3 move_with_collision(int index, const Vec3 &delta);
 
-	// Move camera while avoiding obstacles.
+        // Move camera while avoiding obstacles.
         Vec3 move_camera(Camera &cam, const Vec3 &delta,
                                          const std::vector<Material> &materials) const;
+
+        // Compute illuminated surface area score for active beams.
+        double compute_score() const;
         private:
         bool is_movable(int index) const;
         void apply_translation(const HittablePtr &object, const Vec3 &delta);
@@ -50,4 +53,16 @@ class Scene
                                                std::unordered_map<int, int> &id_map);
         void remap_light_ids(const std::unordered_map<int, int> &id_map);
         void reflect_lights(const std::vector<Material> &mats);
+
+        struct IlluminationSegment
+        {
+                Vec3 origin;
+                Vec3 dir;
+                double radius;
+                double length;
+                int source_id;
+        };
+        std::vector<IlluminationSegment> gather_illumination_segments() const;
+        bool score_ray_hit(const Ray &r, double tmin, double tmax, int ignore_id,
+                                           HitRecord &rec) const;
 };

@@ -1,4 +1,5 @@
 #include "Scene.hpp"
+#include "BeamSource.hpp"
 #include "Camera.hpp"
 #include "Collision.hpp"
 #include "Laser.hpp"
@@ -271,6 +272,150 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
                                                          refl_dir, L.cutoff_cos, remain, true);
                 to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
         }
+}
+
+std::vector<Scene::IlluminationSegment>
+Scene::gather_illumination_segments() const
+{
+        std::vector<IlluminationSegment> segments;
+        segments.reserve(objects.size());
+        for (const auto &obj : objects)
+        {
+                if (obj->is_beam())
+                {
+                        auto laser = std::static_pointer_cast<Laser>(obj);
+                        if (!laser || laser->length <= 1e-6)
+                                continue;
+                        auto src = laser->source.lock();
+                        if (!src)
+                                continue;
+                        double radius = laser->radius;
+                        int source_id = src->object_id;
+                        auto emitter = std::dynamic_pointer_cast<BeamSource>(src);
+                        if (emitter && emitter->light)
+                                radius = emitter->light->radius;
+                        segments.push_back({laser->path.orig,
+                                                                laser->path.dir.normalized(), radius,
+                                                                laser->length, source_id});
+                        continue;
+                }
+                auto emitter = std::dynamic_pointer_cast<BeamSource>(obj);
+                if (!emitter || emitter->beam || !emitter->light)
+                        continue;
+                if (emitter->light->length <= 1e-6)
+                        continue;
+                segments.push_back({emitter->light->ray.orig,
+                                                        emitter->light->ray.dir.normalized(),
+                                                        emitter->light->radius,
+                                                        emitter->light->length,
+                                                        emitter->object_id});
+        }
+        return segments;
+}
+
+bool Scene::score_ray_hit(const Ray &r, double tmin, double tmax, int ignore_id,
+                                               HitRecord &rec) const
+{
+        if (tmax <= tmin)
+                return false;
+        bool hit_any = false;
+        HitRecord tmp;
+        double closest = tmax;
+        for (const auto &obj : objects)
+        {
+                if (obj->is_beam())
+                        continue;
+                if (ignore_id >= 0 && obj->object_id == ignore_id)
+                        continue;
+                if (obj->hit(r, tmin, closest, tmp))
+                {
+                        closest = tmp.t;
+                        rec = tmp;
+                        hit_any = true;
+                }
+        }
+        return hit_any;
+}
+
+double Scene::compute_score() const
+{
+        auto segments = gather_illumination_segments();
+        if (segments.empty())
+                return 0.0;
+
+        const auto &unit_samples = []() -> const std::vector<Vec3> & {
+                static std::vector<Vec3> samples;
+                if (samples.empty())
+                {
+                        const int N = 40;
+                        const double step = 2.0 / static_cast<double>(N);
+                        for (int y = 0; y < N; ++y)
+                        {
+                                double sy = -1.0 + (y + 0.5) * step;
+                                for (int x = 0; x < N; ++x)
+                                {
+                                        double sx = -1.0 + (x + 0.5) * step;
+                                        if (sx * sx + sy * sy <= 1.0)
+                                                samples.emplace_back(sx, sy, 0.0);
+                                }
+                        }
+                }
+                return samples;
+        }();
+        if (unit_samples.empty())
+                return 0.0;
+
+        constexpr double kPi = 3.14159265358979323846;
+        constexpr double kEps = 1e-4;
+        double total = 0.0;
+        for (const auto &seg : segments)
+        {
+                if (seg.radius <= 0.0)
+                        continue;
+                if (seg.length <= kEps)
+                        continue;
+                Vec3 dir = seg.dir;
+                if (dir.length_squared() == 0.0)
+                        continue;
+                dir = dir.normalized();
+                Vec3 world_up = (std::fabs(dir.y) < 0.99) ? Vec3(0.0, 1.0, 0.0)
+                                                          : Vec3(1.0, 0.0, 0.0);
+                Vec3 right = Vec3::cross(world_up, dir);
+                double right_len2 = right.length_squared();
+                if (right_len2 <= 1e-12)
+                        continue;
+                right = right / std::sqrt(right_len2);
+                Vec3 up = Vec3::cross(dir, right);
+                double circle_area = kPi * seg.radius * seg.radius;
+                if (circle_area <= 0.0)
+                        continue;
+                double sample_area = circle_area /
+                                     static_cast<double>(unit_samples.size());
+                double max_t = std::max(0.0, seg.length - kEps);
+                if (max_t <= 0.0)
+                        continue;
+                for (const Vec3 &offset_uv : unit_samples)
+                {
+                        Vec3 offset = right * (offset_uv.x * seg.radius) +
+                                      up * (offset_uv.y * seg.radius);
+                        Vec3 start = seg.origin + offset + dir * kEps;
+                        Ray sample_ray(start, dir);
+                        HitRecord rec;
+                        if (!score_ray_hit(sample_ray, 0.0, max_t, seg.source_id, rec))
+                                continue;
+                        if (rec.object_id < 0 ||
+                                rec.object_id >= static_cast<int>(objects.size()))
+                                continue;
+                        auto hit_obj = objects[rec.object_id];
+                        if (!hit_obj || hit_obj->is_beam() || !hit_obj->scorable)
+                                continue;
+                        double cos_theta = std::abs(Vec3::dot(rec.normal, dir * -1.0));
+                        if (cos_theta <= 1e-6)
+                                continue;
+                        total += sample_area / cos_theta;
+                }
+        }
+        return total;
 }
 
 // Remove finished beam segments and spawn new beams for reflections.
