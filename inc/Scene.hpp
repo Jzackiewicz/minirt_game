@@ -39,6 +39,8 @@ class Scene
 	// Move camera while avoiding obstacles.
         Vec3 move_camera(Camera &cam, const Vec3 &delta,
                                          const std::vector<Material> &materials) const;
+
+        double get_score() const;
         private:
         bool is_movable(int index) const;
         void apply_translation(const HittablePtr &object, const Vec3 &delta);
@@ -50,4 +52,5 @@ class Scene
                                                std::unordered_map<int, int> &id_map);
         void remap_light_ids(const std::unordered_map<int, int> &id_map);
         void reflect_lights(const std::vector<Material> &mats);
+        std::vector<double> lit_areas;
 };

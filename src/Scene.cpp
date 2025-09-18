@@ -17,6 +17,8 @@ inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
         return v - n * (2.0 * Vec3::dot(v, n));
 }
 
+constexpr double kPi = 3.14159265358979323846;
+
 } // namespace
 
 // Remove lights attached to beam segments and collect root laser objects.
@@ -66,6 +68,7 @@ void Scene::prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
         }
 
         objects = std::move(non_beams);
+        lit_areas.assign(objects.size(), 0.0);
 }
 
 // Trace laser beams, spawning reflections and associated point lights.
@@ -92,6 +95,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                         id_map[bm->object_id] = next_oid;
                 bm->object_id = next_oid++;
                 objects.push_back(bm);
+                lit_areas.push_back(0.0);
 
                 Ray forward(bm->path.orig, bm->path.dir);
                 HitRecord tmp, hit_rec;
@@ -114,12 +118,22 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 if (hit_any)
                 {
                         bm->length = closest;
+                        std::shared_ptr<Hittable> hit_obj;
                         if (hit_rec.object_id >= 0 &&
                                 hit_rec.object_id < static_cast<int>(objects.size()))
                         {
-                                auto hit_obj = objects[hit_rec.object_id];
+                                hit_obj = objects[hit_rec.object_id];
                                 if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
+                                if (hit_obj->countable && !hit_obj->is_beam() &&
+                                        hit_rec.object_id < static_cast<int>(lit_areas.size()))
+                                {
+                                        double cos_theta =
+                                                std::fabs(Vec3::dot(hit_rec.normal, forward.dir));
+                                        cos_theta = std::max(1e-4, cos_theta);
+                                        double area = kPi * bm->radius * bm->radius / cos_theta;
+                                        lit_areas[hit_rec.object_id] += area;
+                                }
                         }
                         const Material &hit_mat = mats[hit_rec.material_id];
                         if (hit_mat.mirror)
@@ -131,7 +145,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                         Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
                                         Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
                                        auto new_bm = std::make_shared<Laser>(
-                                               refl_orig, refl_dir, new_len,
+                                               refl_orig, refl_dir, bm->radius, new_len,
                                                bm->light_intensity, 0, bm->material_id,
                                                new_start, bm->total_length);
                                         new_bm->color = bm->color;
@@ -152,8 +166,9 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                         double new_intens =
                                                 bm->light_intensity * (1.0 - hit_mat.alpha);
                                        auto new_bm = std::make_shared<Laser>(
-                                               pass_orig, forward.dir, new_len, new_intens, 0,
-                                               bm->material_id, new_start, bm->total_length);
+                                               pass_orig, forward.dir, bm->radius, new_len,
+                                               new_intens, 0, bm->material_id, new_start,
+                                               bm->total_length);
                                         new_bm->color = new_color;
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
@@ -511,9 +526,9 @@ bool Scene::collides(int index) const
 // Ray-scene intersection test.
 bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
-	bool hit_any = false;
-	HitRecord tmp;
-	double closest = tmax;
+        bool hit_any = false;
+        HitRecord tmp;
+        double closest = tmax;
 	if (accel && accel->hit(r, tmin, tmax, tmp))
 	{
 		hit_any = true;
@@ -530,6 +545,20 @@ bool Scene::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 			closest = tmp.t;
 			rec = tmp;
 		}
-	}
-	return hit_any;
+        }
+        return hit_any;
+}
+
+double Scene::get_score() const
+{
+        double total = 0.0;
+        size_t count = std::min(objects.size(), lit_areas.size());
+        for (size_t i = 0; i < count; ++i)
+        {
+                const auto &obj = objects[i];
+                if (!obj || obj->is_beam() || !obj->countable)
+                        continue;
+                total += lit_areas[i];
+        }
+        return total;
 }

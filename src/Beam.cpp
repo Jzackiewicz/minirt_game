@@ -8,8 +8,8 @@ Beam::Beam(const Vec3 &origin, const Vec3 &dir, double ray_radius,
        light = std::make_shared<LightRay>(origin, dir, ray_radius, intensity, color);
        if (with_laser)
        {
-               laser = std::make_shared<Laser>(origin, dir, length, intensity,
-                                                                               base_oid, laser_mat);
+               laser = std::make_shared<Laser>(origin, dir, ray_radius, length,
+                                                                               intensity, base_oid, laser_mat);
                laser->color = color;
                source = std::make_shared<BeamSource>(origin, dir, laser, light,
                                                                                 ray_radius, base_oid + 1,
