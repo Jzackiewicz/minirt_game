@@ -69,7 +69,7 @@ void Scene::prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
 }
 
 // Trace laser beams, spawning reflections and associated point lights.
-void Scene::process_beams(const std::vector<Material> &mats,
+double Scene::process_beams(const std::vector<Material> &mats,
                                               std::vector<std::shared_ptr<Laser>> &roots,
                                               std::unordered_map<int, int> &id_map)
 {
@@ -85,6 +85,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 int hit_id;
         };
         std::vector<PendingLight> pending_lights;
+        double total_score = 0.0;
         for (size_t i = 0; i < to_process.size(); ++i)
         {
                 auto bm = to_process[i];
@@ -120,6 +121,14 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 auto hit_obj = objects[hit_rec.object_id];
                                 if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
+                                if (hit_obj->countable)
+                                {
+                                        double cos_theta =
+                                                std::abs(Vec3::dot(forward.dir, hit_rec.normal));
+                                        cos_theta = std::max(1e-6, cos_theta);
+                                        double area = M_PI * bm->radius * bm->radius / cos_theta;
+                                        total_score += area;
+                                }
                         }
                         const Material &hit_mat = mats[hit_rec.material_id];
                         if (hit_mat.mirror)
@@ -133,9 +142,10 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                        auto new_bm = std::make_shared<Laser>(
                                                refl_orig, refl_dir, new_len,
                                                bm->light_intensity, 0, bm->material_id,
-                                               new_start, bm->total_length);
+                                               new_start, bm->total_length, bm->radius);
                                         new_bm->color = bm->color;
                                         new_bm->source = bm->source;
+                                        new_bm->countable = bm->countable;
                                         to_process.push_back(new_bm);
                                         pending_lights.push_back({new_bm, hit_rec.object_id});
                                 }
@@ -147,15 +157,17 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 if (new_len > 1e-4)
                                 {
                                         Vec3 pass_orig = forward.at(closest) + forward.dir * 1e-4;
-                                        Vec3 new_color = bm->color * (1.0 - hit_mat.alpha) +
-                                                         hit_mat.base_color * hit_mat.alpha;
-                                        double new_intens =
-                                                bm->light_intensity * (1.0 - hit_mat.alpha);
+                                       Vec3 new_color = bm->color * (1.0 - hit_mat.alpha) +
+                                                        hit_mat.base_color * hit_mat.alpha;
+                                       double new_intens =
+                                               bm->light_intensity * (1.0 - hit_mat.alpha);
                                        auto new_bm = std::make_shared<Laser>(
                                                pass_orig, forward.dir, new_len, new_intens, 0,
-                                               bm->material_id, new_start, bm->total_length);
+                                               bm->material_id, new_start, bm->total_length,
+                                               bm->radius);
                                         new_bm->color = new_color;
                                         new_bm->source = bm->source;
+                                        new_bm->countable = bm->countable;
                                         to_process.push_back(new_bm);
                                         pending_lights.push_back({new_bm, hit_rec.object_id});
                                 }
@@ -176,6 +188,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                         std::vector<int>{bm->object_id, pl.hit_id},
                                                         bm->object_id, bm->path.dir, cone_cos, bm->length);
         }
+
+        return total_score;
 }
 
 // Remap light references after objects have been reindexed.
@@ -270,13 +284,16 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
         }
 }
 
+double Scene::get_score() const { return current_score; }
+
 // Remove finished beam segments and spawn new beams for reflections.
 void Scene::update_beams(const std::vector<Material> &mats)
 {
         std::vector<std::shared_ptr<Laser>> roots;
         std::unordered_map<int, int> id_map;
         prepare_beam_roots(roots, id_map);
-        process_beams(mats, roots, id_map);
+        double score = process_beams(mats, roots, id_map);
+        current_score = score;
         remap_light_ids(id_map);
         reflect_lights(mats);
 }

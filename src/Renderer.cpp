@@ -713,6 +713,15 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
+        SDL_Color hud_white{255, 255, 255, 255};
+        int hud_scale = 2;
+        double score_value = std::max(0.0, scene.get_score());
+        double display_score = std::min(score_value, 999999.99);
+        char score_buf[64];
+        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f", display_score);
+        CustomCharacter::draw_text(ren, score_buf, 5, 5, hud_white, hud_scale);
+        int hud_text_height = 7 * hud_scale;
+        int overlay_offset = 5 + hud_text_height + 4;
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -791,7 +800,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    overlay_offset + i * (7 * scale + 2),
+                                                    red, scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);

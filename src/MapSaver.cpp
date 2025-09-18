@@ -210,7 +210,7 @@ void write_shape_line(std::ostream &out, const Hittable &obj,
                 const auto &sp = static_cast<const Sphere &>(obj);
                 out << "sp " << vec_to_str(sp.center) << ' ' << format_double(sp.radius) << ' '
                     << rgba_to_str(mat.base_color, mat.alpha) << ' ' << reflective_flag << ' '
-                    << move;
+                    << move << ' ' << (obj.countable ? "C" : "NC");
                 break;
         }
         case ShapeType::Plane:
@@ -218,7 +218,7 @@ void write_shape_line(std::ostream &out, const Hittable &obj,
                 const auto &pl = static_cast<const Plane &>(obj);
                 out << "pl " << vec_to_str(pl.point) << ' ' << vec_to_str(pl.normal) << ' '
                     << rgba_to_str(mat.base_color, mat.alpha) << ' ' << reflective_flag << ' '
-                    << move;
+                    << move << ' ' << (obj.countable ? "C" : "NC");
                 break;
         }
         case ShapeType::Cylinder:
@@ -227,7 +227,7 @@ void write_shape_line(std::ostream &out, const Hittable &obj,
                 out << "cy " << vec_to_str(cy.center) << ' ' << vec_to_str(cy.axis) << ' '
                     << format_double(cy.radius * 2.0) << ' ' << format_double(cy.height) << ' '
                     << rgba_to_str(mat.base_color, mat.alpha) << ' ' << reflective_flag << ' '
-                    << move;
+                    << move << ' ' << (obj.countable ? "C" : "NC");
                 break;
         }
         case ShapeType::Cube:
@@ -237,7 +237,7 @@ void write_shape_line(std::ostream &out, const Hittable &obj,
                     << format_double(cu.half.x * 2.0) << ' ' << format_double(cu.half.y * 2.0) << ' '
                     << format_double(cu.half.z * 2.0) << ' '
                     << rgba_to_str(mat.base_color, mat.alpha) << ' ' << reflective_flag << ' '
-                    << move;
+                    << move << ' ' << (obj.countable ? "C" : "NC");
                 break;
         }
         case ShapeType::Cone:
@@ -246,7 +246,7 @@ void write_shape_line(std::ostream &out, const Hittable &obj,
                 out << "co " << vec_to_str(co.center) << ' ' << vec_to_str(co.axis) << ' '
                     << format_double(co.radius * 2.0) << ' ' << format_double(co.height) << ' '
                     << rgba_to_str(mat.base_color, mat.alpha) << ' ' << reflective_flag << ' '
-                    << move;
+                    << move << ' ' << (obj.countable ? "C" : "NC");
                 break;
         }
         default:
@@ -261,7 +261,8 @@ void write_beam_target(std::ostream &out, const BeamTarget &bt,
         const Material &inner = mats[bt.inner.material_id];
         out << "bt " << vec_to_str(bt.center) << ' '
             << rgba_to_str(inner.base_color, inner.alpha) << ' '
-            << format_double(bt.radius) << ' ' << move;
+            << format_double(bt.radius) << ' ' << move << ' '
+            << (bt.countable ? "C" : "NC");
 }
 
 void write_beam(std::ostream &out, const Laser &beam)
@@ -274,7 +275,7 @@ void write_beam(std::ostream &out, const Laser &beam)
             << vec_to_str(beam.path.orig) << ' ' << vec_to_str(beam.path.dir) << ' '
             << rgba_to_str(beam.color, 1.0) << ' ' << format_double(beam.radius) << ' '
             << format_double(beam.total_length >= 0.0 ? beam.total_length : beam.length) << ' '
-            << move;
+            << move << ' ' << (beam.countable ? "C" : "NC");
 }
 
 } // namespace

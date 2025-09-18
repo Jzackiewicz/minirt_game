@@ -13,16 +13,20 @@ class Laser;
 class Scene
 {
 	public:
-	std::vector<HittablePtr> objects;
-	std::vector<PointLight> lights;
+        std::vector<HittablePtr> objects;
+        std::vector<PointLight> lights;
         Ambient ambient{Vec3(1, 1, 1), 0.0};
         std::shared_ptr<Hittable> accel;
+        double current_score = 0.0;
 
         // Update beam objects and associated lights in the scene.
         void update_beams(const std::vector<Material> &materials);
 
         // Update goal-scored effects on beam targets.
         void update_goal_targets(double dt, std::vector<Material> &materials);
+
+        // Retrieve current score value.
+        double get_score() const;
 
 	// Build bounding volume hierarchy for static geometry.
 	void build_bvh();
@@ -45,9 +49,9 @@ class Scene
         void attempt_axis_move(int index, const Vec3 &axis_delta, Vec3 &moved);
         void prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
                                                         std::unordered_map<int, int> &id_map);
-        void process_beams(const std::vector<Material> &mats,
-                                               std::vector<std::shared_ptr<Laser>> &roots,
-                                               std::unordered_map<int, int> &id_map);
+        double process_beams(const std::vector<Material> &mats,
+                                              std::vector<std::shared_ptr<Laser>> &roots,
+                                              std::unordered_map<int, int> &id_map);
         void remap_light_ids(const std::unordered_map<int, int> &id_map);
         void reflect_lights(const std::vector<Material> &mats);
 };
