@@ -19,7 +19,9 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <random>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -713,6 +715,16 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
+        double score = scene.compute_score(mats);
+        std::ostringstream score_stream;
+        score_stream << "SCORE: " << std::fixed << std::setprecision(5) << score;
+        std::string score_text = score_stream.str();
+        SDL_Color white{255, 255, 255, 255};
+        const int score_scale = 2;
+        const int score_x = 5;
+        const int score_y = 5;
+        CustomCharacter::draw_text(ren, score_text, score_x, score_y, white, score_scale);
+        const int score_height = 7 * score_scale;
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -789,9 +801,10 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                 const char *legend[] = {"1-PLANE",  "2-SPHERE",   "3-CUBE",
                                          "4-CONE",  "5-CYLINDER", "SCROLL-SIZE",
                                          "MCLICK-DEL"};
+                int legend_base_y = score_y + score_height + 5;
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    legend_base_y + i * (7 * scale + 2), red, scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);

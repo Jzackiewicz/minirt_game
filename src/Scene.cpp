@@ -1,4 +1,5 @@
 #include "Scene.hpp"
+#include "BeamSource.hpp"
 #include "Camera.hpp"
 #include "Collision.hpp"
 #include "Laser.hpp"
@@ -289,6 +290,108 @@ void Scene::update_goal_targets(double dt, std::vector<Material> &mats)
         for (auto &obj : objects)
                 if (obj->shape_type() == ShapeType::BeamTarget)
                         std::static_pointer_cast<BeamTarget>(obj)->update_goal(dt, mats);
+}
+
+double Scene::compute_score(const std::vector<Material> &materials) const
+{
+        constexpr double EPS = 1e-4;
+        const int grid_size = 20;
+        double total = 0.0;
+        for (const auto &obj : objects)
+        {
+                auto source = std::dynamic_pointer_cast<BeamSource>(obj);
+                if (!source)
+                        continue;
+                auto light = source->light;
+                if (!light)
+                        continue;
+                double radius = light->radius;
+                if (radius <= 0.0)
+                        continue;
+                Vec3 dir = light->ray.dir.normalized();
+                Vec3 basis_ref = (std::fabs(dir.z) < 0.99) ? Vec3(0, 0, 1) : Vec3(0, 1, 0);
+                Vec3 right = Vec3::cross(dir, basis_ref);
+                double right_len2 = right.length_squared();
+                if (right_len2 < 1e-9)
+                        continue;
+                right = right / std::sqrt(right_len2);
+                Vec3 up = Vec3::cross(right, dir);
+                double up_len2 = up.length_squared();
+                if (up_len2 < 1e-9)
+                        continue;
+                up = up / std::sqrt(up_len2);
+                double circle_area = M_PI * radius * radius;
+                double step = (2.0 * radius) / static_cast<double>(grid_size);
+                int inside_samples = 0;
+                int hit_samples = 0;
+                Vec3 base_point = light->ray.orig + dir * (source->radius + 1e-3);
+                for (int ix = 0; ix < grid_size; ++ix)
+                {
+                        double x = -radius + (ix + 0.5) * step;
+                        for (int iy = 0; iy < grid_size; ++iy)
+                        {
+                                double y = -radius + (iy + 0.5) * step;
+                                if (x * x + y * y > radius * radius)
+                                        continue;
+                                ++inside_samples;
+                                Vec3 sample_origin = base_point + right * x + up * y;
+                                Vec3 current_origin = sample_origin + dir * EPS;
+                                bool sample_hit = false;
+                                int iterations = 0;
+                                while (iterations++ < 64)
+                                {
+                                        Ray sample_ray(current_origin, dir);
+                                        HitRecord closest_rec;
+                                        const Hittable *closest_obj = nullptr;
+                                        double closest_t = 1e9;
+                                        HitRecord tmp;
+                                        for (const auto &other : objects)
+                                        {
+                                                if (other.get() == source.get())
+                                                        continue;
+                                                if (other->is_beam())
+                                                        continue;
+                                                if (other->hit(sample_ray, EPS, closest_t, tmp))
+                                                {
+                                                        closest_t = tmp.t;
+                                                        closest_rec = tmp;
+                                                        closest_obj = other.get();
+                                                }
+                                        }
+                                        if (!closest_obj)
+                                                break;
+                                        if (closest_obj->scorable)
+                                        {
+                                                sample_hit = true;
+                                                break;
+                                        }
+                                        if (closest_rec.material_id < 0 ||
+                                                closest_rec.material_id >=
+                                                        static_cast<int>(materials.size()))
+                                        {
+                                                break;
+                                        }
+                                        const Material &mat =
+                                                materials[closest_rec.material_id];
+                                        bool transparent = (mat.alpha < 1.0) &&
+                                                                                !closest_obj->blocks_when_transparent();
+                                        if (!transparent)
+                                                break;
+                                        Vec3 advance = sample_ray.at(closest_t) + dir * EPS;
+                                        current_origin = advance;
+                                }
+                                if (sample_hit)
+                                        ++hit_samples;
+                        }
+                }
+                if (inside_samples > 0)
+                {
+                        double ratio = static_cast<double>(hit_samples) /
+                                                   static_cast<double>(inside_samples);
+                        total += circle_area * ratio;
+                }
+        }
+        return total;
 }
 
 // Construct a bounding volume hierarchy for faster ray queries.
