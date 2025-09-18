@@ -38,12 +38,12 @@ Puzzle game based on miniRT 42School project.
 
 ### Windows
 ```bash
-./build/minirt.exe scenes/[map].rt
+./build/minirt.exe scenes/[map].toml
 ```
 
 ### Linux
 ```bash
-./build/minirt scenes/[map].rt
+./build/minirt scenes/[map].toml
 ```
 
-The `scenes` directory contains sample `.rt` files.
+The `scenes` directory contains sample `.toml` files.

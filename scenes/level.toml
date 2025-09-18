@@ -1,0 +1,147 @@
+[camera]
+id = "cam"
+position = [2.21563, 2.46, -9.33447]
+lookdir = [-0.36065, -0.41687, 0.83435]
+fov = 120
+
+[lighting.ambient]
+intensity = 0.2
+color = [255, 255, 255, 255]
+
+[[objects]]
+id = "cone1"
+type = "cone"
+color = [0, 255, 1]
+position = [2.0, 0.0, 0.0]
+dir = [0.0, -1.0, 0.0]
+radius = 3.0
+height = 3.0
+reflective = true
+rotatable = true
+movable = true
+scorable = false
+transparent = false
+
+[[objects]]
+id = "sphere1"
+type = "sphere"
+color = [255, 0, 0]
+position = [-2.0, -0.4, 0.0]
+dir = [0.0, 1.0, 0.0]
+radius = 1.0
+reflective = true
+rotatable = true
+movable = false
+scorable = true
+transparent = false
+
+[[objects]]
+id = "cylinder1"
+type = "cylinder"
+color = [100, 0, 255, 125]
+position = [0.0, 3.0, 0.0]
+dir = [0.70711, -0.70711, 0.0]
+radius = 1.0
+height = 3.0
+reflective = false
+rotatable = true
+movable = true
+scorable = false
+transparent = true
+
+[[objects]]
+id = "box1"
+type = "box"
+color = [200, 200, 200]
+position = [0.0, -5.0, 0.0]
+dir = [0.0, 1.0, 0.0]
+width = 2.0
+height = 2.0
+length = 2.0
+reflective = true
+rotatable = true
+movable = true
+scorable = false
+transparent = false
+
+[[objects]]
+id = "floor"
+type = "plane"
+color = [50, 50, 50]
+position = [0.0, -10.0, 0.0]
+dir = [0.0, 1.0, 0.0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects]]
+id = "wall_far"
+type = "plane"
+color = [150, 150, 150]
+position = [-15.0, 10.0, 0.0]
+dir = [0.0, 1.0, 0.0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects]]
+id = "wall_back"
+type = "plane"
+color = [50, 50, 50]
+position = [0.0, -10.0, 10.0]
+dir = [0.0, 0.0, -1.0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects]]
+id = "wall_left"
+type = "plane"
+color = [0, 100, 0]
+position = [-10.0, 0.0, 10.0]
+dir = [1.0, 0.0, 0.0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects]]
+id = "wall_right"
+type = "plane"
+color = [0, 0, 100]
+position = [10.0, 0.0, 10.0]
+dir = [1.0, 0.0, 0.0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[beam]
+
+[[beam.sources]]
+id = "beam_source"
+intensity = 0.75
+position = [-3.56791, -0.22483, -7.45168]
+dir = [-0.00725, -0.04210, 0.99909]
+color = [255, 0, 255, 255]
+radius = 0.4
+length = 20.0
+movable = true
+scorable = true
+with_laser = true
+
+[[beam.targets]]
+id = "beam_target"
+position = [1.1, 1.1, 0.0]
+color = [255, 255, 0, 255]
+radius = 0.4
+movable = false
+scorable = true
