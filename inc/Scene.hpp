@@ -30,15 +30,18 @@ class Scene
 	// Test a ray against all objects.
 	bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
 
-	// Determine whether object at index collides with others.
-	bool collides(int index) const;
+        // Determine whether object at index collides with others.
+        bool collides(int index) const;
 
-	// Move object while preventing collisions.
-	Vec3 move_with_collision(int index, const Vec3 &delta);
+        // Move object while preventing collisions.
+        Vec3 move_with_collision(int index, const Vec3 &delta);
 
-	// Move camera while avoiding obstacles.
+        // Move camera while avoiding obstacles.
         Vec3 move_camera(Camera &cam, const Vec3 &delta,
                                          const std::vector<Material> &materials) const;
+
+        // Current lit area score for countable objects.
+        double get_lit_area_score() const;
         private:
         bool is_movable(int index) const;
         void apply_translation(const HittablePtr &object, const Vec3 &delta);
@@ -50,4 +53,5 @@ class Scene
                                                std::unordered_map<int, int> &id_map);
         void remap_light_ids(const std::unordered_map<int, int> &id_map);
         void reflect_lights(const std::vector<Material> &mats);
+        double lit_area_score = 0.0;
 };

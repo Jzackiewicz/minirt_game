@@ -3,6 +3,7 @@
 #include "Collision.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
+#include "BeamSource.hpp"
 #include "BeamTarget.hpp"
 #include "Settings.hpp"
 #include <algorithm>
@@ -113,11 +114,22 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 }
                 if (hit_any)
                 {
+                        double radius = 0.1;
+                        if (auto src = bm->source.lock())
+                        {
+                                if (auto beam_src = std::dynamic_pointer_cast<BeamSource>(src))
+                                {
+                                        if (beam_src->light)
+                                                radius = beam_src->light->radius;
+                                }
+                        }
                         bm->length = closest;
                         if (hit_rec.object_id >= 0 &&
                                 hit_rec.object_id < static_cast<int>(objects.size()))
                         {
                                 auto hit_obj = objects[hit_rec.object_id];
+                                if (hit_obj->countable)
+                                        lit_area_score += M_PI * radius * radius;
                                 if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
                         }
@@ -273,6 +285,7 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
 // Remove finished beam segments and spawn new beams for reflections.
 void Scene::update_beams(const std::vector<Material> &mats)
 {
+        lit_area_score = 0.0;
         std::vector<std::shared_ptr<Laser>> roots;
         std::unordered_map<int, int> id_map;
         prepare_beam_roots(roots, id_map);
@@ -444,6 +457,8 @@ Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
         }
         return moved;
 }
+
+double Scene::get_lit_area_score() const { return lit_area_score; }
 
 // Check if object at index intersects any other object.
 bool Scene::collides(int index) const
