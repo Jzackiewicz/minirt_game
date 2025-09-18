@@ -6,16 +6,17 @@
 class Laser : public Hittable
 {
         public:
-       Ray path;
-       const double radius;
-       double length;
+      Ray path;
+      double radius;
+      double length;
         double start;
         double total_length;
         double light_intensity;
         Vec3 color;
         std::weak_ptr<Hittable> source;
-       Laser(const Vec3 &origin, const Vec3 &dir, double length, double intensity,
-                 int oid, int mid, double start = 0.0, double total = -1.0);
+      Laser(const Vec3 &origin, const Vec3 &dir, double length, double intensity,
+                int oid, int mid, double start = 0.0, double total = -1.0,
+                double radius = 0.1);
 
 	bool hit(const Ray &r, double tmin, double tmax,
 			 HitRecord &rec) const override;

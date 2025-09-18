@@ -17,6 +17,17 @@ inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
         return v - n * (2.0 * Vec3::dot(v, n));
 }
 
+constexpr double kPi = 3.14159265358979323846;
+
+inline double spot_area(const Laser &beam, const Vec3 &normal, const Vec3 &dir)
+{
+        double cos_incidence = -Vec3::dot(dir, normal);
+        cos_incidence = std::max(cos_incidence, 1e-4);
+        if (beam.radius <= 0.0)
+                return 0.0;
+        return kPi * beam.radius * beam.radius / cos_incidence;
+}
+
 } // namespace
 
 // Remove lights attached to beam segments and collect root laser objects.
@@ -69,9 +80,9 @@ void Scene::prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
 }
 
 // Trace laser beams, spawning reflections and associated point lights.
-void Scene::process_beams(const std::vector<Material> &mats,
-                                              std::vector<std::shared_ptr<Laser>> &roots,
-                                              std::unordered_map<int, int> &id_map)
+double Scene::process_beams(const std::vector<Material> &mats,
+                                               std::vector<std::shared_ptr<Laser>> &roots,
+                                               std::unordered_map<int, int> &id_map)
 {
         for (auto &obj : objects)
                 if (obj->shape_type() == ShapeType::BeamTarget)
@@ -85,6 +96,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 int hit_id;
         };
         std::vector<PendingLight> pending_lights;
+        double total_lit_area = 0.0;
         for (size_t i = 0; i < to_process.size(); ++i)
         {
                 auto bm = to_process[i];
@@ -114,12 +126,34 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 if (hit_any)
                 {
                         bm->length = closest;
+                        std::shared_ptr<Hittable> hit_obj;
                         if (hit_rec.object_id >= 0 &&
                                 hit_rec.object_id < static_cast<int>(objects.size()))
                         {
-                                auto hit_obj = objects[hit_rec.object_id];
+                                hit_obj = objects[hit_rec.object_id];
+                        }
+                        else if (hit_rec.object_id < 0)
+                        {
+                                int candidate = -hit_rec.object_id - 1;
+                                if (candidate >= 0 &&
+                                        candidate < static_cast<int>(objects.size()))
+                                        hit_obj = objects[candidate];
+                                else
+                                {
+                                        candidate = -hit_rec.object_id - 2;
+                                        if (candidate >= 0 &&
+                                                candidate < static_cast<int>(objects.size()))
+                                                hit_obj = objects[candidate];
+                                }
+                        }
+                        if (hit_obj)
+                        {
                                 if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
+                                if (hit_obj->countable)
+                                {
+                                        total_lit_area += spot_area(*bm, hit_rec.normal, forward.dir);
+                                }
                         }
                         const Material &hit_mat = mats[hit_rec.material_id];
                         if (hit_mat.mirror)
@@ -130,10 +164,11 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 {
                                         Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
                                         Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
-                                       auto new_bm = std::make_shared<Laser>(
-                                               refl_orig, refl_dir, new_len,
-                                               bm->light_intensity, 0, bm->material_id,
-                                               new_start, bm->total_length);
+                                      auto new_bm = std::make_shared<Laser>(
+                                              refl_orig, refl_dir, new_len,
+                                              bm->light_intensity, 0, bm->material_id,
+                                              new_start, bm->total_length,
+                                              bm->radius);
                                         new_bm->color = bm->color;
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
@@ -151,9 +186,10 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                          hit_mat.base_color * hit_mat.alpha;
                                         double new_intens =
                                                 bm->light_intensity * (1.0 - hit_mat.alpha);
-                                       auto new_bm = std::make_shared<Laser>(
-                                               pass_orig, forward.dir, new_len, new_intens, 0,
-                                               bm->material_id, new_start, bm->total_length);
+                                      auto new_bm = std::make_shared<Laser>(
+                                              pass_orig, forward.dir, new_len, new_intens, 0,
+                                              bm->material_id, new_start, bm->total_length,
+                                              bm->radius);
                                         new_bm->color = new_color;
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
@@ -176,6 +212,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                         std::vector<int>{bm->object_id, pl.hit_id},
                                                         bm->object_id, bm->path.dir, cone_cos, bm->length);
         }
+
+        return total_lit_area;
 }
 
 // Remap light references after objects have been reindexed.
@@ -276,10 +314,12 @@ void Scene::update_beams(const std::vector<Material> &mats)
         std::vector<std::shared_ptr<Laser>> roots;
         std::unordered_map<int, int> id_map;
         prepare_beam_roots(roots, id_map);
-        process_beams(mats, roots, id_map);
+        lit_area_score = process_beams(mats, roots, id_map);
         remap_light_ids(id_map);
         reflect_lights(mats);
 }
+
+double Scene::score() const { return lit_area_score; }
 
 void Scene::update_goal_targets(double dt, std::vector<Material> &mats)
 {

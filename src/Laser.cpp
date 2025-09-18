@@ -3,8 +3,9 @@
 #include <cmath>
 
 Laser::Laser(const Vec3 &origin, const Vec3 &dir, double len,
-                         double intensity, int oid, int mid, double s, double total)
-       : path(origin, dir.normalized()), radius(0.1), length(len), start(s),
+                         double intensity, int oid, int mid, double s, double total,
+                         double r)
+: path(origin, dir.normalized()), radius(r), length(len), start(s),
          total_length(total < 0 ? len : total), light_intensity(intensity),
          color(1.0, 1.0, 1.0)
 {
@@ -45,7 +46,7 @@ bool Laser::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 	Vec3 pb = path.at(tc);
 	Vec3 diff = pr - pb;
 	double dist2 = diff.length_squared();
-	if (dist2 > radius * radius)
+        if (dist2 > radius * radius)
 		return false;
 
 	Vec3 outward;

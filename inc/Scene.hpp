@@ -17,6 +17,7 @@ class Scene
 	std::vector<PointLight> lights;
         Ambient ambient{Vec3(1, 1, 1), 0.0};
         std::shared_ptr<Hittable> accel;
+        double score() const;
 
         // Update beam objects and associated lights in the scene.
         void update_beams(const std::vector<Material> &materials);
@@ -45,9 +46,10 @@ class Scene
         void attempt_axis_move(int index, const Vec3 &axis_delta, Vec3 &moved);
         void prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
                                                         std::unordered_map<int, int> &id_map);
-        void process_beams(const std::vector<Material> &mats,
+        double process_beams(const std::vector<Material> &mats,
                                                std::vector<std::shared_ptr<Laser>> &roots,
                                                std::unordered_map<int, int> &id_map);
         void remap_light_ids(const std::unordered_map<int, int> &id_map);
         void reflect_lights(const std::vector<Material> &mats);
+        double lit_area_score = 0.0;
 };
