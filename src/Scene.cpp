@@ -1,4 +1,5 @@
 #include "Scene.hpp"
+#include "BeamSource.hpp"
 #include "Camera.hpp"
 #include "Collision.hpp"
 #include "Laser.hpp"
@@ -8,7 +9,9 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <unordered_map>
+#include <vector>
 
 namespace
 {
@@ -271,6 +274,167 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
                                                          refl_dir, L.cutoff_cos, remain, true);
                 to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
         }
+}
+
+void Scene::gather_illumination_segments(
+        std::vector<IlluminationSegment> &segments) const
+{
+        segments.clear();
+        segments.reserve(objects.size());
+        for (const auto &obj : objects)
+        {
+                if (obj->is_beam())
+                {
+                        auto laser = std::static_pointer_cast<Laser>(obj);
+                        double seg_length = std::max(0.0, laser->length);
+                        if (seg_length <= 1e-6)
+                                continue;
+                        double seg_radius = 0.0;
+                        int source_id = -1;
+                        if (auto source_ptr = laser->source.lock())
+                        {
+                                if (auto emitter = std::dynamic_pointer_cast<BeamSource>(source_ptr))
+                                {
+                                        if (emitter->light)
+                                                seg_radius = emitter->light->radius;
+                                        source_id = emitter->object_id;
+                                }
+                        }
+                        if (seg_radius <= 0.0)
+                                seg_radius = laser->radius;
+                        if (seg_radius <= 0.0)
+                                continue;
+                        IlluminationSegment seg{};
+                        seg.origin = laser->path.orig;
+                        seg.direction = laser->path.dir.normalized();
+                        seg.radius = seg_radius;
+                        seg.length = seg_length;
+                        seg.source_id = source_id;
+                        segments.push_back(seg);
+                }
+                else
+                {
+                        auto emitter = std::dynamic_pointer_cast<BeamSource>(obj);
+                        if (!emitter || emitter->beam || !emitter->light)
+                                continue;
+                        double seg_length = std::max(0.0, emitter->light->length);
+                        if (seg_length <= 1e-6)
+                                continue;
+                        double seg_radius = emitter->light->radius;
+                        if (seg_radius <= 0.0)
+                                continue;
+                        IlluminationSegment seg{};
+                        seg.origin = emitter->light->ray.orig;
+                        seg.direction = emitter->light->ray.dir.normalized();
+                        seg.radius = seg_radius;
+                        seg.length = seg_length;
+                        seg.source_id = emitter->object_id;
+                        segments.push_back(seg);
+                }
+        }
+}
+
+bool Scene::trace_illumination_sample(const Ray &ray, double max_dist,
+                                                       int source_id, HitRecord &out_rec,
+                                                       const Hittable *&out_obj) const
+{
+        out_obj = nullptr;
+        bool hit_any = false;
+        HitRecord tmp;
+        double closest = max_dist;
+        const Hittable *closest_obj = nullptr;
+        for (const auto &obj : objects)
+        {
+                if (obj->is_beam())
+                        continue;
+                if (obj->object_id == source_id)
+                        continue;
+                if (obj->hit(ray, 1e-4, closest, tmp))
+                {
+                        closest = tmp.t;
+                        out_rec = tmp;
+                        closest_obj = obj.get();
+                        hit_any = true;
+                }
+        }
+        if (hit_any)
+                out_obj = closest_obj;
+        return hit_any;
+}
+
+double Scene::compute_score() const
+{
+        std::vector<IlluminationSegment> segments;
+        gather_illumination_segments(segments);
+        if (segments.empty())
+                return 0.0;
+
+        constexpr int grid_resolution = 40;
+        constexpr double pi = 3.14159265358979323846;
+        double total_area = 0.0;
+        std::vector<Vec3> offsets;
+        offsets.reserve(grid_resolution * grid_resolution);
+
+        for (const auto &seg : segments)
+        {
+                if (seg.radius <= 0.0 || seg.length <= 1e-6)
+                        continue;
+                Vec3 dir = seg.direction.length_squared() > 0.0
+                                       ? seg.direction.normalized()
+                                       : Vec3(0, 0, 0);
+                if (dir.length_squared() == 0.0)
+                        continue;
+
+                Vec3 up_hint = (std::fabs(dir.z) < 0.999) ? Vec3(0, 0, 1) : Vec3(0, 1, 0);
+                Vec3 right = Vec3::cross(up_hint, dir);
+                double right_len = right.length();
+                if (right_len < 1e-9)
+                        continue;
+                right = right / right_len;
+                Vec3 up = Vec3::cross(dir, right);
+                double up_len = up.length();
+                if (up_len < 1e-9)
+                        continue;
+                up = up / up_len;
+
+                offsets.clear();
+                double step = (seg.radius * 2.0) / static_cast<double>(grid_resolution);
+                double radius_sq = seg.radius * seg.radius;
+                for (int iy = 0; iy < grid_resolution; ++iy)
+                {
+                        double y = -seg.radius + (iy + 0.5) * step;
+                        for (int ix = 0; ix < grid_resolution; ++ix)
+                        {
+                                double x = -seg.radius + (ix + 0.5) * step;
+                                if (x * x + y * y <= radius_sq)
+                                {
+                                        offsets.push_back(right * x + up * y);
+                                }
+                        }
+                }
+                if (offsets.empty())
+                        continue;
+                double sample_area = (pi * radius_sq) / static_cast<double>(offsets.size());
+
+                for (const Vec3 &offset : offsets)
+                {
+                        Vec3 start = seg.origin + offset + dir * 1e-4;
+                        Ray sample_ray(start, dir);
+                        HitRecord hit_rec;
+                        const Hittable *hit_obj = nullptr;
+                        if (!trace_illumination_sample(sample_ray, seg.length, seg.source_id,
+                                                                                hit_rec, hit_obj))
+                                continue;
+                        if (!hit_obj || !hit_obj->scorable)
+                                continue;
+                        double cos_theta = std::fabs(Vec3::dot(hit_rec.normal, dir * -1.0));
+                        if (cos_theta <= 1e-6)
+                                continue;
+                        total_area += sample_area / cos_theta;
+                }
+        }
+
+        return total_area;
 }
 
 // Remove finished beam segments and spawn new beams for reflections.
