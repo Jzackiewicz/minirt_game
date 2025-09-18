@@ -16,6 +16,7 @@
 #include <atomic>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -222,6 +223,7 @@ struct Renderer::RenderState
         double edit_dist = 0.0;
         Vec3 edit_pos;
         int spawn_key = -1;
+        double fps = 0.0;
 };
 
 /// Initialize SDL window, renderer and texture objects.
@@ -830,6 +832,15 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
+                double fps_value = std::min(st.fps, 9999.9);
+                char fps_buf[32];
+                std::snprintf(fps_buf, sizeof(fps_buf), "FPS: %.1f", fps_value);
+                std::string fps_text(fps_buf);
+                int fps_w = CustomCharacter::text_width(fps_text, scale);
+                int fps_h = 7 * scale;
+                int fps_x = std::max(0, W - fps_w - 5);
+                int fps_y = std::max(0, H - fps_h - 5);
+                CustomCharacter::draw_text(ren, fps_text, fps_x, fps_y, red, scale);
         }
         SDL_RenderPresent(ren);
 }
@@ -943,6 +954,10 @@ void Renderer::render_window(std::vector<Material> &mats,
                 Uint32 now = SDL_GetTicks();
                 double dt = (now - last) / 1000.0;
                 last = now;
+                if (dt > 1e-6)
+                        st.fps = 1.0 / dt;
+                else
+                        st.fps = 0.0;
 
                 int actual_w = W;
                 int actual_h = H;
