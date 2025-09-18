@@ -19,8 +19,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <random>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -810,6 +812,14 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                                                                   pts[e[1]].x, pts[e[1]].y);
                 }
         }
+        SDL_Color score_color{255, 255, 255, 255};
+        const int score_scale = 2;
+        double score_value = scene.get_score();
+        std::ostringstream score_stream;
+        score_stream << std::fixed << std::setprecision(2) << score_value;
+        std::string score_text = "SCORE: " + score_stream.str();
+        CustomCharacter::draw_text(ren, score_text, 5, 5, score_color, score_scale);
+        int developer_start_y = 5 + 7 * score_scale + 4;
         // Draw crosshair at the center of the screen
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         int cx = W / 2;
@@ -826,7 +836,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    developer_start_y + i * (7 * scale + 2), red,
+                                                    scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);

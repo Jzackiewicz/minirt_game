@@ -117,6 +117,31 @@ void Scene::process_beams(const std::vector<Material> &mats,
                         if (hit_rec.object_id >= 0 &&
                                 hit_rec.object_id < static_cast<int>(objects.size()))
                         {
+                                if (hit_rec.object_id < static_cast<int>(static_object_count))
+                                {
+                                        auto base_obj = objects[hit_rec.object_id];
+                                        if (base_obj && !base_obj->is_beam() &&
+                                                base_obj->countable)
+                                        {
+                                                double incidence = std::fabs(Vec3::dot(
+                                                        hit_rec.normal, forward.dir * -1.0));
+                                                incidence = std::clamp(incidence, 1e-3, 1.0);
+                                                double radius = bm->radius;
+                                                if (auto src = bm->source.lock())
+                                                {
+                                                        if (src->light)
+                                                                radius = src->light->radius;
+                                                }
+                                                const double pi = 3.14159265358979323846;
+                                                double area = pi * radius * radius / incidence;
+                                                if (hit_rec.object_id <
+                                                        static_cast<int>(lit_areas.size()))
+                                                {
+                                                        lit_areas[hit_rec.object_id] += area;
+                                                        total_lit_area += area;
+                                                }
+                                        }
+                                }
                                 auto hit_obj = objects[hit_rec.object_id];
                                 if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
@@ -276,6 +301,9 @@ void Scene::update_beams(const std::vector<Material> &mats)
         std::vector<std::shared_ptr<Laser>> roots;
         std::unordered_map<int, int> id_map;
         prepare_beam_roots(roots, id_map);
+        static_object_count = objects.size();
+        lit_areas.assign(static_object_count, 0.0);
+        total_lit_area = 0.0;
         process_beams(mats, roots, id_map);
         remap_light_ids(id_map);
         reflect_lights(mats);
@@ -443,6 +471,11 @@ Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
                 }
         }
         return moved;
+}
+
+double Scene::get_score() const
+{
+        return total_lit_area;
 }
 
 // Check if object at index intersects any other object.

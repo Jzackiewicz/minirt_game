@@ -14,9 +14,12 @@ class Scene
 {
 	public:
 	std::vector<HittablePtr> objects;
-	std::vector<PointLight> lights;
+        std::vector<PointLight> lights;
         Ambient ambient{Vec3(1, 1, 1), 0.0};
         std::shared_ptr<Hittable> accel;
+
+        double get_score() const;
+        const std::vector<double> &get_lit_areas() const { return lit_areas; }
 
         // Update beam objects and associated lights in the scene.
         void update_beams(const std::vector<Material> &materials);
@@ -50,4 +53,8 @@ class Scene
                                                std::unordered_map<int, int> &id_map);
         void remap_light_ids(const std::unordered_map<int, int> &id_map);
         void reflect_lights(const std::vector<Material> &mats);
+
+        std::vector<double> lit_areas;
+        size_t static_object_count = 0;
+        double total_lit_area = 0.0;
 };
