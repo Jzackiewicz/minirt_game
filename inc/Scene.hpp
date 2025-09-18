@@ -24,11 +24,14 @@ class Scene
         // Update goal-scored effects on beam targets.
         void update_goal_targets(double dt, std::vector<Material> &materials);
 
-	// Build bounding volume hierarchy for static geometry.
-	void build_bvh();
+        // Build bounding volume hierarchy for static geometry.
+        void build_bvh();
 
-	// Test a ray against all objects.
-	bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
+        // Test a ray against all objects.
+        bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
+
+        // Current accumulated lit area score.
+        double get_score() const;
 
 	// Determine whether object at index collides with others.
 	bool collides(int index) const;
@@ -47,7 +50,9 @@ class Scene
                                                         std::unordered_map<int, int> &id_map);
         void process_beams(const std::vector<Material> &mats,
                                                std::vector<std::shared_ptr<Laser>> &roots,
-                                               std::unordered_map<int, int> &id_map);
+                                               std::unordered_map<int, int> &id_map,
+                                               double &score_accum);
         void remap_light_ids(const std::unordered_map<int, int> &id_map);
         void reflect_lights(const std::vector<Material> &mats);
+        double score = 0.0;
 };

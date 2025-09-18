@@ -17,6 +17,8 @@ inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
         return v - n * (2.0 * Vec3::dot(v, n));
 }
 
+constexpr double PI = 3.14159265358979323846;
+
 } // namespace
 
 // Remove lights attached to beam segments and collect root laser objects.
@@ -71,7 +73,8 @@ void Scene::prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
 // Trace laser beams, spawning reflections and associated point lights.
 void Scene::process_beams(const std::vector<Material> &mats,
                                               std::vector<std::shared_ptr<Laser>> &roots,
-                                              std::unordered_map<int, int> &id_map)
+                                              std::unordered_map<int, int> &id_map,
+                                              double &score_accum)
 {
         for (auto &obj : objects)
                 if (obj->shape_type() == ShapeType::BeamTarget)
@@ -118,6 +121,17 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 hit_rec.object_id < static_cast<int>(objects.size()))
                         {
                                 auto hit_obj = objects[hit_rec.object_id];
+                                if (hit_obj->countable)
+                                {
+                                        double cos_incidence =
+                                                std::max(0.0,
+                                                                 Vec3::dot(-forward.dir,
+                                                                                         hit_rec.normal));
+                                        if (cos_incidence < 1e-6)
+                                                cos_incidence = 1e-6;
+                                        double area = PI * bm->radius * bm->radius / cos_incidence;
+                                        score_accum += area;
+                                }
                                 if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
                         }
@@ -133,7 +147,7 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                        auto new_bm = std::make_shared<Laser>(
                                                refl_orig, refl_dir, new_len,
                                                bm->light_intensity, 0, bm->material_id,
-                                               new_start, bm->total_length);
+                                               new_start, bm->total_length, bm->radius);
                                         new_bm->color = bm->color;
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
@@ -153,7 +167,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                 bm->light_intensity * (1.0 - hit_mat.alpha);
                                        auto new_bm = std::make_shared<Laser>(
                                                pass_orig, forward.dir, new_len, new_intens, 0,
-                                               bm->material_id, new_start, bm->total_length);
+                                               bm->material_id, new_start, bm->total_length,
+                                               bm->radius);
                                         new_bm->color = new_color;
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
@@ -276,7 +291,9 @@ void Scene::update_beams(const std::vector<Material> &mats)
         std::vector<std::shared_ptr<Laser>> roots;
         std::unordered_map<int, int> id_map;
         prepare_beam_roots(roots, id_map);
-        process_beams(mats, roots, id_map);
+        double new_score = 0.0;
+        process_beams(mats, roots, id_map, new_score);
+        score = new_score;
         remap_light_ids(id_map);
         reflect_lights(mats);
 }
@@ -303,6 +320,8 @@ void Scene::build_bvh()
 	}
 	accel = std::make_shared<BVHNode>(objs, 0, objs.size());
 }
+
+double Scene::get_score() const { return score; }
 
 // Move object by delta while preventing collisions.
 Vec3 Scene::move_with_collision(int index, const Vec3 &delta)

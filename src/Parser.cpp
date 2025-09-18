@@ -8,6 +8,7 @@
 #include "Sphere.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <cmath>
 #include <cstring>
@@ -78,8 +79,8 @@ inline Vec3 rgb_to_unit(const Vec3 &rgb)
 }
 inline bool parse_rgba(std::string_view sv, Vec3 &out, double &a)
 {
-	eat_ws(sv);
-	size_t p1 = sv.find(',');
+        eat_ws(sv);
+        size_t p1 = sv.find(',');
 	if (p1 == std::string_view::npos)
 		return false;
 	size_t p2 = sv.find(',', p1 + 1);
@@ -105,6 +106,50 @@ inline bool parse_rgba(std::string_view sv, Vec3 &out, double &a)
 	return true;
 }
 inline double alpha_to_unit(double a) { return a / 255.0; }
+
+inline std::string lower_copy(std::string s)
+{
+        std::transform(s.begin(), s.end(), s.begin(),
+                                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        return s;
+}
+
+inline bool apply_common_flag(const std::string &token, bool &mirror, bool &movable,
+                                                         bool &countable)
+{
+        std::string lower = lower_copy(token);
+        if (lower == "r" || token == "1")
+        {
+                mirror = true;
+                return true;
+        }
+        if (lower == "nr" || token == "0")
+        {
+                mirror = false;
+                return true;
+        }
+        if (lower == "m")
+        {
+                movable = true;
+                return true;
+        }
+        if (lower == "im")
+        {
+                movable = false;
+                return true;
+        }
+        if (lower == "c")
+        {
+                countable = true;
+                return true;
+        }
+        if (lower == "nc")
+        {
+                countable = false;
+                return true;
+        }
+        return false;
+}
 
 } // namespace
 
@@ -149,24 +194,25 @@ static void parse_sphere(std::istringstream &iss, Scene &scene, int &oid, int &m
 {
         std::string s_pos, s_r, s_rgb;
         iss >> s_pos >> s_r >> s_rgb;
-        std::string s_mirror;
-        if (!(iss >> s_mirror))
-                s_mirror = "NR";
-        std::string s_move;
-        if (!(iss >> s_move))
-                s_move = "IM";
+        bool mirror = false;
+        bool movable_flag = false;
+        bool countable_flag = false;
+        std::string token;
+        while (iss >> token)
+                apply_common_flag(token, mirror, movable_flag, countable_flag);
         Vec3 c, rgb;
         double r = 1.0;
         double a = 255;
         if (parse_triple(s_pos, c) && to_double(s_r, r) && parse_rgba(s_rgb, rgb, a))
         {
                 auto s = std::make_shared<Sphere>(c, r, oid++, mid);
-                s->movable = (s_move == "M");
+                s->movable = movable_flag;
+                s->countable = countable_flag;
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
                 mats.back().alpha = alpha_to_unit(a);
-                mats.back().mirror = (s_mirror == "R" || s_mirror == "1");
+                mats.back().mirror = mirror;
                 scene.objects.push_back(s);
                 ++mid;
         }
@@ -178,23 +224,24 @@ static void parse_plane(std::istringstream &iss, Scene &scene, int &oid, int &mi
 {
         std::string s_p, s_n, s_rgb;
         iss >> s_p >> s_n >> s_rgb;
-        std::string s_mirror;
-        if (!(iss >> s_mirror))
-                s_mirror = "NR";
-        std::string s_move;
-        if (!(iss >> s_move))
-                s_move = "IM";
+        bool mirror = false;
+        bool movable_flag = false;
+        bool countable_flag = false;
+        std::string token;
+        while (iss >> token)
+                apply_common_flag(token, mirror, movable_flag, countable_flag);
         Vec3 p, n, rgb;
         double a = 255;
         if (parse_triple(s_p, p) && parse_triple(s_n, n) && parse_rgba(s_rgb, rgb, a))
         {
                 auto pl = std::make_shared<Plane>(p, n, oid++, mid);
-                pl->movable = (s_move == "M");
+                pl->movable = movable_flag;
+                pl->countable = countable_flag;
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
                 mats.back().alpha = alpha_to_unit(a);
-                mats.back().mirror = (s_mirror == "R" || s_mirror == "1");
+                mats.back().mirror = mirror;
                 scene.objects.push_back(pl);
                 ++mid;
         }
@@ -206,12 +253,12 @@ static void parse_cylinder(std::istringstream &iss, Scene &scene, int &oid, int 
 {
         std::string s_pos, s_dir, s_d, s_h, s_rgb;
         iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
-        std::string s_mirror;
-        if (!(iss >> s_mirror))
-                s_mirror = "NR";
-        std::string s_move;
-        if (!(iss >> s_move))
-                s_move = "IM";
+        bool mirror = false;
+        bool movable_flag = false;
+        bool countable_flag = false;
+        std::string token;
+        while (iss >> token)
+                apply_common_flag(token, mirror, movable_flag, countable_flag);
         Vec3 c, dir, rgb;
         double d = 1.0, h = 1.0;
         double a = 255;
@@ -220,12 +267,13 @@ static void parse_cylinder(std::istringstream &iss, Scene &scene, int &oid, int 
         {
                 auto cy =
                         std::make_shared<Cylinder>(c, dir, d / 2.0, h, oid++, mid);
-                cy->movable = (s_move == "M");
+                cy->movable = movable_flag;
+                cy->countable = countable_flag;
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
                 mats.back().alpha = alpha_to_unit(a);
-                mats.back().mirror = (s_mirror == "R" || s_mirror == "1");
+                mats.back().mirror = mirror;
                 scene.objects.push_back(cy);
                 ++mid;
         }
@@ -237,12 +285,12 @@ static void parse_cube(std::istringstream &iss, Scene &scene, int &oid, int &mid
 {
         std::string s_pos, s_orient, s_L, s_W, s_H, s_rgb;
         iss >> s_pos >> s_orient >> s_L >> s_W >> s_H >> s_rgb;
-        std::string s_mirror;
-        if (!(iss >> s_mirror))
-                s_mirror = "NR";
-        std::string s_move;
-        if (!(iss >> s_move))
-                s_move = "IM";
+        bool mirror = false;
+        bool movable_flag = false;
+        bool countable_flag = false;
+        std::string token;
+        while (iss >> token)
+                apply_common_flag(token, mirror, movable_flag, countable_flag);
         Vec3 c, orient, rgb;
         double L = 1.0, W = 1.0, H = 1.0;
         double alpha = 255;
@@ -252,12 +300,13 @@ static void parse_cube(std::istringstream &iss, Scene &scene, int &oid, int &mid
         {
                 auto cu =
                         std::make_shared<Cube>(c, orient, L, W, H, oid++, mid);
-                cu->movable = (s_move == "M");
+                cu->movable = movable_flag;
+                cu->countable = countable_flag;
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
                 mats.back().alpha = alpha_to_unit(alpha);
-                mats.back().mirror = (s_mirror == "R" || s_mirror == "1");
+                mats.back().mirror = mirror;
                 scene.objects.push_back(cu);
                 ++mid;
         }
@@ -269,12 +318,21 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
 {
        std::string s_intens, s_pos, s_dir, s_rgb, s_r, s_L;
        iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_r >> s_L;
-        std::string s_move;
-        if (!(iss >> s_move))
-                s_move = "IM";
-        std::string s_laser;
-        if (!(iss >> s_laser))
-                s_laser = "L";
+        bool movable_flag = false;
+        bool countable_flag = false;
+        bool with_laser = true;
+        bool dummy_mirror = false;
+        std::string token;
+        while (iss >> token)
+        {
+                if (apply_common_flag(token, dummy_mirror, movable_flag, countable_flag))
+                        continue;
+                std::string lower = lower_copy(token);
+                if (lower == "l")
+                        with_laser = true;
+                else if (lower == "nl")
+                        with_laser = false;
+        }
        Vec3 o, dir, rgb;
        double ray_radius = 0.1, L = 1.0, intensity = 0.75;
         double a = 255;
@@ -310,7 +368,6 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 mats.back().alpha = 1.0;
                 int small_mat = mid++;
 
-               bool with_laser = (s_laser != "NL");
                auto bm = std::make_shared<Beam>(o, dir_norm, ray_radius, L,
                                                                                         intensity, oid, beam_mat,
                                                                                         big_mat, mid_mat, small_mat,
@@ -318,7 +375,8 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 if (with_laser)
                 {
                         oid += 2;
-                        bm->source->movable = (s_move == "M");
+                        bm->source->movable = movable_flag;
+                        bm->source->countable = countable_flag;
                         scene.objects.push_back(bm->laser);
                         scene.objects.push_back(bm->source);
                         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
@@ -332,7 +390,8 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 else
                 {
                         oid += 1;
-                        bm->source->movable = (s_move == "M");
+                        bm->source->movable = movable_flag;
+                        bm->source->countable = countable_flag;
                         scene.objects.push_back(bm->source);
                         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
                         scene.lights.emplace_back(
@@ -350,9 +409,12 @@ static void parse_beam_target(std::istringstream &iss, Scene &scene, int &oid,
 {
         std::string s_pos, s_rgb, s_r;
         iss >> s_pos >> s_rgb >> s_r;
-        std::string s_move;
-        if (!(iss >> s_move))
-                s_move = "IM";
+        bool movable_flag = false;
+        bool countable_flag = false;
+        bool dummy_mirror = false;
+        std::string token;
+        while (iss >> token)
+                apply_common_flag(token, dummy_mirror, movable_flag, countable_flag);
         Vec3 c, rgb;
         double R = 1.0;
         double a = 255;
@@ -379,7 +441,8 @@ static void parse_beam_target(std::istringstream &iss, Scene &scene, int &oid,
                 int small_mat = mid++;
 
                 auto bt = std::make_shared<BeamTarget>(c, R, oid++, big_mat, mid_mat, small_mat);
-                bt->movable = (s_move == "M");
+                bt->movable = movable_flag;
+                bt->countable = countable_flag;
                 scene.objects.push_back(bt);
         }
 }
@@ -390,12 +453,12 @@ static void parse_cone(std::istringstream &iss, Scene &scene, int &oid, int &mid
 {
         std::string s_pos, s_dir, s_d, s_h, s_rgb;
         iss >> s_pos >> s_dir >> s_d >> s_h >> s_rgb;
-        std::string s_mirror;
-        if (!(iss >> s_mirror))
-                s_mirror = "NR";
-        std::string s_move;
-        if (!(iss >> s_move))
-                s_move = "IM";
+        bool mirror = false;
+        bool movable_flag = false;
+        bool countable_flag = false;
+        std::string token;
+        while (iss >> token)
+                apply_common_flag(token, mirror, movable_flag, countable_flag);
         Vec3 c, dir, rgb;
         double d = 1.0, h = 1.0;
         double a = 255;
@@ -404,12 +467,13 @@ static void parse_cone(std::istringstream &iss, Scene &scene, int &oid, int &mid
         {
                 auto co =
                         std::make_shared<Cone>(c, dir, d / 2.0, h, oid++, mid);
-                co->movable = (s_move == "M");
+                co->movable = movable_flag;
+                co->countable = countable_flag;
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
                 mats.back().alpha = alpha_to_unit(a);
-                mats.back().mirror = (s_mirror == "R" || s_mirror == "1");
+                mats.back().mirror = mirror;
                 scene.objects.push_back(co);
                 ++mid;
         }
