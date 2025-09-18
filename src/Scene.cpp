@@ -129,15 +129,16 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 if (new_len > 1e-4)
                                 {
                                         Vec3 refl_dir = reflect(forward.dir, hit_rec.normal);
-                                        Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
+                                       Vec3 refl_orig = forward.at(closest) + refl_dir * 1e-4;
                                        auto new_bm = std::make_shared<Laser>(
                                                refl_orig, refl_dir, new_len,
                                                bm->light_intensity, 0, bm->material_id,
                                                new_start, bm->total_length);
-                                        new_bm->color = bm->color;
-                                        new_bm->source = bm->source;
-                                        to_process.push_back(new_bm);
-                                        pending_lights.push_back({new_bm, hit_rec.object_id});
+                                       new_bm->countable = bm->countable;
+                                       new_bm->color = bm->color;
+                                       new_bm->source = bm->source;
+                                       to_process.push_back(new_bm);
+                                       pending_lights.push_back({new_bm, hit_rec.object_id});
                                 }
                         }
                         else if (hit_mat.alpha < 1.0)
@@ -154,10 +155,11 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                        auto new_bm = std::make_shared<Laser>(
                                                pass_orig, forward.dir, new_len, new_intens, 0,
                                                bm->material_id, new_start, bm->total_length);
-                                        new_bm->color = new_color;
-                                        new_bm->source = bm->source;
-                                        to_process.push_back(new_bm);
-                                        pending_lights.push_back({new_bm, hit_rec.object_id});
+                                       new_bm->countable = bm->countable;
+                                       new_bm->color = new_color;
+                                       new_bm->source = bm->source;
+                                       to_process.push_back(new_bm);
+                                       pending_lights.push_back({new_bm, hit_rec.object_id});
                                 }
                         }
                 }
