@@ -1,4 +1,5 @@
 #include "Scene.hpp"
+#include "BeamSource.hpp"
 #include "Camera.hpp"
 #include "Collision.hpp"
 #include "Laser.hpp"
@@ -271,6 +272,156 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
                                                          refl_dir, L.cutoff_cos, remain, true);
                 to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
         }
+}
+
+void Scene::gather_illumination_segments(
+        std::vector<IlluminationSegment> &segments) const
+{
+        segments.clear();
+        segments.reserve(objects.size());
+        for (const auto &obj : objects)
+        {
+                if (!obj->is_beam())
+                        continue;
+                auto laser = std::static_pointer_cast<Laser>(obj);
+                double length = laser->length;
+                if (length <= 1e-6)
+                        continue;
+                Vec3 dir = laser->path.dir.normalized();
+                double radius = laser->radius;
+                int source_id = -1;
+                if (auto src = laser->source.lock())
+                {
+                        source_id = src->object_id;
+                        if (auto emitter = std::dynamic_pointer_cast<BeamSource>(src))
+                        {
+                                if (emitter->light)
+                                        radius = emitter->light->radius;
+                                source_id = emitter->object_id;
+                        }
+                }
+                segments.push_back(
+                        {laser->path.orig, dir, radius, length, source_id});
+        }
+
+        for (const auto &obj : objects)
+        {
+                auto emitter = std::dynamic_pointer_cast<BeamSource>(obj);
+                if (!emitter)
+                        continue;
+                if (emitter->beam)
+                        continue;
+                if (!emitter->light)
+                        continue;
+                double length = emitter->light->length;
+                if (length <= 1e-6)
+                        continue;
+                segments.push_back({emitter->light->ray.orig,
+                                    emitter->light->ray.dir.normalized(),
+                                    emitter->light->radius, length,
+                                    emitter->object_id});
+        }
+}
+
+bool Scene::score_first_hit(const Ray &r, double tmax, int ignore_id,
+                                                 HitRecord &rec) const
+{
+        HitRecord tmp;
+        HitRecord best_rec;
+        bool hit_any = false;
+        double closest = tmax;
+        const Hittable *closest_obj = nullptr;
+        for (const auto &obj : objects)
+        {
+                if (obj->is_beam())
+                        continue;
+                if (ignore_id >= 0 && obj->object_id == ignore_id)
+                        continue;
+                if (obj->hit(r, 1e-4, closest, tmp))
+                {
+                        closest = tmp.t;
+                        best_rec = tmp;
+                        closest_obj = obj.get();
+                        hit_any = true;
+                }
+        }
+        if (!hit_any || !closest_obj)
+                return false;
+        if (!closest_obj->scorable)
+                return false;
+        rec = best_rec;
+        return true;
+}
+
+double Scene::compute_score() const
+{
+        std::vector<IlluminationSegment> segments;
+        gather_illumination_segments(segments);
+        if (segments.empty())
+                return 0.0;
+
+        constexpr int grid = 40;
+        std::vector<Vec3> offsets;
+        offsets.reserve(grid * grid);
+        double total = 0.0;
+        const double pi = std::acos(-1.0);
+
+        for (const auto &seg : segments)
+        {
+                if (seg.length <= 1e-6 || seg.radius <= 0.0)
+                        continue;
+                Vec3 dir = seg.dir.normalized();
+                if (dir.length_squared() <= 1e-9)
+                        continue;
+                Vec3 right = Vec3::cross(dir, Vec3(0.0, 1.0, 0.0));
+                if (right.length_squared() <= 1e-8)
+                        right = Vec3::cross(dir, Vec3(1.0, 0.0, 0.0));
+                double right_len = right.length();
+                if (right_len <= 1e-8)
+                        continue;
+                right = right / right_len;
+                Vec3 up = Vec3::cross(right, dir);
+                double up_len = up.length();
+                if (up_len <= 1e-8)
+                        continue;
+                up = up / up_len;
+
+                offsets.clear();
+                double radius = seg.radius;
+                double radius_sq = radius * radius;
+                double step = (2.0 * radius) / grid;
+                if (step <= 0.0)
+                        continue;
+                for (int iy = 0; iy < grid; ++iy)
+                {
+                        double y = -radius + (iy + 0.5) * step;
+                        for (int ix = 0; ix < grid; ++ix)
+                        {
+                                double x = -radius + (ix + 0.5) * step;
+                                if (x * x + y * y <= radius_sq)
+                                        offsets.push_back(right * x + up * y);
+                        }
+                }
+                if (offsets.empty())
+                        continue;
+                double sample_area = pi * radius_sq /
+                                     static_cast<double>(offsets.size());
+                for (const Vec3 &offset : offsets)
+                {
+                        Vec3 origin = seg.origin + offset + dir * 1e-4;
+                        Ray ray(origin, dir);
+                        HitRecord hit_rec;
+                        if (!score_first_hit(ray, seg.length, seg.source_id, hit_rec))
+                                continue;
+                        double cos_theta =
+                                std::fabs(Vec3::dot(hit_rec.normal, dir * -1.0));
+                        if (cos_theta < 1e-6)
+                                continue;
+                        total += sample_area / cos_theta;
+                }
+        }
+
+        return total;
 }
 
 // Remove finished beam segments and spawn new beams for reflections.

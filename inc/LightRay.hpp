@@ -8,10 +8,11 @@ class LightRay
        double radius;
        double intensity;
        Vec3 color;
-       LightRay(const Vec3 &origin, const Vec3 &dir, double r, double intens,
-                               const Vec3 &col)
+       double length;
+       LightRay(const Vec3 &origin, const Vec3 &dir, double r, double len,
+                              double intens, const Vec3 &col)
                : ray(origin, dir.normalized()), radius(r), intensity(intens),
-                 color(col)
-       {
-       }
+                 color(col), length(len)
+        {
+        }
 };
