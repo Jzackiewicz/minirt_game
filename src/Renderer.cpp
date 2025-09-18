@@ -187,6 +187,7 @@ struct Renderer::RenderState
         Vec3 edit_pos;
         int spawn_key = -1;
         double fps = 0.0;
+        double score = 0.0;
 };
 
 /// Initialize SDL window, renderer and texture objects.
@@ -775,6 +776,16 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                                                                   pts[e[1]].x, pts[e[1]].y);
                 }
         }
+        const int score_scale = 2;
+        const int score_y = 5;
+        const int score_x = 5;
+        const int score_height = 7 * score_scale;
+        int legend_offset_y = score_y + score_height + 10;
+        SDL_Color white{255, 255, 255, 255};
+        char score_buf[64];
+        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.5f", st.score);
+        std::string score_text(score_buf);
+        CustomCharacter::draw_text(ren, score_text, score_x, score_y, white, score_scale);
         // Draw crosshair at the center of the screen
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         int cx = W / 2;
@@ -791,7 +802,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    legend_offset_y + i * (7 * scale + 2),
+                                                    red, scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
@@ -971,6 +983,7 @@ void Renderer::render_window(std::vector<Material> &mats,
                 handle_keyboard(st, dt, mats);
                 scene.update_goal_targets(dt, mats);
                 update_selection(st, mats);
+                st.score = scene.compute_score();
                 render_frame(st, ren, tex, framebuffer, pixels, RW, RH, W, H, T,
                                          mats);
         }

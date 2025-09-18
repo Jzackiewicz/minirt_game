@@ -24,14 +24,17 @@ class Scene
         // Update goal-scored effects on beam targets.
         void update_goal_targets(double dt, std::vector<Material> &materials);
 
-	// Build bounding volume hierarchy for static geometry.
-	void build_bvh();
+        // Build bounding volume hierarchy for static geometry.
+        void build_bvh();
 
-	// Test a ray against all objects.
-	bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
+        // Test a ray against all objects.
+        bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
 
-	// Determine whether object at index collides with others.
-	bool collides(int index) const;
+        // Compute illuminated surface score for active beams.
+        double compute_score() const;
+
+        // Determine whether object at index collides with others.
+        bool collides(int index) const;
 
 	// Move object while preventing collisions.
 	Vec3 move_with_collision(int index, const Vec3 &delta);
@@ -50,4 +53,16 @@ class Scene
                                                std::unordered_map<int, int> &id_map);
         void remap_light_ids(const std::unordered_map<int, int> &id_map);
         void reflect_lights(const std::vector<Material> &mats);
+        struct IlluminationSegment
+        {
+                Vec3 origin;
+                Vec3 dir;
+                double radius;
+                double length;
+                int source_id;
+        };
+        void collect_illumination_segments(
+                std::vector<IlluminationSegment> &segments) const;
+        bool score_intersection(const Ray &ray, double max_dist, int source_id,
+                                                        HitRecord &rec, HittablePtr &hit_obj) const;
 };

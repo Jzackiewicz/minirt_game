@@ -5,7 +5,8 @@ Beam::Beam(const Vec3 &origin, const Vec3 &dir, double ray_radius,
                   int big_mat, int mid_mat, int small_mat, bool with_laser,
                   const Vec3 &color)
 {
-       light = std::make_shared<LightRay>(origin, dir, ray_radius, intensity, color);
+       light = std::make_shared<LightRay>(origin, dir, ray_radius, intensity,
+                                                                                color, length);
        if (with_laser)
        {
                laser = std::make_shared<Laser>(origin, dir, length, intensity,
