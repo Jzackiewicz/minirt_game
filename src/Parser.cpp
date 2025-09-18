@@ -107,6 +107,14 @@ inline bool parse_rgba(std::string_view sv, Vec3 &out, double &a)
 }
 inline double alpha_to_unit(double a) { return a / 255.0; }
 
+inline bool token_is_countable(std::string token)
+{
+        for (char &c : token)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return token == "c" || token == "countable" || token == "1" ||
+               token == "true" || token == "t";
+}
+
 } // namespace
 
 // Parse ambient light definition line.
@@ -156,13 +164,18 @@ static void parse_sphere(std::istringstream &iss, Scene &scene, int &oid, int &m
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_countable;
+        if (!(iss >> s_countable))
+                s_countable = "NC";
         Vec3 c, rgb;
         double r = 1.0;
         double a = 255;
+        bool countable = token_is_countable(s_countable);
         if (parse_triple(s_pos, c) && to_double(s_r, r) && parse_rgba(s_rgb, rgb, a))
         {
                 auto s = std::make_shared<Sphere>(c, r, oid++, mid);
                 s->movable = (s_move == "M");
+                s->countable = countable;
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
@@ -185,12 +198,17 @@ static void parse_plane(std::istringstream &iss, Scene &scene, int &oid, int &mi
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_countable;
+        if (!(iss >> s_countable))
+                s_countable = "NC";
         Vec3 p, n, rgb;
         double a = 255;
+        bool countable = token_is_countable(s_countable);
         if (parse_triple(s_p, p) && parse_triple(s_n, n) && parse_rgba(s_rgb, rgb, a))
         {
                 auto pl = std::make_shared<Plane>(p, n, oid++, mid);
                 pl->movable = (s_move == "M");
+                pl->countable = countable;
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
@@ -213,15 +231,20 @@ static void parse_cylinder(std::istringstream &iss, Scene &scene, int &oid, int 
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_countable;
+        if (!(iss >> s_countable))
+                s_countable = "NC";
         Vec3 c, dir, rgb;
         double d = 1.0, h = 1.0;
         double a = 255;
+        bool countable = token_is_countable(s_countable);
         if (parse_triple(s_pos, c) && parse_triple(s_dir, dir) &&
                 to_double(s_d, d) && to_double(s_h, h) && parse_rgba(s_rgb, rgb, a))
         {
                 auto cy =
                         std::make_shared<Cylinder>(c, dir, d / 2.0, h, oid++, mid);
                 cy->movable = (s_move == "M");
+                cy->countable = countable;
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
@@ -244,9 +267,13 @@ static void parse_cube(std::istringstream &iss, Scene &scene, int &oid, int &mid
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_countable;
+        if (!(iss >> s_countable))
+                s_countable = "NC";
         Vec3 c, orient, rgb;
         double L = 1.0, W = 1.0, H = 1.0;
         double alpha = 255;
+        bool countable = token_is_countable(s_countable);
         if (parse_triple(s_pos, c) && parse_triple(s_orient, orient) &&
                 to_double(s_L, L) && to_double(s_W, W) && to_double(s_H, H) &&
                 parse_rgba(s_rgb, rgb, alpha))
@@ -254,6 +281,7 @@ static void parse_cube(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 auto cu =
                         std::make_shared<Cube>(c, orient, L, W, H, oid++, mid);
                 cu->movable = (s_move == "M");
+                cu->countable = countable;
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
@@ -270,15 +298,19 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
 {
        std::string s_intens, s_pos, s_dir, s_rgb, s_r, s_L;
        iss >> s_intens >> s_pos >> s_dir >> s_rgb >> s_r >> s_L;
-        std::string s_move;
-        if (!(iss >> s_move))
-                s_move = "IM";
-        std::string s_laser;
-        if (!(iss >> s_laser))
-                s_laser = "L";
+       std::string s_move;
+       if (!(iss >> s_move))
+               s_move = "IM";
+       std::string s_laser;
+       if (!(iss >> s_laser))
+               s_laser = "L";
+        std::string s_countable;
+        if (!(iss >> s_countable))
+                s_countable = "NC";
        Vec3 o, dir, rgb;
        double ray_radius = 0.1, L = 1.0, intensity = 0.75;
-        double a = 255;
+       double a = 255;
+        bool countable = token_is_countable(s_countable);
        if (to_double(s_intens, intensity) && parse_triple(s_pos, o) &&
                parse_triple(s_dir, dir) && parse_rgba(s_rgb, rgb, a) &&
                to_double(s_r, ray_radius) && to_double(s_L, L))
@@ -320,6 +352,7 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 {
                         oid += 2;
                         bm->source->movable = (s_move == "M");
+                        bm->source->countable = countable;
                         scene.objects.push_back(bm->laser);
                         scene.objects.push_back(bm->source);
                         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
@@ -334,6 +367,7 @@ static void parse_beam(std::istringstream &iss, Scene &scene, int &oid, int &mid
                 {
                         oid += 1;
                         bm->source->movable = (s_move == "M");
+                        bm->source->countable = countable;
                         scene.objects.push_back(bm->source);
                         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
                         scene.lights.emplace_back(
@@ -354,9 +388,13 @@ static void parse_beam_target(std::istringstream &iss, Scene &scene, int &oid,
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_countable;
+        if (!(iss >> s_countable))
+                s_countable = "NC";
         Vec3 c, rgb;
         double R = 1.0;
         double a = 255;
+        bool countable = token_is_countable(s_countable);
         if (parse_triple(s_pos, c) && parse_rgba(s_rgb, rgb, a) && to_double(s_r, R))
         {
                 Vec3 unit = rgb_to_unit(rgb);
@@ -381,6 +419,7 @@ static void parse_beam_target(std::istringstream &iss, Scene &scene, int &oid,
 
                 auto bt = std::make_shared<BeamTarget>(c, R, oid++, big_mat, mid_mat, small_mat);
                 bt->movable = (s_move == "M");
+                bt->countable = countable;
                 scene.objects.push_back(bt);
         }
 }
@@ -397,15 +436,20 @@ static void parse_cone(std::istringstream &iss, Scene &scene, int &oid, int &mid
         std::string s_move;
         if (!(iss >> s_move))
                 s_move = "IM";
+        std::string s_countable;
+        if (!(iss >> s_countable))
+                s_countable = "NC";
         Vec3 c, dir, rgb;
         double d = 1.0, h = 1.0;
         double a = 255;
+        bool countable = token_is_countable(s_countable);
         if (parse_triple(s_pos, c) && parse_triple(s_dir, dir) &&
                 to_double(s_d, d) && to_double(s_h, h) && parse_rgba(s_rgb, rgb, a))
         {
                 auto co =
                         std::make_shared<Cone>(c, dir, d / 2.0, h, oid++, mid);
                 co->movable = (s_move == "M");
+                co->countable = countable;
                 mats.emplace_back();
                 mats.back().color = rgb_to_unit(rgb);
                 mats.back().base_color = mats.back().color;
@@ -523,14 +567,20 @@ bool Parser::save_rt_file(const std::string &path, const Scene &scene,
 			if (auto src = bm->source.lock())
 				beam_sources.insert(src->object_id);
 			const Material &m = mats[bm->material_id];
-			std::string move = "IM";
-			if (auto src = bm->source.lock(); src && src->movable)
-				move = "M";
+                        std::string move = "IM";
+                        std::string count_flag = "NC";
+                        if (auto src = bm->source.lock())
+                        {
+                                if (src->movable)
+                                        move = "M";
+                                if (src->countable)
+                                        count_flag = "C";
+                        }
                         out << "bm " << bm->light_intensity << ' '
                                 << vec_to_str(bm->path.orig) << ' ' << vec_to_str(bm->path.dir)
                                 << ' ' << rgba_to_str(m.base_color, m.alpha) << ' '
                                 << bm->radius << ' ' << bm->total_length << ' ' << move
-                                << ' ' << 'L' << '\n';
+                                << ' ' << 'L' << ' ' << count_flag << '\n';
                 }
         }
 
@@ -540,56 +590,57 @@ bool Parser::save_rt_file(const std::string &path, const Scene &scene,
 			continue;
 		if (beam_sources.count(obj->object_id))
 			continue;
-		const Material &m = mats[obj->material_id];
-		std::string mirror = m.mirror ? "R" : "NR";
-		std::string move = obj->movable ? "M" : "IM";
-		switch (obj->shape_type())
-		{
-		case ShapeType::Sphere:
-		{
-			auto sp = static_cast<const Sphere *>(obj.get());
-			out << "sp " << vec_to_str(sp->center) << ' ' << sp->radius << ' '
-				<< rgba_to_str(m.base_color, m.alpha) << ' ' << mirror << ' '
-				<< move << '\n';
-			break;
-		}
-		case ShapeType::Plane:
-		{
-			auto pl = static_cast<const Plane *>(obj.get());
-			out << "pl " << vec_to_str(pl->point) << ' '
-				<< vec_to_str(pl->normal) << ' '
-				<< rgba_to_str(m.base_color, m.alpha) << ' ' << mirror << ' '
-				<< move << '\n';
-			break;
-		}
-		case ShapeType::Cylinder:
-		{
-			auto cy = static_cast<const Cylinder *>(obj.get());
-			out << "cy " << vec_to_str(cy->center) << ' '
-				<< vec_to_str(cy->axis) << ' ' << (cy->radius * 2.0) << ' '
-				<< cy->height << ' ' << rgba_to_str(m.base_color, m.alpha)
-				<< ' ' << mirror << ' ' << move << '\n';
-			break;
-		}
-		case ShapeType::Cube:
-		{
-			auto cu = static_cast<const Cube *>(obj.get());
-			out << "cu " << vec_to_str(cu->center) << ' '
-				<< vec_to_str(cu->axis[2]) << ' ' << (cu->half.x * 2.0) << ' '
-				<< (cu->half.y * 2.0) << ' ' << (cu->half.z * 2.0) << ' '
-				<< rgba_to_str(m.base_color, m.alpha) << ' ' << mirror << ' '
-				<< move << '\n';
-			break;
-		}
-		case ShapeType::Cone:
-		{
-			auto co = static_cast<const Cone *>(obj.get());
-			out << "co " << vec_to_str(co->center) << ' '
-				<< vec_to_str(co->axis) << ' ' << (co->radius * 2.0) << ' '
-				<< co->height << ' ' << rgba_to_str(m.base_color, m.alpha)
-				<< ' ' << mirror << ' ' << move << '\n';
-			break;
-		}
+                const Material &m = mats[obj->material_id];
+                std::string mirror = m.mirror ? "R" : "NR";
+                std::string move = obj->movable ? "M" : "IM";
+                std::string count_flag = obj->countable ? "C" : "NC";
+                switch (obj->shape_type())
+                {
+                case ShapeType::Sphere:
+                {
+                        auto sp = static_cast<const Sphere *>(obj.get());
+                        out << "sp " << vec_to_str(sp->center) << ' ' << sp->radius << ' '
+                                << rgba_to_str(m.base_color, m.alpha) << ' ' << mirror << ' '
+                                << move << ' ' << count_flag << '\n';
+                        break;
+                }
+                case ShapeType::Plane:
+                {
+                        auto pl = static_cast<const Plane *>(obj.get());
+                        out << "pl " << vec_to_str(pl->point) << ' '
+                                << vec_to_str(pl->normal) << ' '
+                                << rgba_to_str(m.base_color, m.alpha) << ' ' << mirror << ' '
+                                << move << ' ' << count_flag << '\n';
+                        break;
+                }
+                case ShapeType::Cylinder:
+                {
+                        auto cy = static_cast<const Cylinder *>(obj.get());
+                        out << "cy " << vec_to_str(cy->center) << ' '
+                                << vec_to_str(cy->axis) << ' ' << (cy->radius * 2.0) << ' '
+                                << cy->height << ' ' << rgba_to_str(m.base_color, m.alpha)
+                                << ' ' << mirror << ' ' << move << ' ' << count_flag << '\n';
+                        break;
+                }
+                case ShapeType::Cube:
+                {
+                        auto cu = static_cast<const Cube *>(obj.get());
+                        out << "cu " << vec_to_str(cu->center) << ' '
+                                << vec_to_str(cu->axis[2]) << ' ' << (cu->half.x * 2.0) << ' '
+                                << (cu->half.y * 2.0) << ' ' << (cu->half.z * 2.0) << ' '
+                                << rgba_to_str(m.base_color, m.alpha) << ' ' << mirror << ' '
+                                << move << ' ' << count_flag << '\n';
+                        break;
+                }
+                case ShapeType::Cone:
+                {
+                        auto co = static_cast<const Cone *>(obj.get());
+                        out << "co " << vec_to_str(co->center) << ' '
+                                << vec_to_str(co->axis) << ' ' << (co->radius * 2.0) << ' '
+                                << co->height << ' ' << rgba_to_str(m.base_color, m.alpha)
+                                << ' ' << mirror << ' ' << move << ' ' << count_flag << '\n';
+                        break;
+                }
 		default:
 			break;
 		}

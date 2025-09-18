@@ -12,6 +12,8 @@
 
 namespace
 {
+constexpr double kPi = 3.14159265358979323846;
+
 inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
 {
         return v - n * (2.0 * Vec3::dot(v, n));
@@ -66,6 +68,7 @@ void Scene::prepare_beam_roots(std::vector<std::shared_ptr<Laser>> &roots,
         }
 
         objects = std::move(non_beams);
+        score = 0.0;
 }
 
 // Trace laser beams, spawning reflections and associated point lights.
@@ -118,6 +121,16 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 hit_rec.object_id < static_cast<int>(objects.size()))
                         {
                                 auto hit_obj = objects[hit_rec.object_id];
+                                if (!hit_obj->is_beam() && hit_obj->countable)
+                                {
+                                        double incidence = -Vec3::dot(forward.dir, hit_rec.normal);
+                                        if (incidence > 1e-6)
+                                        {
+                                                double area = kPi * bm->radius * bm->radius /
+                                                               std::max(1e-4, incidence);
+                                                score += area;
+                                        }
+                                }
                                 if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
                         }
@@ -286,6 +299,11 @@ void Scene::update_goal_targets(double dt, std::vector<Material> &mats)
         for (auto &obj : objects)
                 if (obj->shape_type() == ShapeType::BeamTarget)
                         std::static_pointer_cast<BeamTarget>(obj)->update_goal(dt, mats);
+}
+
+double Scene::get_score() const
+{
+        return score;
 }
 
 // Construct a bounding volume hierarchy for faster ray queries.
