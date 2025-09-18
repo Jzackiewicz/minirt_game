@@ -2,7 +2,7 @@
 #include "AABB.hpp"
 #include "Config.hpp"
 #include "Settings.hpp"
-#include "Parser.hpp"
+#include "MapSaver.hpp"
 #include "PauseMenu.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
@@ -14,11 +14,9 @@
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
-#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -171,41 +169,6 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 		return sum * alpha + behind * (1.0 - alpha);
 	}
 	return sum;
-}
-
-static std::string next_save_path(const std::string &orig)
-{
-	namespace fs = std::filesystem;
-	fs::path p(orig);
-	fs::path dir = p.parent_path();
-	std::string stem = p.stem().string();
-	int base_id = 0;
-	auto pos = stem.find_last_of('_');
-	if (pos != std::string::npos)
-	{
-		bool num = true;
-		for (size_t i = pos + 1; i < stem.size(); ++i)
-			if (!std::isdigit(static_cast<unsigned char>(stem[i])))
-			{
-				num = false;
-				break;
-			}
-		if (num)
-		{
-			base_id = std::atoi(stem.c_str() + pos + 1);
-			stem = stem.substr(0, pos);
-		}
-	}
-	int idx = base_id + 1;
-	fs::path ext = p.extension();
-	for (;; ++idx)
-	{
-		fs::path candidate =
-			dir / (stem + "_" + std::to_string(idx) + ext.string());
-		std::error_code ec;
-		if (!fs::exists(candidate, ec))
-			return candidate.string();
-	}
 }
 
 Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
@@ -470,11 +433,11 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 {
                         scene.update_beams(mats);
                         scene.build_bvh();
-                        std::string save = next_save_path(scene_path);
-                        if (Parser::save_rt_file(save, scene, cam, mats))
-                                std::cout << "Saved scene to: " << save << "\n";
+                        if (MapSaver::save(scene_path, scene, cam, mats))
+                                std::cout << "Saved scene to: " << scene_path << "\n";
                         else
-                                std::cerr << "Failed to save scene to: " << save << "\n";
+                                std::cerr << "Failed to save scene to: " << scene_path
+                                          << "\n";
                 }
                 else if (g_developer_mode && st.focused && e.type == SDL_KEYDOWN &&
                                  (e.key.keysym.scancode == SDL_SCANCODE_1 ||
