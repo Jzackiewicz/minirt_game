@@ -118,6 +118,107 @@ bool light_ignores(const PointLight &L, int object_id)
                L.ignore_ids.end();
 }
 
+Vec3 clamp_color(const Vec3 &c, double lo = 0.0, double hi = 1.0)
+{
+        return Vec3(std::clamp(c.x, lo, hi), std::clamp(c.y, lo, hi),
+                                std::clamp(c.z, lo, hi));
+}
+
+Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
+                                         const Material &mat)
+{
+        Vec3 base = mat.base_color;
+        Vec3 col = mat.color;
+        if (rec.object_id >= 0 &&
+                rec.object_id < static_cast<int>(scene.objects.size()))
+        {
+                auto obj = scene.objects[rec.object_id];
+                if (obj->is_beam())
+                {
+                        auto beam = std::static_pointer_cast<Laser>(obj);
+                        base = col = beam->color;
+                }
+        }
+        if (mat.checkered)
+        {
+                Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
+                int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
+                                   static_cast<int>(std::floor(rec.p.y * 5)) +
+                                   static_cast<int>(std::floor(rec.p.z * 5))) &
+                                  1;
+                col = chk ? base : inv;
+        }
+        return col;
+}
+
+double compute_effective_alpha(const Material &mat, const HitRecord &rec)
+{
+        double alpha = mat.alpha;
+        if (mat.random_alpha)
+        {
+                double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
+                alpha *= (1.0 - tpos);
+        }
+        return std::clamp(alpha, 0.0, 1.0);
+}
+
+Vec3 ambient_contribution(const Scene &scene, const Vec3 &surface_color)
+{
+        return Vec3(surface_color.x * scene.ambient.color.x * scene.ambient.intensity,
+                                surface_color.y * scene.ambient.color.y * scene.ambient.intensity,
+                                surface_color.z * scene.ambient.color.z * scene.ambient.intensity);
+}
+
+Vec3 light_contribution(const Scene &scene, const std::vector<Material> &mats,
+                                         const PointLight &light, const HitRecord &rec,
+                                         const Vec3 &surface_color, const Material &mat,
+                                         const Vec3 &point, const Vec3 &view_dir)
+{
+        if (light_ignores(light, rec.object_id))
+                return Vec3(0.0, 0.0, 0.0);
+        Vec3 to_light = light.position - point;
+        double dist = to_light.length();
+        if (dist <= 1e-6)
+                return Vec3(0.0, 0.0, 0.0);
+        Vec3 ldir = to_light / dist;
+        if (light.cutoff_cos > -1.0)
+        {
+                Vec3 spot_dir = (point - light.position).normalized();
+                if (Vec3::dot(light.direction, spot_dir) < light.cutoff_cos)
+                        return Vec3(0.0, 0.0, 0.0);
+        }
+        Vec3 lcolor;
+        double lintensity;
+        if (!light_through(scene, mats, point, light, lcolor, lintensity))
+                return Vec3(0.0, 0.0, 0.0);
+        double atten = 1.0;
+        if (light.range > 0.0)
+        {
+                atten = std::max(0.0, 1.0 - dist / light.range);
+                if (atten <= 0.0)
+                        return Vec3(0.0, 0.0, 0.0);
+        }
+        double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
+        if (diff <= 1e-6)
+                return Vec3(0.0, 0.0, 0.0);
+        Vec3 h = (ldir + view_dir).normalized();
+        double spec = 0.0;
+        if (mat.specular_k > 0.0)
+        {
+                spec = std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), mat.specular_exp) *
+                       mat.specular_k;
+        }
+        double diff_term = lintensity * diff * atten;
+        return Vec3(surface_color.x * lcolor.x * diff_term + lcolor.x * spec * atten,
+                                surface_color.y * lcolor.y * diff_term + lcolor.y * spec * atten,
+                                surface_color.z * lcolor.z * diff_term + lcolor.z * spec * atten);
+}
+
+double luminance(const Vec3 &c)
+{
+        return 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z;
+}
+
 double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &mats,
                                                          const PointLight &L, const Vec3 &dir,
                                                          double sample_weight)
@@ -170,18 +271,51 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                                         std::max(0.0, Vec3::dot(rec.normal, ldir));
                                 if (cos_incident > 1e-6)
                                 {
-                                        total_area += ((dist2 * sample_weight) /
-                                                                       cos_incident) *
-                                                      (L.intensity * transmittance);
+                                        const Material &mat = mats[rec.material_id];
+                                        Vec3 surface_color = surface_color_at(scene, rec, mat);
+                                        Vec3 view_dir = rec.normal.normalized();
+                                        Vec3 base = ambient_contribution(scene, surface_color);
+                                        for (const auto &other : scene.lights)
+                                        {
+                                                if (&other == &L)
+                                                        continue;
+                                                base += light_contribution(scene, mats, other, rec,
+                                                                           surface_color, mat, point,
+                                                                           view_dir);
+                                        }
+                                        Vec3 beam_contrib = light_contribution(
+                                                scene, mats, L, rec, surface_color, mat, point,
+                                                view_dir);
+                                        if (beam_contrib.length_squared() > 1e-12)
+                                        {
+                                                Vec3 base_clamped = clamp_color(base);
+                                                Vec3 with_clamped =
+                                                        clamp_color(base + beam_contrib);
+                                                Vec3 delta = with_clamped - base_clamped;
+                                                delta.x = std::max(0.0, delta.x);
+                                                delta.y = std::max(0.0, delta.y);
+                                                delta.z = std::max(0.0, delta.z);
+                                                double delta_luma = luminance(delta);
+                                                if (delta_luma > 1e-6)
+                                                {
+                                                        double area =
+                                                                (dist2 * sample_weight) /
+                                                                cos_incident;
+                                                        double alpha =
+                                                                compute_effective_alpha(mat, rec);
+                                                        total_area += area * delta_luma * alpha;
+                                                }
+                                        }
                                 }
                         }
                 }
 
                 const Material &mat = mats[rec.material_id];
-                if (mat.alpha >= 1.0)
+                double effective_alpha = compute_effective_alpha(mat, rec);
+                if (effective_alpha >= 1.0)
                         break;
 
-                transmittance *= (1.0 - mat.alpha);
+                transmittance *= (1.0 - effective_alpha);
                 if (transmittance <= 1e-4)
                         break;
 
