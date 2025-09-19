@@ -1,5 +1,6 @@
 #include "MapSaver.hpp"
 
+#include "BeamSource.hpp"
 #include "BeamTarget.hpp"
 #include "Cone.hpp"
 #include "Cube.hpp"
@@ -9,17 +10,19 @@
 #include "Sphere.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
-#include <limits>
+#include <memory>
 #include <sstream>
 #include <string>
-#include <unordered_set>
+#include <vector>
 
 namespace
 {
+
+constexpr double kTransparentAlpha = 125.0 / 255.0;
+
 std::string format_double(double value)
 {
         double rounded = std::round(value * 100000.0) / 100000.0;
@@ -33,365 +36,283 @@ std::string format_double(double value)
         return oss.str();
 }
 
-std::string vec_to_str(const Vec3 &v)
+std::string format_vec3_array(const Vec3 &v)
 {
-        return format_double(v.x) + ',' + format_double(v.y) + ',' + format_double(v.z);
+        return "[" + format_double(v.x) + ", " + format_double(v.y) + ", " + format_double(v.z) + "]";
 }
 
-std::string rgba_to_str(const Vec3 &color, double alpha)
+int clamp_color_component(double value)
 {
-        auto clamp01 = [](double v) { return std::clamp(v, 0.0, 1.0); };
-        int r = static_cast<int>(std::round(clamp01(color.x) * 255.0));
-        int g = static_cast<int>(std::round(clamp01(color.y) * 255.0));
-        int b = static_cast<int>(std::round(clamp01(color.z) * 255.0));
-        int a = static_cast<int>(std::round(clamp01(alpha) * 255.0));
+        double clamped = std::clamp(value, 0.0, 1.0);
+        return static_cast<int>(std::round(clamped * 255.0));
+}
+
+std::string format_color_array(const Vec3 &color)
+{
+        int r = clamp_color_component(color.x);
+        int g = clamp_color_component(color.y);
+        int b = clamp_color_component(color.z);
         std::ostringstream oss;
-        oss << r << ',' << g << ',' << b << ',' << a;
+        oss << "[" << r << ", " << g << ", " << b << "]";
         return oss.str();
 }
 
-std::string nearest_base16_color(const Vec3 &color)
+std::string bool_str(bool value) { return value ? "true" : "false"; }
+
+bool material_is_transparent(const Material &mat)
 {
-        struct NamedColor
-        {
-                const char *name;
-                double r;
-                double g;
-                double b;
-        };
-
-        static const std::array<NamedColor, 16> base16 = {
-                NamedColor{"black", 0.0, 0.0, 0.0},
-                NamedColor{"white", 255.0, 255.0, 255.0},
-                NamedColor{"gray", 128.0, 128.0, 128.0},
-                NamedColor{"silver", 192.0, 192.0, 192.0},
-                NamedColor{"maroon", 128.0, 0.0, 0.0},
-                NamedColor{"red", 255.0, 0.0, 0.0},
-                NamedColor{"purple", 128.0, 0.0, 128.0},
-                NamedColor{"fushsia", 255.0, 0.0, 255.0},
-                NamedColor{"green", 0.0, 128.0, 0.0},
-                NamedColor{"lime", 0.0, 255.0, 0.0},
-                NamedColor{"olive", 128.0, 128.0, 0.0},
-                NamedColor{"yellow", 255.0, 255.0, 0.0},
-                NamedColor{"navy", 0.0, 0.0, 128.0},
-                NamedColor{"blue", 0.0, 0.0, 255.0},
-                NamedColor{"teal", 0.0, 128.0, 128.0},
-                NamedColor{"aqua", 0.0, 255.0, 255.0},
-        };
-
-        auto clamp01 = [](double v) { return std::clamp(v, 0.0, 1.0); };
-        auto clamp255 = [](double v) { return std::clamp(v, 0.0, 255.0); };
-
-        double max_component = std::max({std::fabs(color.x), std::fabs(color.y),
-                                         std::fabs(color.z)});
-        double r;
-        double g;
-        double b;
-        if (max_component <= 1.0)
-        {
-                r = clamp01(color.x) * 255.0;
-                g = clamp01(color.y) * 255.0;
-                b = clamp01(color.z) * 255.0;
-        }
-        else
-        {
-                r = clamp255(color.x);
-                g = clamp255(color.y);
-                b = clamp255(color.z);
-        }
-
-        const NamedColor *closest = &base16.front();
-        double best = std::numeric_limits<double>::max();
-        for (const auto &named : base16)
-        {
-                double dr = r - named.r;
-                double dg = g - named.g;
-                double db = b - named.b;
-                double dist = dr * dr + dg * dg + db * db;
-                if (dist < best)
-                {
-                        best = dist;
-                        closest = &named;
-                }
-        }
-
-        return closest->name;
+        return std::fabs(mat.alpha - kTransparentAlpha) < 1e-6;
 }
 
-std::string object_display_name(const Hittable &obj)
+std::string object_id_for(const std::string &prefix, int index)
 {
-        switch (obj.shape_type())
-        {
-        case ShapeType::Sphere:
-                return "Sphere";
-        case ShapeType::Cube:
-                return "Cube";
-        case ShapeType::Cylinder:
-                return "Cylinder";
-        case ShapeType::Cone:
-                return "Cone";
-        case ShapeType::Plane:
-                return "Plane";
-        case ShapeType::Beam:
-                return "Beam";
-        case ShapeType::BeamTarget:
-                return "Beam target";
-        default:
-                return "Object";
-        }
+        std::ostringstream oss;
+        oss << prefix << index;
+        return oss.str();
 }
 
 bool is_rotatable(const Hittable &obj)
 {
-        switch (obj.shape_type())
-        {
-        case ShapeType::Plane:
-                return false;
-        default:
-                return true;
-        }
+        return obj.shape_type() != ShapeType::Plane;
 }
 
-std::string describe_shape(const Hittable &obj, const Material &mat)
+struct PlaneRecord
 {
-        std::ostringstream oss;
-        oss << "#\t" << object_display_name(obj) << " - "
-            << nearest_base16_color(mat.base_color);
-        if (mat.alpha < 0.999)
-                oss << ", transparent";
-        oss << ", " << (mat.mirror ? "reflective" : "non-reflective") << ", "
-            << (is_rotatable(obj) ? "rotatable" : "non-rotatable") << ", "
-            << (obj.movable ? "movable" : "immovable") << ", "
-            << (obj.scorable ? "scorable" : "non-scorable");
-        return oss.str();
-}
+        std::shared_ptr<Plane> plane;
+        const Material *mat;
+};
 
-std::string describe_plane(const Plane &pl, const Material &mat)
+struct SphereRecord
 {
-        return describe_shape(pl, mat);
-}
+        std::shared_ptr<Sphere> sphere;
+        const Material *mat;
+};
 
-std::string describe_beam(const Laser &beam)
+struct CubeRecord
 {
-        std::ostringstream oss;
-        bool has_source = !beam.source.expired();
-        bool movable = false;
-        if (auto src = beam.source.lock())
-                movable = src->movable;
-        oss << "#\t" << (has_source ? "Beam source" : "Beam") << " - "
-            << nearest_base16_color(beam.color) << ", radius "
-            << format_double(beam.radius) << ", length "
-            << format_double(beam.total_length >= 0.0 ? beam.total_length : beam.length)
-            << ", " << (movable ? "movable" : "immovable") << ", "
-            << (beam.scorable ? "scorable" : "non-scorable");
-        return oss.str();
-}
+        std::shared_ptr<Cube> cube;
+        const Material *mat;
+};
 
-std::string describe_beam_target(const BeamTarget &target,
-                                 const std::vector<Material> &mats)
+struct ConeRecord
 {
-        const Material &inner = mats[target.inner.material_id];
-        std::ostringstream oss;
-        oss << "#\tBeam target - " << nearest_base16_color(inner.base_color);
-        if (inner.alpha < 0.999)
-                oss << ", transparent";
-        oss << ", radius " << format_double(target.radius) << ", "
-            << (target.movable ? "movable" : "immovable") << ", "
-            << (target.scorable ? "scorable" : "non-scorable");
-        return oss.str();
-}
+        std::shared_ptr<Cone> cone;
+        const Material *mat;
+};
 
-void write_shape_line(std::ostream &out, const Hittable &obj,
-                      const Material &mat)
+struct CylinderRecord
 {
-        std::string reflective_flag = mat.mirror ? "R" : "NR";
-        std::string move = obj.movable ? "M" : "IM";
-        std::string score = obj.scorable ? "S" : "NS";
-        switch (obj.shape_type())
-        {
-        case ShapeType::Sphere:
-        {
-                const auto &sp = static_cast<const Sphere &>(obj);
-                out << "sp " << vec_to_str(sp.center) << ' ' << format_double(sp.radius) << ' '
-                    << rgba_to_str(mat.base_color, mat.alpha) << ' ' << reflective_flag << ' '
-                    << move << ' ' << score;
-                break;
-        }
-        case ShapeType::Plane:
-        {
-                const auto &pl = static_cast<const Plane &>(obj);
-                out << "pl " << vec_to_str(pl.point) << ' ' << vec_to_str(pl.normal) << ' '
-                    << rgba_to_str(mat.base_color, mat.alpha) << ' ' << reflective_flag << ' '
-                    << move << ' ' << score;
-                break;
-        }
-        case ShapeType::Cylinder:
-        {
-                const auto &cy = static_cast<const Cylinder &>(obj);
-                out << "cy " << vec_to_str(cy.center) << ' ' << vec_to_str(cy.axis) << ' '
-                    << format_double(cy.radius * 2.0) << ' ' << format_double(cy.height) << ' '
-                    << rgba_to_str(mat.base_color, mat.alpha) << ' ' << reflective_flag << ' '
-                    << move << ' ' << score;
-                break;
-        }
-        case ShapeType::Cube:
-        {
-                const auto &cu = static_cast<const Cube &>(obj);
-                out << "cu " << vec_to_str(cu.center) << ' ' << vec_to_str(cu.axis[2]) << ' '
-                    << format_double(cu.half.x * 2.0) << ' ' << format_double(cu.half.y * 2.0) << ' '
-                    << format_double(cu.half.z * 2.0) << ' '
-                    << rgba_to_str(mat.base_color, mat.alpha) << ' ' << reflective_flag << ' '
-                    << move << ' ' << score;
-                break;
-        }
-        case ShapeType::Cone:
-        {
-                const auto &co = static_cast<const Cone &>(obj);
-                out << "co " << vec_to_str(co.center) << ' ' << vec_to_str(co.axis) << ' '
-                    << format_double(co.radius * 2.0) << ' ' << format_double(co.height) << ' '
-                    << rgba_to_str(mat.base_color, mat.alpha) << ' ' << reflective_flag << ' '
-                    << move << ' ' << score;
-                break;
-        }
-        default:
-                break;
-        }
-}
-
-void write_beam_target(std::ostream &out, const BeamTarget &bt,
-                       const std::vector<Material> &mats)
-{
-        std::string move = bt.movable ? "M" : "IM";
-        const Material &inner = mats[bt.inner.material_id];
-        out << "bt " << vec_to_str(bt.center) << ' '
-            << rgba_to_str(inner.base_color, inner.alpha) << ' '
-            << format_double(bt.radius) << ' ' << move << ' '
-            << (bt.scorable ? "S" : "NS");
-}
-
-void write_beam(std::ostream &out, const Laser &beam)
-{
-        bool movable = false;
-        if (auto src = beam.source.lock())
-                movable = src->movable;
-        std::string move = movable ? "M" : "IM";
-        out << "bm " << format_double(beam.light_intensity) << ' '
-            << vec_to_str(beam.path.orig) << ' ' << vec_to_str(beam.path.dir) << ' '
-            << rgba_to_str(beam.color, 1.0) << ' ' << format_double(beam.radius) << ' '
-            << format_double(beam.total_length >= 0.0 ? beam.total_length : beam.length) << ' '
-            << move << ' ' << (beam.scorable ? "S" : "NS");
-}
+        std::shared_ptr<Cylinder> cylinder;
+        const Material *mat;
+};
 
 } // namespace
 
-bool MapSaver::save(const std::string &path, const Scene &scene,
-                                         const Camera &camera,
+bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &camera,
                                          const std::vector<Material> &materials)
 {
         std::ofstream out(path);
         if (!out)
                 return false;
 
-        out << "#-----------CAMERA-------------\n";
-        out << "C " << vec_to_str(camera.origin) << ' ' << vec_to_str(camera.forward)
-            << ' ' << format_double(camera.fov_deg) << "\n\n";
+        out << "[camera]\n";
+        out << "id = \"camera\"\n";
+        out << "position = " << format_vec3_array(camera.origin) << "\n";
+        out << "lookdir = " << format_vec3_array(camera.forward) << "\n";
+        out << "fov = " << format_double(camera.fov_deg) << "\n\n";
 
-        out << "#-----------LIGHTING-------------\n";
-        out << "# Ambient light\n";
-        out << "A " << format_double(scene.ambient.intensity) << ' '
-            << rgba_to_str(scene.ambient.color, 1.0) << "\n";
+        out << "[lighting.ambient]\n";
+        out << "intensity = " << format_double(scene.ambient.intensity) << "\n";
+        out << "color = " << format_color_array(scene.ambient.color) << "\n";
+
         int light_index = 1;
         for (const auto &light : scene.lights)
         {
                 if (light.attached_id != -1)
                         continue;
-                out << "# Light source " << light_index++ << "\n";
-                out << "L " << vec_to_str(light.position) << ' ' << format_double(light.intensity)
-                    << ' ' << rgba_to_str(light.color, 1.0) << "\n";
+                out << "\n[[lighting.light_sources]]\n";
+                out << "id = \"light" << light_index++ << "\"\n";
+                out << "intensity = " << format_double(light.intensity) << "\n";
+                out << "position = " << format_vec3_array(light.position) << "\n";
+                out << "color = " << format_color_array(light.color) << "\n";
         }
         out << "\n";
 
-        std::unordered_set<int> beam_sources;
-        std::vector<std::shared_ptr<Laser>> beams;
-        for (const auto &obj : scene.objects)
-        {
-                if (!obj->is_beam())
-                        continue;
-                auto laser = std::static_pointer_cast<Laser>(obj);
-                if (laser->start > 0.0)
-                        continue;
-                if (auto src = laser->source.lock())
-                        beam_sources.insert(src->object_id);
-                beams.push_back(laser);
-        }
+        std::vector<PlaneRecord> planes;
+        std::vector<SphereRecord> spheres;
+        std::vector<CubeRecord> cubes;
+        std::vector<ConeRecord> cones;
+        std::vector<CylinderRecord> cylinders;
+        std::vector<std::shared_ptr<BeamSource>> beam_sources;
+        std::vector<std::shared_ptr<BeamTarget>> beam_targets;
 
-        out << "#-----------OBJECTS-------------\n";
-        bool has_objects = false;
         for (const auto &obj : scene.objects)
         {
-                if (obj->is_beam())
+                if (auto laser = std::dynamic_pointer_cast<Laser>(obj))
+                {
+                        (void)laser;
                         continue;
-                if (beam_sources.count(obj->object_id))
+                }
+                if (auto source = std::dynamic_pointer_cast<BeamSource>(obj))
+                {
+                        beam_sources.push_back(source);
                         continue;
-                if (obj->shape_type() == ShapeType::Plane ||
-                    obj->shape_type() == ShapeType::BeamTarget)
+                }
+                if (auto target = std::dynamic_pointer_cast<BeamTarget>(obj))
+                {
+                        beam_targets.push_back(target);
                         continue;
-                if (obj->material_id < 0 ||
-                    obj->material_id >= static_cast<int>(materials.size()))
+                }
+                if (obj->material_id < 0 || obj->material_id >= static_cast<int>(materials.size()))
                         continue;
                 const Material &mat = materials[obj->material_id];
-                out << describe_shape(*obj, mat) << "\n";
-                write_shape_line(out, *obj, mat);
-                out << "\n";
-                has_objects = true;
+                switch (obj->shape_type())
+                {
+                case ShapeType::Plane:
+                        planes.push_back({std::static_pointer_cast<Plane>(obj), &mat});
+                        break;
+                case ShapeType::Sphere:
+                        spheres.push_back({std::static_pointer_cast<Sphere>(obj), &mat});
+                        break;
+                case ShapeType::Cube:
+                        cubes.push_back({std::static_pointer_cast<Cube>(obj), &mat});
+                        break;
+                case ShapeType::Cone:
+                        cones.push_back({std::static_pointer_cast<Cone>(obj), &mat});
+                        break;
+                case ShapeType::Cylinder:
+                        cylinders.push_back({std::static_pointer_cast<Cylinder>(obj), &mat});
+                        break;
+                default:
+                        break;
+                }
         }
-        if (!has_objects)
-                out << "#\t(no objects)\n";
-        out << "\n";
 
-        out << "#-----------WALLS-------------\n";
-        bool has_walls = false;
-        for (const auto &obj : scene.objects)
+        int plane_index = 1;
+        for (const auto &rec : planes)
         {
-                if (obj->is_beam())
-                        continue;
-                if (obj->shape_type() != ShapeType::Plane)
-                        continue;
-                if (obj->material_id < 0 ||
-                    obj->material_id >= static_cast<int>(materials.size()))
-                        continue;
-                const Material &mat = materials[obj->material_id];
-                const auto &pl = static_cast<const Plane &>(*obj);
-                out << describe_plane(pl, mat) << "\n";
-                write_shape_line(out, *obj, mat);
-                out << "\n";
-                has_walls = true;
+                out << "[[objects.planes]]\n";
+                out << "id = \"" << object_id_for("plane", plane_index++) << "\"\n";
+                out << "color = " << format_color_array(rec.mat->base_color) << "\n";
+                out << "position = " << format_vec3_array(rec.plane->point) << "\n";
+                out << "dir = " << format_vec3_array(rec.plane->normal.normalized()) << "\n";
+                out << "reflective = " << bool_str(rec.mat->mirror) << "\n";
+                out << "rotatable = " << bool_str(false) << "\n";
+                out << "movable = " << bool_str(rec.plane->movable) << "\n";
+                out << "scorable = " << bool_str(rec.plane->scorable) << "\n";
+                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n\n";
         }
-        if (!has_walls)
-                out << "#\t(no walls)\n";
-        out << "\n";
 
-        out << "#-----------BEAMS-------------\n";
-        bool has_beams = false;
-        for (const auto &beam : beams)
+        int cube_index = 1;
+        for (const auto &rec : cubes)
         {
-                out << describe_beam(*beam) << "\n";
-                write_beam(out, *beam);
-                out << "\n";
-                has_beams = true;
+                out << "[[objects.boxes]]\n";
+                out << "id = \"" << object_id_for("box", cube_index++) << "\"\n";
+                out << "color = " << format_color_array(rec.mat->base_color) << "\n";
+                out << "position = " << format_vec3_array(rec.cube->center) << "\n";
+                out << "dir = " << format_vec3_array(rec.cube->axis[2]) << "\n";
+                out << "width = " << format_double(rec.cube->half.y * 2.0) << "\n";
+                out << "height = " << format_double(rec.cube->half.z * 2.0) << "\n";
+                out << "length = " << format_double(rec.cube->half.x * 2.0) << "\n";
+                out << "reflective = " << bool_str(rec.mat->mirror) << "\n";
+                out << "rotatable = " << bool_str(is_rotatable(*rec.cube)) << "\n";
+                out << "movable = " << bool_str(rec.cube->movable) << "\n";
+                out << "scorable = " << bool_str(rec.cube->scorable) << "\n";
+                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n\n";
         }
-        for (const auto &obj : scene.objects)
+
+        int sphere_index = 1;
+        for (const auto &rec : spheres)
         {
-                if (obj->shape_type() != ShapeType::BeamTarget)
-                        continue;
-                const auto &bt = static_cast<const BeamTarget &>(*obj);
-                out << describe_beam_target(bt, materials) << "\n";
-                write_beam_target(out, bt, materials);
-                out << "\n";
-                has_beams = true;
+                out << "[[objects.spheres]]\n";
+                out << "id = \"" << object_id_for("sphere", sphere_index++) << "\"\n";
+                out << "color = " << format_color_array(rec.mat->base_color) << "\n";
+                out << "position = " << format_vec3_array(rec.sphere->center) << "\n";
+                out << "dir = [0.0, 1.0, 0.0]\n";
+                out << "radius = " << format_double(rec.sphere->radius) << "\n";
+                out << "reflective = " << bool_str(rec.mat->mirror) << "\n";
+                out << "rotatable = " << bool_str(is_rotatable(*rec.sphere)) << "\n";
+                out << "movable = " << bool_str(rec.sphere->movable) << "\n";
+                out << "scorable = " << bool_str(rec.sphere->scorable) << "\n";
+                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n\n";
         }
-        if (!has_beams)
-                out << "#\t(no beams)\n";
+
+        int cone_index = 1;
+        for (const auto &rec : cones)
+        {
+                out << "[[objects.cones]]\n";
+                out << "id = \"" << object_id_for("cone", cone_index++) << "\"\n";
+                out << "color = " << format_color_array(rec.mat->base_color) << "\n";
+                out << "position = " << format_vec3_array(rec.cone->center) << "\n";
+                out << "dir = " << format_vec3_array(rec.cone->axis) << "\n";
+                out << "radius = " << format_double(rec.cone->radius) << "\n";
+                out << "height = " << format_double(rec.cone->height) << "\n";
+                out << "reflective = " << bool_str(rec.mat->mirror) << "\n";
+                out << "rotatable = " << bool_str(is_rotatable(*rec.cone)) << "\n";
+                out << "movable = " << bool_str(rec.cone->movable) << "\n";
+                out << "scorable = " << bool_str(rec.cone->scorable) << "\n";
+                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n\n";
+        }
+
+        int cylinder_index = 1;
+        for (const auto &rec : cylinders)
+        {
+                out << "[[objects.cylinders]]\n";
+                out << "id = \"" << object_id_for("cylinder", cylinder_index++) << "\"\n";
+                out << "color = " << format_color_array(rec.mat->base_color) << "\n";
+                out << "position = " << format_vec3_array(rec.cylinder->center) << "\n";
+                out << "dir = " << format_vec3_array(rec.cylinder->axis) << "\n";
+                out << "radius = " << format_double(rec.cylinder->radius) << "\n";
+                out << "height = " << format_double(rec.cylinder->height) << "\n";
+                out << "reflective = " << bool_str(rec.mat->mirror) << "\n";
+                out << "rotatable = " << bool_str(is_rotatable(*rec.cylinder)) << "\n";
+                out << "movable = " << bool_str(rec.cylinder->movable) << "\n";
+                out << "scorable = " << bool_str(rec.cylinder->scorable) << "\n";
+                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n\n";
+        }
+
+        int beam_source_index = 1;
+        for (const auto &source : beam_sources)
+        {
+                Vec3 direction = source->spot_direction();
+                if (direction.length_squared() == 0.0)
+                        direction = Vec3(0, 0, 1);
+                Vec3 color = (source->beam && source->beam->color.length_squared() > 0.0)
+                                     ? source->beam->color
+                                     : (source->light ? source->light->color : Vec3(1, 1, 1));
+                double intensity = source->beam ? source->beam->light_intensity
+                                                : (source->light ? source->light->intensity : 0.0);
+                double length = source->beam ? source->beam->total_length : 0.0;
+                out << "[[beam.sources]]\n";
+                out << "id = \"" << object_id_for("beam_source", beam_source_index++) << "\"\n";
+                out << "intensity = " << format_double(intensity) << "\n";
+                out << "position = " << format_vec3_array(source->center) << "\n";
+                out << "dir = " << format_vec3_array(direction.normalized()) << "\n";
+                out << "color = " << format_color_array(color) << "\n";
+                out << "radius = " << format_double(source->radius) << "\n";
+                out << "length = " << format_double(length) << "\n";
+                out << "movable = " << bool_str(source->movable) << "\n";
+                out << "rotatable = " << bool_str(true) << "\n";
+                out << "scorable = " << bool_str(source->scorable) << "\n";
+                out << "with_laser = " << bool_str(source->beam != nullptr) << "\n\n";
+        }
+
+        int beam_target_index = 1;
+        for (const auto &target : beam_targets)
+        {
+                Vec3 color = Vec3(1, 1, 0);
+                if (target->inner.material_id >= 0 &&
+                    target->inner.material_id < static_cast<int>(materials.size()))
+                        color = materials[target->inner.material_id].base_color;
+                out << "[[beam.targets]]\n";
+                out << "id = \"" << object_id_for("beam_target", beam_target_index++) << "\"\n";
+                out << "position = " << format_vec3_array(target->center) << "\n";
+                out << "color = " << format_color_array(color) << "\n";
+                out << "radius = " << format_double(target->radius) << "\n";
+                out << "movable = " << bool_str(target->movable) << "\n";
+                out << "scorable = " << bool_str(target->scorable) << "\n\n";
+        }
 
         return true;
 }
+

@@ -5,7 +5,7 @@ bool parse_arguments(int argc, char **argv, std::string &scene_path)
 {
         if (argc != 2)
         {
-                std::cerr << "Usage: minirt <scene.rt>\n";
+                std::cerr << "Usage: minirt <scene.toml>\n";
                 return false;
         }
         scene_path = argv[1];
