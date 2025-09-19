@@ -36,9 +36,12 @@ class Scene
 	// Move object while preventing collisions.
 	Vec3 move_with_collision(int index, const Vec3 &delta);
 
-	// Move camera while avoiding obstacles.
+        // Move camera while avoiding obstacles.
         Vec3 move_camera(Camera &cam, const Vec3 &delta,
                                          const std::vector<Material> &materials) const;
+
+        // Calculate score contributed by beam spotlights hitting scorable objects.
+        double compute_beam_spotlight_score() const;
         private:
         bool is_movable(int index) const;
         void apply_translation(const HittablePtr &object, const Vec3 &delta);

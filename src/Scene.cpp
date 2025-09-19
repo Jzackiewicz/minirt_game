@@ -177,7 +177,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 lights.emplace_back(bm->path.orig, light_col,
                                                         bm->light_intensity * ratio,
                                                         std::vector<int>{bm->object_id, pl.hit_id},
-                                                        bm->object_id, bm->path.dir, cone_cos, bm->length);
+                                                        bm->object_id, bm->path.dir, cone_cos,
+                                                        bm->length, false, true);
         }
 }
 
@@ -268,7 +269,8 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
                 std::vector<int> ignore = L.ignore_ids;
                 ignore.push_back(hit_rec.object_id);
                 PointLight new_light(refl_orig, L.color, intensity, ignore, -1,
-                                                         refl_dir, L.cutoff_cos, remain, true);
+                                                         refl_dir, L.cutoff_cos, remain, true,
+                                                         L.beam_spotlight);
                 to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
         }
 }
@@ -448,11 +450,70 @@ Vec3 Scene::move_camera(Camera &cam, const Vec3 &delta,
         return moved;
 }
 
+double Scene::compute_beam_spotlight_score() const
+{
+        constexpr double PI = 3.14159265358979323846;
+        double total = 0.0;
+        for (const auto &L : lights)
+        {
+                if (!L.beam_spotlight)
+                        continue;
+                if (L.cutoff_cos <= -1.0)
+                        continue;
+                Vec3 dir = L.direction;
+                double len_sq = dir.length_squared();
+                if (len_sq <= 1e-12)
+                        continue;
+                Vec3 ndir = dir / std::sqrt(len_sq);
+                Ray spotlight_ray(L.position, ndir);
+                double max_dist = (L.range > 0.0) ? L.range : 1e9;
+                HitRecord tmp, best;
+                bool hit_any = false;
+                for (const auto &obj : objects)
+                {
+                        if (obj->is_beam())
+                                continue;
+                        if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                                  obj->object_id) != L.ignore_ids.end())
+                                continue;
+                        if (obj->hit(spotlight_ray, 1e-4, max_dist, tmp))
+                        {
+                                max_dist = tmp.t;
+                                best = tmp;
+                                hit_any = true;
+                        }
+                }
+                if (!hit_any)
+                        continue;
+                if (best.object_id < 0 ||
+                        best.object_id >= static_cast<int>(objects.size()))
+                        continue;
+                auto target = objects[best.object_id];
+                if (!target || !target->scorable)
+                        continue;
+                double distance = max_dist;
+                if (distance <= 1e-6)
+                        continue;
+                double cone_cos = L.cutoff_cos;
+                if (cone_cos <= 0.0)
+                        cone_cos = std::max(1e-6, std::abs(cone_cos));
+                double sin_sq = std::max(0.0, 1.0 - cone_cos * cone_cos);
+                double tan_theta = std::sqrt(sin_sq) / std::max(cone_cos, 1e-6);
+                double radius = distance * tan_theta;
+                double area = PI * radius * radius;
+                double cos_inc = std::abs(Vec3::dot(best.normal, -ndir));
+                cos_inc = std::max(cos_inc, 1e-6);
+                area /= cos_inc;
+                total += area;
+        }
+        return total;
+}
+
 // Check if object at index intersects any other object.
 bool Scene::collides(int index) const
 {
-	if (index < 0 || index >= static_cast<int>(objects.size()))
-		return false;
+        if (index < 0 || index >= static_cast<int>(objects.size()))
+                return false;
 	auto obj = objects[index];
 	if (obj->is_beam())
 		return false;

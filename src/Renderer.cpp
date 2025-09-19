@@ -19,7 +19,9 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <random>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -782,6 +784,18 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         const int ch_size = 10;
         SDL_RenderDrawLine(ren, cx - ch_size, cy, cx + ch_size, cy);
         SDL_RenderDrawLine(ren, cx, cy - ch_size, cx, cy + ch_size);
+        double raw_score = scene.compute_beam_spotlight_score();
+        double display_score = std::max(0.0, raw_score);
+        std::ostringstream score_stream;
+        score_stream << "SCORE " << std::fixed << std::setprecision(2) << display_score;
+        std::string score_text = score_stream.str();
+        int score_scale = 2;
+        SDL_Color score_color{255, 255, 255, 255};
+        int score_x = 5;
+        int score_y = 5;
+        CustomCharacter::draw_text(ren, score_text, score_x, score_y, score_color,
+                                                    score_scale);
+        int next_text_y = score_y + 7 * score_scale + 4;
         if (g_developer_mode)
         {
                 SDL_Color red{255, 0, 0, 255};
@@ -791,7 +805,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    next_text_y + i * (7 * scale + 2),
+                                                    red, scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
