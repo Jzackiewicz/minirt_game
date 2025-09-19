@@ -28,6 +28,16 @@ static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
         return a * (1.0 - alpha) + b * alpha;
 }
 
+static double luminance(const Vec3 &c)
+{
+        return c.x * 0.2126 + c.y * 0.7152 + c.z * 0.0722;
+}
+
+static double luminance_product(const Vec3 &a, const Vec3 &b)
+{
+        return a.x * b.x * 0.2126 + a.y * b.y * 0.7152 + a.z * b.z * 0.0722;
+}
+
 static bool light_through(const Scene &scene, const std::vector<Material> &mats,
                                                 const Vec3 &p, const PointLight &L,
                                                 Vec3 &color, double &intensity)
@@ -76,13 +86,245 @@ static bool light_through(const Scene &scene, const std::vector<Material> &mats,
         return true;
 }
 
-static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
-					  const Ray &r, std::mt19937 &rng,
-					  std::uniform_real_distribution<double> &dist,
-					  int depth = 0)
+namespace
 {
-	if (depth > 10)
-		return Vec3(0.0, 0.0, 0.0);
+
+struct Basis
+{
+        Vec3 u;
+        Vec3 v;
+        Vec3 w;
+};
+
+Basis make_basis(const Vec3 &axis)
+{
+        Basis b{};
+        double len2 = axis.length_squared();
+        if (len2 <= 1e-12)
+        {
+                b.w = Vec3(0, 0, 1);
+                b.u = Vec3(1, 0, 0);
+                b.v = Vec3(0, 1, 0);
+                return b;
+        }
+        b.w = axis / std::sqrt(len2);
+        Vec3 helper = (std::abs(b.w.z) < 0.999) ? Vec3(0, 0, 1) : Vec3(0, 1, 0);
+        b.u = Vec3::cross(helper, b.w);
+        double ulen = b.u.length();
+        if (ulen <= 1e-12)
+        {
+                helper = Vec3(0, 1, 0);
+                b.u = Vec3::cross(helper, b.w);
+                ulen = b.u.length();
+        }
+        b.u = (ulen > 1e-12) ? b.u / ulen : Vec3(1, 0, 0);
+        b.v = Vec3::cross(b.w, b.u);
+        return b;
+}
+
+bool light_ignores(const PointLight &L, int object_id)
+{
+        return std::find(L.ignore_ids.begin(), L.ignore_ids.end(), object_id) !=
+               L.ignore_ids.end();
+}
+
+Vec3 surface_color_at(const Material &mat, const HitRecord &rec)
+{
+        if (mat.checkered)
+        {
+                Vec3 inv = Vec3(1.0, 1.0, 1.0) - mat.base_color;
+                int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
+                                   static_cast<int>(std::floor(rec.p.y * 5)) +
+                                   static_cast<int>(std::floor(rec.p.z * 5))) &
+                                  1;
+                return chk ? mat.base_color : inv;
+        }
+        return mat.color;
+}
+
+double baseline_brightness(const Scene &scene, const std::vector<Material> &mats,
+                          const HitRecord &rec, const PointLight &skip_light,
+                          const Vec3 &surface_color)
+{
+        double brightness =
+                scene.ambient.intensity * luminance_product(surface_color, scene.ambient.color);
+        for (const auto &other : scene.lights)
+        {
+                if (&other == &skip_light)
+                        continue;
+                Vec3 to_light = other.position - rec.p;
+                double dist = to_light.length();
+                if (dist <= 1e-6)
+                        continue;
+                if (other.cutoff_cos > -1.0)
+                {
+                        Vec3 spot_dir = (rec.p - other.position).normalized();
+                        if (Vec3::dot(other.direction, spot_dir) < other.cutoff_cos)
+                                continue;
+                }
+                Vec3 lcolor;
+                double lintensity;
+                if (!light_through(scene, mats, rec.p, other, lcolor, lintensity))
+                        continue;
+                Vec3 ldir = to_light / dist;
+                double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
+                if (diff <= 1e-6)
+                        continue;
+                double atten = 1.0;
+                if (other.range > 0.0)
+                        atten = std::max(0.0, 1.0 - dist / other.range);
+                double contrib = lintensity * diff * atten *
+                                 luminance_product(surface_color, lcolor);
+                brightness += contrib;
+        }
+        return std::clamp(brightness, 0.0, 1.0);
+}
+
+double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &mats,
+                                                         const PointLight &L, const Vec3 &dir,
+                                                         double sample_weight)
+{
+        if (L.intensity <= 1e-4)
+                return 0.0;
+        const double max_range = (L.range > 0.0) ? L.range : 1e9;
+        double travelled = 0.0;
+        Vec3 origin = L.position;
+        double transmittance = 1.0;
+        double total_score = 0.0;
+
+        while (travelled < max_range - 1e-4 && transmittance > 1e-4)
+        {
+                Ray ray(origin, dir);
+                double closest = max_range - travelled;
+                HitRecord rec;
+                bool hit_any = false;
+                Hittable *hit_obj = nullptr;
+                for (const auto &obj : scene.objects)
+                {
+                        if (obj->is_beam())
+                                continue;
+                        if (light_ignores(L, obj->object_id))
+                                continue;
+                        HitRecord tmp;
+                        if (obj->hit(ray, 1e-4, closest, tmp))
+                        {
+                                closest = tmp.t;
+                                rec = tmp;
+                                hit_any = true;
+                                hit_obj = obj.get();
+                        }
+                }
+                if (!hit_any)
+                        break;
+
+                travelled += closest;
+                Vec3 point = ray.at(closest);
+
+                if (hit_obj && hit_obj->scorable && !hit_obj->is_beam())
+                {
+                        Vec3 to_light = L.position - point;
+                        double dist2 = to_light.length_squared();
+                        if (dist2 > 1e-8)
+                        {
+                                double dist = std::sqrt(dist2);
+                                Vec3 ldir = to_light / dist;
+                                double cos_incident =
+                                        std::max(0.0, Vec3::dot(rec.normal, ldir));
+                                if (cos_incident > 1e-6)
+                                {
+                                        const Material &mat = mats[rec.material_id];
+                                        Vec3 surface_col = surface_color_at(mat, rec);
+                                        double area = (dist2 * sample_weight) /
+                                                      std::max(cos_incident, 1e-6);
+                                        double base_brightness = baseline_brightness(
+                                                scene, mats, rec, L, surface_col);
+                                        double atten = 1.0;
+                                        if (L.range > 0.0)
+                                                atten = std::max(0.0, 1.0 - dist / L.range);
+                                        double beam_intensity =
+                                                L.intensity * transmittance * atten;
+                                        double beam_brightness = beam_intensity * cos_incident *
+                                                                luminance_product(surface_col, L.color);
+                                        double new_brightness =
+                                                std::clamp(base_brightness + beam_brightness, 0.0, 1.0);
+                                        double gain =
+                                                std::max(0.0, new_brightness - base_brightness);
+                                        total_score += area * gain;
+                                }
+                        }
+                }
+
+                const Material &mat = mats[rec.material_id];
+                if (mat.alpha >= 1.0)
+                        break;
+
+                transmittance *= (1.0 - mat.alpha);
+                if (transmittance <= 1e-4)
+                        break;
+
+                travelled += 1e-4;
+                origin = point + dir * 1e-4;
+        }
+
+        return total_score;
+}
+
+double integrate_spotlight_area(const Scene &scene, const std::vector<Material> &mats,
+                                                           const PointLight &L)
+{
+        if (!L.beam_spotlight || L.intensity <= 0.0)
+                return 0.0;
+        Basis basis = make_basis(L.direction);
+        double cos_max = std::clamp(L.cutoff_cos, -1.0, 1.0);
+        double solid_angle = 2.0 * M_PI * (1.0 - cos_max);
+        if (solid_angle <= 0.0)
+                solid_angle = 1e-6;
+        const int grid = (solid_angle > 1.0) ? 24 : 16;
+        double sample_weight = solid_angle / (grid * grid);
+
+        double total = 0.0;
+        for (int iy = 0; iy < grid; ++iy)
+        {
+                for (int ix = 0; ix < grid; ++ix)
+                {
+                        double su = (ix + 0.5) / static_cast<double>(grid);
+                        double sv = (iy + 0.5) / static_cast<double>(grid);
+                        double cos_theta = 1.0 - (1.0 - cos_max) * su;
+                        cos_theta = std::clamp(cos_theta, -1.0, 1.0);
+                        double sin_theta =
+                                std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
+                        double phi = 2.0 * M_PI * sv;
+                        Vec3 dir = basis.u * (std::cos(phi) * sin_theta) +
+                                   basis.v * (std::sin(phi) * sin_theta) +
+                                   basis.w * cos_theta;
+                        dir = dir.normalized();
+                        total += trace_spotlight_sample(scene, mats, L, dir, sample_weight);
+                }
+        }
+        return total;
+}
+
+double compute_beam_score(const Scene &scene, const std::vector<Material> &mats)
+{
+        double score = 0.0;
+        for (const auto &L : scene.lights)
+        {
+                if (!L.beam_spotlight || L.reflected)
+                        continue;
+                score += integrate_spotlight_area(scene, mats, L);
+        }
+        return score;
+}
+
+} // namespace
+
+static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
+                                          const Ray &r, std::mt19937 &rng,
+                                          std::uniform_real_distribution<double> &dist,
+                                          int depth = 0)
+{
+        if (depth > 10)
+                return Vec3(0.0, 0.0, 0.0);
 	HitRecord rec;
 	if (!scene.hit(r, 1e-4, 1e9, rec))
 	{
@@ -111,14 +353,14 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 				  1;
 		col = chk ? base : inv;
 	}
-	Vec3 sum(col.x * scene.ambient.color.x * scene.ambient.intensity,
-			 col.y * scene.ambient.color.y * scene.ambient.intensity,
-			 col.z * scene.ambient.color.z * scene.ambient.intensity);
-	for (const auto &L : scene.lights)
-	{
-		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
-					  rec.object_id) != L.ignore_ids.end())
-			continue;
+        Vec3 sum(col.x * scene.ambient.color.x * scene.ambient.intensity,
+                         col.y * scene.ambient.color.y * scene.ambient.intensity,
+                         col.z * scene.ambient.color.z * scene.ambient.intensity);
+        for (const auto &L : scene.lights)
+        {
+                if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                          rec.object_id) != L.ignore_ids.end())
+                        continue;
                 Vec3 to_light = L.position - rec.p;
                 double dist = to_light.length();
                 Vec3 ldir = to_light / dist;
@@ -140,6 +382,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                 double spec =
                         std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
                         m.specular_k;
+                double diff_term = lintensity * diff * atten;
                 sum += Vec3(col.x * lcolor.x * lintensity * diff * atten +
                                                 lcolor.x * spec * atten,
                                         col.y * lcolor.y * lintensity * diff * atten +
@@ -152,10 +395,10 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 		Vec3 refl_dir =
 			r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
 		Ray refl(rec.p + refl_dir * 1e-4, refl_dir);
-		Vec3 refl_col = trace_ray(scene, mats, refl, rng, dist, depth + 1);
-		double refl_ratio = REFLECTION / 100.0;
-		sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
-	}
+                Vec3 refl_col = trace_ray(scene, mats, refl, rng, dist, depth + 1);
+                double refl_ratio = REFLECTION / 100.0;
+                sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
+        }
 	double alpha = m.alpha;
 	if (m.random_alpha)
 	{
@@ -164,11 +407,11 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	}
 	if (alpha < 1.0)
 	{
-		Ray next(rec.p + r.dir * 1e-4, r.dir);
-		Vec3 behind = trace_ray(scene, mats, next, rng, dist, depth + 1);
-		return sum * alpha + behind * (1.0 - alpha);
-	}
-	return sum;
+                Ray next(rec.p + r.dir * 1e-4, r.dir);
+                Vec3 behind = trace_ray(scene, mats, next, rng, dist, depth + 1);
+                return sum * alpha + behind * (1.0 - alpha);
+        }
+        return sum;
 }
 
 Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
@@ -187,6 +430,7 @@ struct Renderer::RenderState
         Vec3 edit_pos;
         int spawn_key = -1;
         double fps = 0.0;
+        double last_score = 0.0;
 };
 
 /// Initialize SDL window, renderer and texture objects.
@@ -665,7 +909,7 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                                        std::vector<Material> &mats)
 {
         std::atomic<int> next_row{0};
-        auto worker = [&]()
+        auto worker = [&](int index)
         {
                 std::mt19937 rng(std::random_device{}());
                 std::uniform_real_distribution<double> dist(0.0, 1.0);
@@ -676,10 +920,10 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                 break;
                         for (int x = 0; x < RW; ++x)
                         {
-                                double u = (x + 0.5) / RW;
-                                double v = (y + 0.5) / RH;
+                                double u = (x + 0.5) / static_cast<double>(RW);
+                                double v = (y + 0.5) / static_cast<double>(RH);
                                 Ray r = cam.ray_through(u, v);
-                                Vec3 col = trace_ray(scene, mats, r, rng, dist);
+                                Vec3 col = trace_ray(scene, mats, r, rng, dist, 0);
                                 framebuffer[y * RW + x] = col;
                         }
                 }
@@ -688,9 +932,11 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         std::vector<std::thread> pool;
         pool.reserve(T);
         for (int i = 0; i < T; ++i)
-                pool.emplace_back(worker);
+                pool.emplace_back(worker, i);
         for (auto &th : pool)
                 th.join();
+
+        st.last_score = compute_beam_score(scene, mats);
 
         for (int y = 0; y < RH; ++y)
         {
@@ -713,6 +959,12 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
+        SDL_Color score_color{255, 255, 255, 255};
+        int score_scale = 2;
+        char score_buf[64];
+        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f m^2", st.last_score);
+        int score_text_height = 7 * score_scale;
+        [[maybe_unused]] int legend_base_y = 5 + score_text_height + 5;
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -791,7 +1043,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    legend_base_y + i * (7 * scale + 2), red,
+                                                    scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
@@ -805,6 +1058,7 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                 int fps_y = std::max(0, H - fps_h - 5);
                 CustomCharacter::draw_text(ren, fps_text, fps_x, fps_y, red, scale);
         }
+        CustomCharacter::draw_text(ren, score_buf, 5, 5, score_color, score_scale);
         SDL_RenderPresent(ren);
 }
 
