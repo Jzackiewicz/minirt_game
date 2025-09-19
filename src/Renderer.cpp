@@ -170,7 +170,19 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                                         std::max(0.0, Vec3::dot(rec.normal, ldir));
                                 if (cos_incident > 1e-6)
                                 {
-                                        total_area += (dist2 * sample_weight) / cos_incident;
+                                        double atten = 1.0 / std::max(dist2, 1e-6);
+                                        if (L.range > 0.0)
+                                        {
+                                                atten *=
+                                                        std::max(0.0, 1.0 - dist / L.range);
+                                        }
+                                        double incident_intensity = intensity * atten;
+                                        if (incident_intensity > 1e-6)
+                                        {
+                                                total_area += ((dist2 * sample_weight) /
+                                                                       cos_incident) *
+                                                              incident_intensity;
+                                        }
                                 }
                         }
                 }
