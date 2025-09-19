@@ -49,8 +49,9 @@ class Hittable
         virtual bool is_plane() const { return false; }
         virtual bool is_bvh() const { return false; }
         virtual bool blocks_when_transparent() const { return false; }
+        virtual bool casts_shadow() const { return true; }
         // default translation does nothing
-	virtual void translate(const Vec3 &delta) { (void)delta; }
+        virtual void translate(const Vec3 &delta) { (void)delta; }
 	// default rotation does nothing
 	virtual void rotate(const Vec3 &axis, double angle)
 	{
