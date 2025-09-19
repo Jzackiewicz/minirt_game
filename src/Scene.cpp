@@ -501,7 +501,7 @@ double Scene::compute_beam_spotlight_score() const
                 double tan_theta = std::sqrt(sin_sq) / std::max(cone_cos, 1e-6);
                 double radius = distance * tan_theta;
                 double area = PI * radius * radius;
-                double cos_inc = std::abs(Vec3::dot(best.normal, -ndir));
+                double cos_inc = std::abs(Vec3::dot(best.normal, -1 * ndir));
                 cos_inc = std::max(cos_inc, 1e-6);
                 area /= cos_inc;
                 total += area;
