@@ -713,6 +713,17 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
+        const int score_scale = 2;
+        const int score_x = 5;
+        const int score_y = 5;
+        const int score_text_height = 7 * score_scale;
+        const int scoreboard_bottom = score_y + score_text_height;
+        double score_value = std::max(0.0, scene.get_spotlight_score());
+        double display_score = std::min(score_value, 999999.9);
+        char score_buf[64];
+        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.1f m^2", display_score);
+        SDL_Color white{255, 255, 255, 255};
+        CustomCharacter::draw_text(ren, score_buf, score_x, score_y, white, score_scale);
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -785,25 +796,27 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         if (g_developer_mode)
         {
                 SDL_Color red{255, 0, 0, 255};
-                int scale = 2;
+                const int legend_scale = 2;
+                const int legend_start_y = scoreboard_bottom + 6;
                 const char *legend[] = {"1-PLANE",  "2-SPHERE",   "3-CUBE",
                                          "4-CONE",  "5-CYLINDER", "SCROLL-SIZE",
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    legend_start_y + i * (7 * legend_scale + 2),
+                                                    red, legend_scale);
                 std::string text = "DEVELOPER MODE";
-                int tw = CustomCharacter::text_width(text, scale);
-                CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
+                int tw = CustomCharacter::text_width(text, legend_scale);
+                CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, legend_scale);
                 double fps_value = std::min(st.fps, 9999.9);
                 char fps_buf[32];
                 std::snprintf(fps_buf, sizeof(fps_buf), "FPS: %.1f", fps_value);
                 std::string fps_text(fps_buf);
-                int fps_w = CustomCharacter::text_width(fps_text, scale);
-                int fps_h = 7 * scale;
+                int fps_w = CustomCharacter::text_width(fps_text, legend_scale);
+                int fps_h = 7 * legend_scale;
                 int fps_x = std::max(0, W - fps_w - 5);
                 int fps_y = std::max(0, H - fps_h - 5);
-                CustomCharacter::draw_text(ren, fps_text, fps_x, fps_y, red, scale);
+                CustomCharacter::draw_text(ren, fps_text, fps_x, fps_y, red, legend_scale);
         }
         SDL_RenderPresent(ren);
 }

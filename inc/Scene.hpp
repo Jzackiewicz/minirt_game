@@ -12,11 +12,12 @@ class Laser;
 
 class Scene
 {
-	public:
-	std::vector<HittablePtr> objects;
-	std::vector<PointLight> lights;
+        public:
+        std::vector<HittablePtr> objects;
+        std::vector<PointLight> lights;
         Ambient ambient{Vec3(1, 1, 1), 0.0};
         std::shared_ptr<Hittable> accel;
+        double spotlight_score = 0.0;
 
         // Update beam objects and associated lights in the scene.
         void update_beams(const std::vector<Material> &materials);
@@ -24,14 +25,17 @@ class Scene
         // Update goal-scored effects on beam targets.
         void update_goal_targets(double dt, std::vector<Material> &materials);
 
-	// Build bounding volume hierarchy for static geometry.
-	void build_bvh();
+        // Build bounding volume hierarchy for static geometry.
+        void build_bvh();
 
-	// Test a ray against all objects.
-	bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
+        // Test a ray against all objects.
+        bool hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const;
 
-	// Determine whether object at index collides with others.
-	bool collides(int index) const;
+        // Retrieve the current illuminated area contributed by beam spotlights.
+        double get_spotlight_score() const;
+
+        // Determine whether object at index collides with others.
+        bool collides(int index) const;
 
 	// Move object while preventing collisions.
 	Vec3 move_with_collision(int index, const Vec3 &delta);

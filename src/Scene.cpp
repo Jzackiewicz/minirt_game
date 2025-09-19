@@ -2,6 +2,7 @@
 #include "Camera.hpp"
 #include "Collision.hpp"
 #include "Laser.hpp"
+#include "BeamSource.hpp"
 #include "Plane.hpp"
 #include "BeamTarget.hpp"
 #include "Settings.hpp"
@@ -15,6 +16,58 @@ namespace
 inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
 {
         return v - n * (2.0 * Vec3::dot(v, n));
+}
+
+constexpr double kSpotlightSin = 0.25;
+constexpr double kPi = 3.14159265358979323846;
+
+double compute_spotlight_area(const Vec3 &beam_dir, const Vec3 &normal,
+                                                        double distance)
+{
+        if (distance <= 0.0)
+                return 0.0;
+        const double cos_theta = std::sqrt(std::max(0.0, 1.0 - kSpotlightSin * kSpotlightSin));
+        if (cos_theta <= 1e-6)
+                return 0.0;
+        const double tan_theta = kSpotlightSin / cos_theta;
+        const double radius = distance * tan_theta;
+        if (radius <= 0.0)
+                return 0.0;
+        const double base_area = kPi * radius * radius;
+        Vec3 dir = beam_dir.normalized();
+        Vec3 n = normal.normalized();
+        double cos_incidence = std::abs(Vec3::dot(dir, n));
+        cos_incidence = std::max(cos_incidence, 1e-3);
+        return base_area / cos_incidence;
+}
+
+HittablePtr resolve_scorable_object(const std::vector<HittablePtr> &objects,
+                                                                    int object_id)
+{
+        if (object_id >= 0 && object_id < static_cast<int>(objects.size()))
+        {
+                auto obj = objects[object_id];
+                if (obj->scorable && !obj->is_beam())
+                        return obj;
+                return nullptr;
+        }
+        for (const auto &candidate : objects)
+        {
+                if (candidate->shape_type() == ShapeType::BeamTarget)
+                {
+                        auto target = std::static_pointer_cast<BeamTarget>(candidate);
+                        if ((target->mid.object_id == object_id && target->mid.scorable) ||
+                                (target->inner.object_id == object_id && target->inner.scorable))
+                                return candidate;
+                }
+                if (auto source = std::dynamic_pointer_cast<BeamSource>(candidate))
+                {
+                        if ((source->mid.object_id == object_id && source->mid.scorable) ||
+                                (source->inner.object_id == object_id && source->inner.scorable))
+                                return candidate;
+                }
+        }
+        return nullptr;
 }
 
 } // namespace
@@ -114,13 +167,14 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 if (hit_any)
                 {
                         bm->length = closest;
-                        if (hit_rec.object_id >= 0 &&
-                                hit_rec.object_id < static_cast<int>(objects.size()))
+                        auto scorable_obj = resolve_scorable_object(objects, hit_rec.object_id);
+                        if (scorable_obj && scorable_obj->shape_type() == ShapeType::BeamTarget)
+                                std::static_pointer_cast<BeamTarget>(scorable_obj)->start_goal();
+                        if (scorable_obj)
                         {
-                                auto hit_obj = objects[hit_rec.object_id];
-                                if (hit_obj->shape_type() == ShapeType::BeamTarget &&
-                                        hit_obj->scorable)
-                                        std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
+                                double area =
+                                        compute_spotlight_area(forward.dir, hit_rec.normal, closest);
+                                spotlight_score += area;
                         }
                         const Material &hit_mat = mats[hit_rec.material_id];
                         if (hit_mat.mirror)
@@ -278,10 +332,16 @@ void Scene::update_beams(const std::vector<Material> &mats)
 {
         std::vector<std::shared_ptr<Laser>> roots;
         std::unordered_map<int, int> id_map;
+        spotlight_score = 0.0;
         prepare_beam_roots(roots, id_map);
         process_beams(mats, roots, id_map);
         remap_light_ids(id_map);
         reflect_lights(mats);
+}
+
+double Scene::get_spotlight_score() const
+{
+        return spotlight_score;
 }
 
 void Scene::update_goal_targets(double dt, std::vector<Material> &mats)
