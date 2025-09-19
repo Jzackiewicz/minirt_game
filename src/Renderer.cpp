@@ -28,49 +28,55 @@ static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
         return a * (1.0 - alpha) + b * alpha;
 }
 
-struct ScoreContext
+struct OrthonormalBasis
 {
-        double pixel_solid_angle = 0.0;
-        double *accumulator = nullptr;
+        Vec3 u;
+        Vec3 v;
+        Vec3 w;
 };
 
-static double estimate_patch_area(const Ray &view_ray, const HitRecord &rec,
-                                                               double pixel_solid_angle)
+static OrthonormalBasis make_basis(const Vec3 &axis)
 {
-        if (pixel_solid_angle <= 0.0)
-                return 0.0;
-        Vec3 to_camera = view_ray.orig - rec.p;
-        double dist2 = to_camera.length_squared();
-        if (dist2 <= 1e-12)
-                return 0.0;
-        double dist = std::sqrt(dist2);
-        Vec3 view_dir = to_camera / dist;
-        double cos_view = Vec3::dot(rec.normal, view_dir);
-        if (cos_view <= 1e-6)
-                return 0.0;
-        return (dist2 / cos_view) * pixel_solid_angle;
+        Vec3 w = axis;
+        double len = w.length();
+        if (len <= 1e-12)
+                w = Vec3(0.0, 0.0, 1.0);
+        else
+                w = w / len;
+        Vec3 helper = (std::fabs(w.x) > 0.9) ? Vec3(0.0, 1.0, 0.0) : Vec3(1.0, 0.0, 0.0);
+        Vec3 u = Vec3::cross(helper, w);
+        double ulen = u.length();
+        if (ulen <= 1e-12)
+        {
+                helper = Vec3(0.0, 1.0, 0.0);
+                u = Vec3::cross(helper, w);
+                ulen = u.length();
+        }
+        if (ulen <= 1e-12)
+                u = Vec3(1.0, 0.0, 0.0);
+        else
+                u = u / ulen;
+        Vec3 v = Vec3::cross(w, u);
+        return {u, v, w};
 }
 
-static double compute_pixel_solid_angle(const Camera &cam, double u, double v,
-                                                                        double du, double dv)
+static Vec3 sample_cone_direction(const OrthonormalBasis &basis, double cutoff_cos,
+                                                               double u1, double u2)
 {
-        double fov_rad = cam.fov_deg * M_PI / 180.0;
-        double half_h = std::tan(fov_rad * 0.5);
-        double half_w = cam.aspect * half_h;
-        Vec3 dir = cam.forward + (2 * u - 1) * half_w * cam.right +
-                           (1 - 2 * v) * half_h * cam.up;
-        Vec3 dd_du = 2 * half_w * cam.right;
-        Vec3 dd_dv = -2 * half_h * cam.up;
-        double norm = dir.length();
-        if (norm <= 1e-12)
-                return 0.0;
-        double dot_u = Vec3::dot(dir, dd_du);
-        double dot_v = Vec3::dot(dir, dd_dv);
-        Vec3 dhat_du = dd_du / norm - dir * (dot_u / (norm * norm * norm));
-        Vec3 dhat_dv = dd_dv / norm - dir * (dot_v / (norm * norm * norm));
-        Vec3 cross = Vec3::cross(dhat_du, dhat_dv);
-        double solid = cross.length() * du * dv;
-        return std::abs(solid);
+        double cos_theta = 1.0 - u1 * (1.0 - cutoff_cos);
+        cos_theta = std::clamp(cos_theta, -1.0, 1.0);
+        double sin_theta = std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
+        double phi = 2.0 * M_PI * u2;
+        double x = sin_theta * std::cos(phi);
+        double y = sin_theta * std::sin(phi);
+        double z = cos_theta;
+        return basis.u * x + basis.v * y + basis.w * z;
+}
+
+static bool light_ignores(const PointLight &L, int object_id)
+{
+        return std::find(L.ignore_ids.begin(), L.ignore_ids.end(), object_id) !=
+                       L.ignore_ids.end();
 }
 
 static bool light_through(const Scene &scene, const std::vector<Material> &mats,
@@ -121,15 +127,112 @@ static bool light_through(const Scene &scene, const std::vector<Material> &mats,
         return true;
 }
 
+static double score_spotlight_sample(const Scene &scene,
+                                                                const std::vector<Material> &mats,
+                                                                const PointLight &L, const Vec3 &dir,
+                                                                double max_dist, double sample_weight)
+{
+        Ray ray(L.position, dir.normalized());
+        double tmin = 1e-4;
+        while (tmin < max_dist)
+        {
+                HitRecord best_rec;
+                HittablePtr hit_obj;
+                bool found = false;
+                double closest = max_dist;
+                for (const auto &obj : scene.objects)
+                {
+                        if (!obj)
+                                continue;
+                        if (obj->is_beam())
+                                continue;
+                        if (light_ignores(L, obj->object_id))
+                                continue;
+                        HitRecord tmp;
+                        if (obj->hit(ray, tmin, closest, tmp))
+                        {
+                                closest = tmp.t;
+                                best_rec = tmp;
+                                hit_obj = obj;
+                                found = true;
+                        }
+                }
+                if (!found)
+                        return 0.0;
+                const Material &mat = mats[best_rec.material_id];
+                if (!hit_obj->scorable)
+                {
+                        if (mat.alpha < 1.0 && !hit_obj->blocks_when_transparent())
+                        {
+                                tmin = closest + 1e-4;
+                                continue;
+                        }
+                        return 0.0;
+                }
+                Vec3 dummy_color;
+                double dummy_intensity;
+                if (!light_through(scene, mats, best_rec.p, L, dummy_color,
+                                                    dummy_intensity))
+                {
+                        return 0.0;
+                }
+                double cos_incidence =
+                        std::max(0.0, Vec3::dot(best_rec.normal, -ray.dir));
+                if (cos_incidence <= 1e-6)
+                        return 0.0;
+                double distance = closest;
+                if (distance <= 0.0)
+                        distance = (best_rec.p - L.position).length();
+                return (distance * distance / cos_incidence) * sample_weight;
+        }
+        return 0.0;
+}
+
+static double compute_beam_score(const Scene &scene,
+                                                         const std::vector<Material> &mats)
+{
+        constexpr int grid = 8;
+        constexpr int sample_count = grid * grid;
+        double total = 0.0;
+        for (const auto &L : scene.lights)
+        {
+                if (!L.beam_spotlight || L.reflected)
+                        continue;
+                if (L.direction.length_squared() <= 1e-12)
+                        continue;
+                double cutoff = std::clamp(L.cutoff_cos, -1.0, 1.0);
+                double cone_solid_angle =
+                        (cutoff > -1.0) ? 2.0 * M_PI * (1.0 - cutoff) : 4.0 * M_PI;
+                if (cone_solid_angle <= 1e-12)
+                        continue;
+                double max_dist = (L.range > 0.0) ? L.range : 1e9;
+                OrthonormalBasis basis = make_basis(L.direction);
+                double sample_weight = cone_solid_angle / static_cast<double>(sample_count);
+                for (int y = 0; y < grid; ++y)
+                {
+                        for (int x = 0; x < grid; ++x)
+                        {
+                                double u1 = (y + 0.5) / static_cast<double>(grid);
+                                double u2 = (x + 0.5) / static_cast<double>(grid);
+                                Vec3 dir = sample_cone_direction(basis, cutoff, u1, u2);
+                                total += score_spotlight_sample(scene, mats, L, dir,
+                                                                 max_dist, sample_weight);
+                        }
+                }
+        }
+        return total;
+}
+
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                                           const Ray &r, std::mt19937 &rng,
                                           std::uniform_real_distribution<double> &dist,
-                                          int depth = 0, ScoreContext *score_ctx = nullptr)
+                                          int depth = 0)
 {
-	if (depth > 10)
-		return Vec3(0.0, 0.0, 0.0);
-	HitRecord rec;
-	if (!scene.hit(r, 1e-4, 1e9, rec))
+        (void)dist;
+        if (depth > 10)
+                return Vec3(0.0, 0.0, 0.0);
+        HitRecord rec;
+        if (!scene.hit(r, 1e-4, 1e9, rec))
 	{
 		return Vec3(0.0, 0.0, 0.0);
 	}
@@ -160,21 +263,15 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 				   static_cast<int>(std::floor(rec.p.z * 5))) &
 				  1;
 		col = chk ? base : inv;
-	}
+        }
         Vec3 sum(col.x * scene.ambient.color.x * scene.ambient.intensity,
                          col.y * scene.ambient.color.y * scene.ambient.intensity,
                          col.z * scene.ambient.color.z * scene.ambient.intensity);
-        bool can_score = score_ctx && score_ctx->accumulator &&
-                                         score_ctx->pixel_solid_angle > 0.0 && depth == 0 &&
-                                         scorable_obj;
-        bool scored = false;
-        double patch_area = 0.0;
         for (const auto &L : scene.lights)
         {
                 if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
                                           rec.object_id) != L.ignore_ids.end())
                         continue;
-                bool beam_light = L.beam_spotlight && !L.reflected;
                 Vec3 to_light = L.position - rec.p;
                 double dist = to_light.length();
                 Vec3 ldir = to_light / dist;
@@ -197,17 +294,6 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                         std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
                         m.specular_k;
                 double diff_term = lintensity * diff * atten;
-                if (beam_light && can_score && !scored && diff_term > 1e-6)
-                {
-                        if (patch_area <= 0.0)
-                                patch_area =
-                                        estimate_patch_area(r, rec, score_ctx->pixel_solid_angle);
-                        if (patch_area > 0.0)
-                        {
-                                *score_ctx->accumulator += patch_area;
-                                scored = true;
-                        }
-                }
                 sum += Vec3(col.x * lcolor.x * lintensity * diff * atten +
                                                 lcolor.x * spec * atten,
                                         col.y * lcolor.y * lintensity * diff * atten +
@@ -215,30 +301,30 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                                         col.z * lcolor.z * lintensity * diff * atten +
                                                 lcolor.z * spec * atten);
         }
-	if (m.mirror)
-	{
-		Vec3 refl_dir =
-			r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
-		Ray refl(rec.p + refl_dir * 1e-4, refl_dir);
+        if (m.mirror)
+        {
+                Vec3 refl_dir =
+                        r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
+                Ray refl(rec.p + refl_dir * 1e-4, refl_dir);
                 Vec3 refl_col =
-                        trace_ray(scene, mats, refl, rng, dist, depth + 1, score_ctx);
-		double refl_ratio = REFLECTION / 100.0;
-		sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
-	}
-	double alpha = m.alpha;
+                        trace_ray(scene, mats, refl, rng, dist, depth + 1);
+                double refl_ratio = REFLECTION / 100.0;
+                sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
+        }
+        double alpha = m.alpha;
 	if (m.random_alpha)
 	{
 		double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
 		alpha *= (1.0 - tpos);
 	}
-	if (alpha < 1.0)
-	{
-		Ray next(rec.p + r.dir * 1e-4, r.dir);
+        if (alpha < 1.0)
+        {
+                Ray next(rec.p + r.dir * 1e-4, r.dir);
                 Vec3 behind =
-                        trace_ray(scene, mats, next, rng, dist, depth + 1, score_ctx);
-		return sum * alpha + behind * (1.0 - alpha);
-	}
-	return sum;
+                        trace_ray(scene, mats, next, rng, dist, depth + 1);
+                return sum * alpha + behind * (1.0 - alpha);
+        }
+        return sum;
 }
 
 Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
@@ -735,16 +821,13 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                                        int RW, int RH, int W, int H, int T,
                                                        std::vector<Material> &mats)
 {
+        st.last_score = compute_beam_score(scene, mats);
         std::atomic<int> next_row{0};
-        std::vector<double> thread_scores(T, 0.0);
-        double du = (RW > 0) ? 1.0 / static_cast<double>(RW) : 0.0;
-        double dv = (RH > 0) ? 1.0 / static_cast<double>(RH) : 0.0;
 
-        auto worker = [&](int index)
+        auto worker = [&]()
         {
                 std::mt19937 rng(std::random_device{}());
                 std::uniform_real_distribution<double> dist(0.0, 1.0);
-                double &local_score = thread_scores[index];
                 for (;;)
                 {
                         int y = next_row.fetch_add(1);
@@ -755,9 +838,7 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                 double u = (x + 0.5) / static_cast<double>(RW);
                                 double v = (y + 0.5) / static_cast<double>(RH);
                                 Ray r = cam.ray_through(u, v);
-                                double solid_angle = compute_pixel_solid_angle(cam, u, v, du, dv);
-                                ScoreContext ctx{solid_angle, &local_score};
-                                Vec3 col = trace_ray(scene, mats, r, rng, dist, 0, &ctx);
+                                Vec3 col = trace_ray(scene, mats, r, rng, dist, 0);
                                 framebuffer[y * RW + x] = col;
                         }
                 }
@@ -766,14 +847,9 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         std::vector<std::thread> pool;
         pool.reserve(T);
         for (int i = 0; i < T; ++i)
-                pool.emplace_back(worker, i);
+                pool.emplace_back(worker);
         for (auto &th : pool)
                 th.join();
-
-        double frame_score = 0.0;
-        for (double value : thread_scores)
-                frame_score += value;
-        st.last_score = frame_score;
 
         for (int y = 0; y < RH; ++y)
         {
