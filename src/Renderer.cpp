@@ -49,6 +49,8 @@ static bool light_through(const Scene &scene, const std::vector<Material> &mats,
                 int hit_mat = -1;
                 for (const auto &obj : scene.objects)
                 {
+                        if (!obj->casts_shadow())
+                                continue;
                         if (obj->is_beam())
                                 continue;
                         if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
