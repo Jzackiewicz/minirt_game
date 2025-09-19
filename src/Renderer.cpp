@@ -127,10 +127,10 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
         const double max_range = (L.range > 0.0) ? L.range : 1e9;
         double travelled = 0.0;
         Vec3 origin = L.position;
-        double intensity = L.intensity;
+        double transmittance = 1.0;
         double total_area = 0.0;
 
-        while (travelled < max_range - 1e-4 && intensity > 1e-4)
+        while (travelled < max_range - 1e-4 && transmittance > 1e-4)
         {
                 Ray ray(origin, dir);
                 double closest = max_range - travelled;
@@ -170,19 +170,9 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                                         std::max(0.0, Vec3::dot(rec.normal, ldir));
                                 if (cos_incident > 1e-6)
                                 {
-                                        double atten = 1.0 / std::max(dist2, 1e-6);
-                                        if (L.range > 0.0)
-                                        {
-                                                atten *=
-                                                        std::max(0.0, 1.0 - dist / L.range);
-                                        }
-                                        double incident_intensity = intensity * atten;
-                                        if (incident_intensity > 1e-6)
-                                        {
-                                                total_area += ((dist2 * sample_weight) /
+                                        total_area += ((dist2 * sample_weight) /
                                                                        cos_incident) *
-                                                              incident_intensity;
-                                        }
+                                                      (L.intensity * transmittance);
                                 }
                         }
                 }
@@ -191,8 +181,8 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                 if (mat.alpha >= 1.0)
                         break;
 
-                intensity *= (1.0 - mat.alpha);
-                if (intensity <= 1e-4)
+                transmittance *= (1.0 - mat.alpha);
+                if (transmittance <= 1e-4)
                         break;
 
                 travelled += 1e-4;
