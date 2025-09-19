@@ -41,6 +41,12 @@ class Renderer
                                           std::vector<unsigned char> &pixels, int RW,
                                           int RH, int W, int H, int T,
                                           std::vector<Material> &mats);
+        void auto_save_if_needed(RenderState &st, const std::vector<Material> &mats,
+                                                        const std::string &scene_path);
+        void mark_scene_dirty(RenderState &st);
+        bool reload_scene(RenderState &st, std::vector<Material> &mats,
+                                                const std::string &scene_path, int width,
+                                                int height);
         Scene &scene;
         Camera &cam;
 };

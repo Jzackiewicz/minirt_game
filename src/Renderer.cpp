@@ -3,6 +3,7 @@
 #include "Config.hpp"
 #include "Settings.hpp"
 #include "MapSaver.hpp"
+#include "Parser.hpp"
 #include "PauseMenu.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
@@ -22,6 +23,7 @@
 #include <random>
 #include <string>
 #include <thread>
+#include <utility>
 
 static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
 {
@@ -189,6 +191,7 @@ struct Renderer::RenderState
         Vec3 edit_pos;
         int spawn_key = -1;
         double fps = 0.0;
+        bool scene_dirty = false;
 };
 
 /// Initialize SDL window, renderer and texture objects.
@@ -288,6 +291,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                         scene.build_bvh();
                                                         st.edit_dist =
                                                                 (center - cam.origin).length();
+                                                        mark_scene_dirty(st);
                                                 }
                                         }
                                         st.edit_pos = center;
@@ -327,6 +331,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         scene.objects.erase(scene.objects.begin() + st.selected_obj);
                         scene.update_beams(mats);
                         scene.build_bvh();
+                        mark_scene_dirty(st);
                         st.selected_obj = st.selected_mat = -1;
                         st.edit_mode = false;
                         st.rotating = false;
@@ -363,6 +368,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 {
                                         scene.update_beams(mats);
                                         scene.build_bvh();
+                                        mark_scene_dirty(st);
                                 }
                         }
                         else
@@ -370,6 +376,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 double sens = get_mouse_sensitivity();
                                 cam.rotate(-e.motion.xrel * sens,
                                                    -e.motion.yrel * sens);
+                                if (e.motion.xrel != 0 || e.motion.yrel != 0)
+                                        mark_scene_dirty(st);
                         }
                 }
                 else if (e.type == SDL_MOUSEWHEEL)
@@ -416,6 +424,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                 }
                                                 scene.update_beams(mats);
                                                 scene.build_bvh();
+                                                mark_scene_dirty(st);
                                         }
                                 }
                                 else
@@ -427,8 +436,19 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         }
                         else if (st.focused)
                         {
-                                scene.move_camera(cam, cam.up * step, mats);
+                                Vec3 moved = scene.move_camera(cam, cam.up * step, mats);
+                                if (moved.length_squared() > 0.0)
+                                        mark_scene_dirty(st);
                         }
+                }
+                else if (g_developer_mode && st.focused && e.type == SDL_KEYDOWN &&
+                                 e.key.keysym.scancode == SDL_SCANCODE_R)
+                {
+                        if (reload_scene(st, mats, scene_path, W, H))
+                                std::cout << "Reloaded scene from: " << scene_path << "\n";
+                        else
+                                std::cerr << "Failed to reload scene from: " << scene_path
+                                          << "\n";
                 }
                 else if (g_developer_mode && st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_C)
@@ -436,7 +456,10 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         scene.update_beams(mats);
                         scene.build_bvh();
                         if (MapSaver::save(scene_path, scene, cam, mats))
+                        {
                                 std::cout << "Saved scene to: " << scene_path << "\n";
+                                st.scene_dirty = false;
+                        }
                         else
                                 std::cerr << "Failed to save scene to: " << scene_path
                                           << "\n";
@@ -458,6 +481,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         scene.objects.erase(scene.objects.begin() + st.selected_obj);
                                         scene.update_beams(mats);
                                         scene.build_bvh();
+                                        mark_scene_dirty(st);
                                         st.selected_obj = st.selected_mat = -1;
                                         st.edit_mode = false;
                                         st.rotating = false;
@@ -489,6 +513,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 scene.objects.push_back(obj);
                                 scene.update_beams(mats);
                                 scene.build_bvh();
+                                mark_scene_dirty(st);
                                 st.selected_obj = oid;
                                 st.selected_mat = mid;
                                 mats[mid].checkered = true;
@@ -538,21 +563,28 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
                 forward_xz = forward_xz.normalized();
         Vec3 right_xz = cam.right;
 
+        auto move_camera_if_needed = [&](const Vec3 &delta)
+        {
+                Vec3 moved = scene.move_camera(cam, delta, mats);
+                if (moved.length_squared() > 0.0)
+                        mark_scene_dirty(st);
+        };
+
         if (st.edit_mode)
         {
                 double cam_speed = CAMERA_MOVE_SPEED * dt;
                 if (state[SDL_SCANCODE_W])
-                        scene.move_camera(cam, forward_xz * cam_speed, mats);
+                        move_camera_if_needed(forward_xz * cam_speed);
                 if (state[SDL_SCANCODE_S])
-                        scene.move_camera(cam, forward_xz * -cam_speed, mats);
+                        move_camera_if_needed(forward_xz * -cam_speed);
                 if (state[SDL_SCANCODE_A])
-                        scene.move_camera(cam, right_xz * -cam_speed, mats);
+                        move_camera_if_needed(right_xz * -cam_speed);
                 if (state[SDL_SCANCODE_D])
-                        scene.move_camera(cam, right_xz * cam_speed, mats);
+                        move_camera_if_needed(right_xz * cam_speed);
                 if (state[SDL_SCANCODE_SPACE])
-                        scene.move_camera(cam, Vec3(0, 1, 0) * cam_speed, mats);
+                        move_camera_if_needed(Vec3(0, 1, 0) * cam_speed);
                 if (state[SDL_SCANCODE_LCTRL])
-                        scene.move_camera(cam, Vec3(0, -1, 0) * cam_speed, mats);
+                        move_camera_if_needed(Vec3(0, -1, 0) * cam_speed);
 
                 double rot_speed = OBJECT_ROTATE_SPEED * dt;
                 bool changed = false;
@@ -578,23 +610,24 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
                 {
                         scene.update_beams(mats);
                         scene.build_bvh();
+                        mark_scene_dirty(st);
                 }
         }
         else if (st.focused)
         {
                 double speed = CAMERA_MOVE_SPEED * dt;
                 if (state[SDL_SCANCODE_W])
-                        scene.move_camera(cam, forward_xz * speed, mats);
+                        move_camera_if_needed(forward_xz * speed);
                 if (state[SDL_SCANCODE_S])
-                        scene.move_camera(cam, forward_xz * -speed, mats);
+                        move_camera_if_needed(forward_xz * -speed);
                 if (state[SDL_SCANCODE_A])
-                        scene.move_camera(cam, right_xz * -speed, mats);
+                        move_camera_if_needed(right_xz * -speed);
                 if (state[SDL_SCANCODE_D])
-                        scene.move_camera(cam, right_xz * speed, mats);
+                        move_camera_if_needed(right_xz * speed);
                 if (state[SDL_SCANCODE_SPACE])
-                        scene.move_camera(cam, Vec3(0, 1, 0) * speed, mats);
+                        move_camera_if_needed(Vec3(0, 1, 0) * speed);
                 if (state[SDL_SCANCODE_LCTRL])
-                        scene.move_camera(cam, Vec3(0, -1, 0) * speed, mats);
+                        move_camera_if_needed(Vec3(0, -1, 0) * speed);
         }
 }
 
@@ -619,13 +652,18 @@ void Renderer::update_selection(RenderState &st,
                         {
                                 scene.update_beams(mats);
                                 scene.build_bvh();
+                                mark_scene_dirty(st);
                         }
                 }
 
                 Vec3 cam_target = st.edit_pos - cam.forward * st.edit_dist;
                 Vec3 cam_delta = cam_target - cam.origin;
                 if (cam_delta.length_squared() > 0)
-                        scene.move_camera(cam, cam_delta, mats);
+                {
+                        Vec3 moved = scene.move_camera(cam, cam_delta, mats);
+                        if (moved.length_squared() > 0.0)
+                                mark_scene_dirty(st);
+                }
                 st.edit_dist = (st.edit_pos - cam.origin).length();
         }
         else
@@ -810,9 +848,78 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_RenderPresent(ren);
 }
 
+void Renderer::mark_scene_dirty(RenderState &st)
+{
+        if (g_developer_mode)
+                st.scene_dirty = true;
+}
+
+void Renderer::auto_save_if_needed(RenderState &st, const std::vector<Material> &mats,
+                                                        const std::string &scene_path)
+{
+        if (!g_developer_mode)
+        {
+                st.scene_dirty = false;
+                return;
+        }
+        if (!st.scene_dirty)
+                return;
+        if (scene_path.empty())
+        {
+                st.scene_dirty = false;
+                return;
+        }
+        if (!MapSaver::save(scene_path, scene, cam, mats))
+        {
+                std::cerr << "Failed to auto-save scene to: " << scene_path << "\n";
+                return;
+        }
+        st.scene_dirty = false;
+}
+
+bool Renderer::reload_scene(RenderState &st, std::vector<Material> &mats,
+                                                   const std::string &scene_path, int width,
+                                                   int height)
+{
+        if (scene_path.empty())
+                return false;
+
+        int safe_width = std::max(1, width);
+        int safe_height = std::max(1, height);
+
+        Scene new_scene;
+        Camera new_camera({0, 0, -10}, {0, 0, 0}, 60.0,
+                                          static_cast<double>(safe_width) /
+                                                  static_cast<double>(safe_height));
+        if (!Parser::parse_rt_file(scene_path, new_scene, new_camera, safe_width,
+                                   safe_height))
+                return false;
+
+        std::vector<Material> new_materials = Parser::get_materials();
+
+        scene = std::move(new_scene);
+        cam = new_camera;
+        mats = std::move(new_materials);
+        scene.update_beams(mats);
+        scene.build_bvh();
+
+        st.scene_dirty = false;
+        st.edit_mode = false;
+        st.rotating = false;
+        st.hover_obj = -1;
+        st.hover_mat = -1;
+        st.selected_obj = -1;
+        st.selected_mat = -1;
+        st.spawn_key = -1;
+        st.edit_dist = 0.0;
+        st.edit_pos = Vec3();
+
+        return true;
+}
+
 void Renderer::render_ppm(const std::string &path,
-						  const std::vector<Material> &mats,
-						  const RenderSettings &rset)
+                                                  const std::vector<Material> &mats,
+                                                  const RenderSettings &rset)
 {
 	const float scale = std::max(1.0f, rset.downscale);
 	const int W = std::max(1, static_cast<int>(rset.width / scale));
@@ -973,6 +1080,7 @@ void Renderer::render_window(std::vector<Material> &mats,
                 handle_keyboard(st, dt, mats);
                 scene.update_goal_targets(dt, mats);
                 update_selection(st, mats);
+                auto_save_if_needed(st, mats, scene_path);
                 render_frame(st, ren, tex, framebuffer, pixels, RW, RH, W, H, T,
                                          mats);
         }
