@@ -815,7 +815,8 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
                                           std::vector<int>{beam->laser->object_id,
                                                            beam->source->object_id,
                                                            beam->source->mid.object_id},
-                                          beam->source->object_id, dir_norm, cone_cos, length);
+                                          beam->source->object_id, dir_norm, cone_cos, length,
+                                          false, true);
         }
         else
         {
@@ -824,7 +825,8 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
                 scene.lights.emplace_back(position, color_unit, intensity,
                                           std::vector<int>{beam->source->object_id,
                                                            beam->source->mid.object_id},
-                                          beam->source->object_id, dir_norm, cone_cos, length);
+                                          beam->source->object_id, dir_norm, cone_cos, length,
+                                          false, true);
         }
         return true;
 }
