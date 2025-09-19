@@ -22,10 +22,94 @@
 #include <random>
 #include <string>
 #include <thread>
+#include <mutex>
+#include <unordered_set>
 
 static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
 {
         return a * (1.0 - alpha) + b * alpha;
+}
+
+struct ScoreKey
+{
+        int material_id;
+        int light_index;
+
+        bool operator==(const ScoreKey &other) const noexcept
+        {
+                return material_id == other.material_id && light_index == other.light_index;
+        }
+};
+
+struct ScoreKeyHash
+{
+        std::size_t operator()(const ScoreKey &key) const noexcept
+        {
+                std::size_t h1 = std::hash<int>{}(key.material_id);
+                std::size_t h2 = std::hash<int>{}(key.light_index);
+                return h1 ^ (h2 << 1);
+        }
+};
+
+struct ScoreContext
+{
+        std::unordered_set<ScoreKey, ScoreKeyHash> counted_pairs;
+        double total_area = 0.0;
+        std::mutex mutex;
+};
+
+static double compute_spot_area(const Scene &scene, const PointLight &light,
+                                                           int material_id, const Vec3 &sample_point)
+{
+        if (light.cutoff_cos <= 0.0)
+                return 0.0;
+        double cos_theta = std::clamp(light.cutoff_cos, 0.0, 1.0);
+        if (cos_theta <= 1e-6)
+                return 0.0;
+        double sin_sq = std::max(0.0, 1.0 - cos_theta * cos_theta);
+        if (sin_sq <= 0.0)
+                return 0.0;
+        double sin_theta = std::sqrt(sin_sq);
+        double tan_theta = sin_theta / cos_theta;
+        Ray axis_ray(light.position, light.direction);
+        double max_dist = (light.range > 0.0) ? light.range : 1e9;
+        HitRecord axis_hit;
+        bool hit_any = false;
+        for (const auto &obj : scene.objects)
+        {
+                if (obj->is_beam())
+                        continue;
+                if (std::find(light.ignore_ids.begin(), light.ignore_ids.end(), obj->object_id) !=
+                                light.ignore_ids.end())
+                        continue;
+                HitRecord tmp;
+                if (obj->hit(axis_ray, 1e-4, max_dist, tmp))
+                {
+                        max_dist = tmp.t;
+                        axis_hit = tmp;
+                        hit_any = true;
+                }
+        }
+        double axis_dist = 0.0;
+        if (hit_any && axis_hit.material_id == material_id)
+        {
+                axis_dist = axis_hit.t;
+        }
+        else
+        {
+                Vec3 to_point = sample_point - light.position;
+                axis_dist = Vec3::dot(to_point, light.direction);
+                axis_dist = std::max(0.0, axis_dist);
+                if (light.range > 0.0)
+                        axis_dist = std::min(axis_dist, light.range);
+        }
+        if (axis_dist <= 0.0)
+                return 0.0;
+        double radius = axis_dist * tan_theta;
+        if (radius <= 0.0)
+                return 0.0;
+        constexpr double kPi = 3.14159265358979323846;
+        return kPi * radius * radius;
 }
 
 static bool light_through(const Scene &scene, const std::vector<Material> &mats,
@@ -77,9 +161,9 @@ static bool light_through(const Scene &scene, const std::vector<Material> &mats,
 }
 
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
-					  const Ray &r, std::mt19937 &rng,
-					  std::uniform_real_distribution<double> &dist,
-					  int depth = 0)
+                                          const Ray &r, std::mt19937 &rng,
+                                          std::uniform_real_distribution<double> &dist,
+                                          ScoreContext *score_ctx, int depth = 0)
 {
 	if (depth > 10)
 		return Vec3(0.0, 0.0, 0.0);
@@ -114,11 +198,12 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	Vec3 sum(col.x * scene.ambient.color.x * scene.ambient.intensity,
 			 col.y * scene.ambient.color.y * scene.ambient.intensity,
 			 col.z * scene.ambient.color.z * scene.ambient.intensity);
-	for (const auto &L : scene.lights)
-	{
-		if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
-					  rec.object_id) != L.ignore_ids.end())
-			continue;
+        for (size_t light_idx = 0; light_idx < scene.lights.size(); ++light_idx)
+        {
+                const auto &L = scene.lights[light_idx];
+                if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
+                                          rec.object_id) != L.ignore_ids.end())
+                        continue;
                 Vec3 to_light = L.position - rec.p;
                 double dist = to_light.length();
                 Vec3 ldir = to_light / dist;
@@ -146,29 +231,41 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                                                 lcolor.y * spec * atten,
                                         col.z * lcolor.z * lintensity * diff * atten +
                                                 lcolor.z * spec * atten);
+                if (score_ctx && m.scorable && L.cutoff_cos > -1.0 &&
+                        (diff > 0.0 || spec > 0.0))
+                {
+                        ScoreKey key{rec.material_id, static_cast<int>(light_idx)};
+                        std::lock_guard<std::mutex> guard(score_ctx->mutex);
+                        if (score_ctx->counted_pairs.insert(key).second)
+                        {
+                                double area = compute_spot_area(scene, L, rec.material_id, rec.p);
+                                if (area > 0.0)
+                                        score_ctx->total_area += area;
+                        }
+                }
         }
-	if (m.mirror)
-	{
-		Vec3 refl_dir =
-			r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
-		Ray refl(rec.p + refl_dir * 1e-4, refl_dir);
-		Vec3 refl_col = trace_ray(scene, mats, refl, rng, dist, depth + 1);
-		double refl_ratio = REFLECTION / 100.0;
-		sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
-	}
+        if (m.mirror)
+        {
+                Vec3 refl_dir =
+                        r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
+                Ray refl(rec.p + refl_dir * 1e-4, refl_dir);
+                Vec3 refl_col = trace_ray(scene, mats, refl, rng, dist, score_ctx, depth + 1);
+                double refl_ratio = REFLECTION / 100.0;
+                sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
+        }
 	double alpha = m.alpha;
 	if (m.random_alpha)
 	{
 		double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
 		alpha *= (1.0 - tpos);
 	}
-	if (alpha < 1.0)
-	{
-		Ray next(rec.p + r.dir * 1e-4, r.dir);
-		Vec3 behind = trace_ray(scene, mats, next, rng, dist, depth + 1);
-		return sum * alpha + behind * (1.0 - alpha);
-	}
-	return sum;
+        if (alpha < 1.0)
+        {
+                Ray next(rec.p + r.dir * 1e-4, r.dir);
+                Vec3 behind = trace_ray(scene, mats, next, rng, dist, score_ctx, depth + 1);
+                return sum * alpha + behind * (1.0 - alpha);
+        }
+        return sum;
 }
 
 Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
@@ -187,6 +284,8 @@ struct Renderer::RenderState
         Vec3 edit_pos;
         int spawn_key = -1;
         double fps = 0.0;
+        ScoreContext score_ctx;
+        double score = 0.0;
 };
 
 /// Initialize SDL window, renderer and texture objects.
@@ -665,6 +764,12 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                                        std::vector<Material> &mats)
 {
         std::atomic<int> next_row{0};
+        {
+                std::lock_guard<std::mutex> guard(st.score_ctx.mutex);
+                st.score_ctx.counted_pairs.clear();
+                st.score_ctx.total_area = 0.0;
+        }
+        ScoreContext *score_ctx = &st.score_ctx;
         auto worker = [&]()
         {
                 std::mt19937 rng(std::random_device{}());
@@ -679,7 +784,7 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                 double u = (x + 0.5) / RW;
                                 double v = (y + 0.5) / RH;
                                 Ray r = cam.ray_through(u, v);
-                                Vec3 col = trace_ray(scene, mats, r, rng, dist);
+                                Vec3 col = trace_ray(scene, mats, r, rng, dist, score_ctx);
                                 framebuffer[y * RW + x] = col;
                         }
                 }
@@ -691,6 +796,11 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                 pool.emplace_back(worker);
         for (auto &th : pool)
                 th.join();
+
+        {
+                std::lock_guard<std::mutex> guard(st.score_ctx.mutex);
+                st.score = st.score_ctx.total_area;
+        }
 
         for (int y = 0; y < RH; ++y)
         {
@@ -713,6 +823,14 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
+        SDL_Color score_color{255, 255, 255, 255};
+        int score_scale = 2;
+        double display_score = std::max(0.0, st.score);
+        char score_buf[64];
+        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.1f m^2", display_score);
+        CustomCharacter::draw_text(ren, score_buf, 5, 5, score_color, score_scale);
+        int score_text_height = 7 * score_scale;
+        int legend_start_y = 5 + score_text_height + 4;
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -791,7 +909,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    legend_start_y + i * (7 * scale + 2), red,
+                                                    scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
@@ -836,13 +955,13 @@ void Renderer::render_ppm(const std::string &path,
 			for (int x = 0; x < W; ++x)
 			{
 				double u = (x + 0.5) / W;
-				double v = (y + 0.5) / H;
-				Ray r = cam.ray_through(u, v);
-				Vec3 col = trace_ray(scene, mats, r, rng, dist);
-				framebuffer[y * W + x] = col;
-			}
-		}
-	};
+                                double v = (y + 0.5) / H;
+                                Ray r = cam.ray_through(u, v);
+                                Vec3 col = trace_ray(scene, mats, r, rng, dist, nullptr);
+                                framebuffer[y * W + x] = col;
+                        }
+                }
+        };
 
 	std::vector<std::thread> pool;
 	pool.reserve(T);

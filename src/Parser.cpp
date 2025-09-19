@@ -494,6 +494,7 @@ bool process_plane(const TableData &table, Scene &scene, int &oid, int &mid,
         plane->movable = movable;
         plane->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        materials.back().scorable = scorable;
         scene.objects.push_back(plane);
         ++mid;
         return true;
@@ -543,6 +544,7 @@ bool process_sphere(const TableData &table, Scene &scene, int &oid, int &mid,
         sphere->movable = movable;
         sphere->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        materials.back().scorable = scorable;
         scene.objects.push_back(sphere);
         ++mid;
         return true;
@@ -601,6 +603,7 @@ bool process_cube(const TableData &table, Scene &scene, int &oid, int &mid,
         cube->movable = movable;
         cube->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        materials.back().scorable = scorable;
         scene.objects.push_back(cube);
         ++mid;
         return true;
@@ -656,6 +659,7 @@ bool process_cylinder(const TableData &table, Scene &scene, int &oid, int &mid,
         cylinder->movable = movable;
         cylinder->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        materials.back().scorable = scorable;
         scene.objects.push_back(cylinder);
         ++mid;
         return true;
@@ -711,6 +715,7 @@ bool process_cone(const TableData &table, Scene &scene, int &oid, int &mid,
         cone->movable = movable;
         cone->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        materials.back().scorable = scorable;
         scene.objects.push_back(cone);
         ++mid;
         return true;
@@ -781,18 +786,21 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
         materials.back().color = Vec3(1.0, 1.0, 1.0);
         materials.back().base_color = materials.back().color;
         materials.back().alpha = 0.67;
+        materials.back().scorable = scorable_flag;
         int big_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = (Vec3(1.0, 1.0, 1.0) + color_unit) * 0.5;
         materials.back().base_color = materials.back().color;
         materials.back().alpha = 0.33;
+        materials.back().scorable = scorable_flag;
         int mid_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = color_unit;
         materials.back().base_color = color_unit;
         materials.back().alpha = 1.0;
+        materials.back().scorable = scorable_flag;
         int small_mat = mid++;
 
         auto beam = std::make_shared<Beam>(position, dir_norm, beam_radius, length, intensity,
@@ -863,18 +871,21 @@ bool process_beam_target(const TableData &table, Scene &scene, int &oid, int &mi
         materials.back().color = Vec3(0.0, 0.0, 0.0);
         materials.back().base_color = materials.back().color;
         materials.back().alpha = 0.33;
+        materials.back().scorable = scorable;
         int big_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = color_unit * 0.5;
         materials.back().base_color = materials.back().color;
         materials.back().alpha = 0.67;
+        materials.back().scorable = scorable;
         int mid_mat = mid++;
 
         materials.emplace_back();
         materials.back().color = color_unit;
         materials.back().base_color = color_unit;
         materials.back().alpha = 1.0;
+        materials.back().scorable = scorable;
         int small_mat = mid++;
 
         auto target = std::make_shared<BeamTarget>(position, radius, oid++, big_mat, mid_mat, small_mat);
