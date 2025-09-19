@@ -177,7 +177,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 lights.emplace_back(bm->path.orig, light_col,
                                                         bm->light_intensity * ratio,
                                                         std::vector<int>{bm->object_id, pl.hit_id},
-                                                        bm->object_id, bm->path.dir, cone_cos, bm->length);
+                                                        bm->object_id, bm->path.dir, cone_cos, bm->length,
+                                                        false, true);
         }
 }
 
@@ -268,7 +269,8 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
                 std::vector<int> ignore = L.ignore_ids;
                 ignore.push_back(hit_rec.object_id);
                 PointLight new_light(refl_orig, L.color, intensity, ignore, -1,
-                                                         refl_dir, L.cutoff_cos, remain, true);
+                                                         refl_dir, L.cutoff_cos, remain, true,
+                                                         L.beam_light);
                 to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
         }
 }
@@ -291,11 +293,93 @@ void Scene::update_goal_targets(double dt, std::vector<Material> &mats)
                         std::static_pointer_cast<BeamTarget>(obj)->update_goal(dt, mats);
 }
 
+void Scene::update_beam_score(const std::vector<Material> &mats)
+{
+        const double pi = 3.14159265358979323846;
+        double total = 0.0;
+        for (const auto &light : lights)
+        {
+                if (!light.beam_light)
+                        continue;
+                if (light.direction.length_squared() == 0.0)
+                        continue;
+                double range = (light.range > 0.0) ? light.range : 1e9;
+                if (range <= 1e-4)
+                        continue;
+                double cutoff = std::clamp(light.cutoff_cos, -1.0, 1.0);
+                if (cutoff <= -1.0)
+                        continue;
+                double angle = std::acos(cutoff);
+                double tan_theta = std::tan(angle);
+                if (!std::isfinite(tan_theta))
+                        continue;
+                Ray ray(light.position, light.direction.normalized());
+                double remaining = range;
+                while (remaining > 1e-4)
+                {
+                        HitRecord tmp;
+                        HitRecord best;
+                        bool hit_any = false;
+                        double closest = remaining;
+                        for (const auto &obj : objects)
+                        {
+                                if (obj->is_beam())
+                                        continue;
+                                if (obj->object_id == light.attached_id)
+                                        continue;
+                                if (std::find(light.ignore_ids.begin(), light.ignore_ids.end(),
+                                                          obj->object_id) != light.ignore_ids.end())
+                                        continue;
+                                if (obj->hit(ray, 1e-4, closest, tmp))
+                                {
+                                        closest = tmp.t;
+                                        best = tmp;
+                                        hit_any = true;
+                                }
+                        }
+                        if (!hit_any)
+                                break;
+                        Vec3 hit_point = ray.at(closest);
+                        double distance = (hit_point - light.position).length();
+                        std::shared_ptr<Hittable> hit_obj;
+                        if (best.object_id >= 0 &&
+                                best.object_id < static_cast<int>(objects.size()))
+                                hit_obj = objects[best.object_id];
+                        bool allow_pass = false;
+                        if (hit_obj)
+                        {
+                                const Material &mat = mats[best.material_id];
+                                allow_pass = (mat.alpha < 1.0 &&
+                                                         !hit_obj->blocks_when_transparent());
+                                if (hit_obj->scorable)
+                                {
+                                        double cos_incidence = -Vec3::dot(ray.dir, best.normal);
+                                        if (cos_incidence > 1e-6)
+                                        {
+                                                double radius = distance * tan_theta;
+                                                if (radius > 0.0 && std::isfinite(radius))
+                                                {
+                                                        double area = pi * radius * radius / cos_incidence;
+                                                        if (std::isfinite(area))
+                                                                total += area;
+                                                }
+                                        }
+                                }
+                        }
+                        ray.orig = hit_point + ray.dir * 1e-4;
+                        remaining -= closest;
+                        if (!allow_pass)
+                                break;
+                }
+        }
+        current_score = total;
+}
+
 // Construct a bounding volume hierarchy for faster ray queries.
 void Scene::build_bvh()
 {
-	std::vector<HittablePtr> objs;
-	objs.reserve(objects.size());
+        std::vector<HittablePtr> objs;
+        objs.reserve(objects.size());
 	for (auto &o : objects)
 		if (!o->is_plane())
 			objs.push_back(o);

@@ -713,6 +713,19 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
+        int score_scale = 2;
+        int score_y = 5;
+        SDL_Color score_color{255, 255, 255, 255};
+        double score_value = scene.current_score;
+        if (!std::isfinite(score_value) || score_value < 0.0)
+                score_value = 0.0;
+        score_value = std::min(score_value, 9999999.9);
+        char score_buf[64];
+        std::snprintf(score_buf, sizeof(score_buf), "Score: %.1f m^2", score_value);
+        std::string score_text(score_buf);
+        CustomCharacter::draw_text(ren, score_text, 5, score_y, score_color,
+                                   score_scale);
+        int overlay_start_y = score_y + 7 * score_scale + 4;
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -791,7 +804,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                          "MCLICK-DEL"};
                 for (int i = 0; i < 7; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    5 + i * (7 * scale + 2), red, scale);
+                                                    overlay_start_y + i * (7 * scale + 2),
+                                                    red, scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
@@ -971,6 +985,7 @@ void Renderer::render_window(std::vector<Material> &mats,
                 handle_keyboard(st, dt, mats);
                 scene.update_goal_targets(dt, mats);
                 update_selection(st, mats);
+                scene.update_beam_score(mats);
                 render_frame(st, ren, tex, framebuffer, pixels, RW, RH, W, H, T,
                                          mats);
         }

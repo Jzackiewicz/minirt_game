@@ -5,9 +5,9 @@
 
 class PointLight
 {
-	public:
-	Vec3 position;
-	Vec3 color;
+        public:
+        Vec3 position;
+        Vec3 color;
         double intensity;
         std::vector<int> ignore_ids;
         int attached_id;
@@ -15,11 +15,13 @@ class PointLight
         double cutoff_cos;
         double range;
         bool reflected;
+        bool beam_light;
 
         PointLight(const Vec3 &p, const Vec3 &c, double i,
                            std::vector<int> ignore_ids = {}, int attached_id = -1,
                            const Vec3 &dir = Vec3(0, 0, 0), double cutoff_cos = -1.0,
-                           double range = -1.0, bool reflected = false);
+                           double range = -1.0, bool reflected = false,
+                           bool beam_light = false);
 };
 
 class Ambient
