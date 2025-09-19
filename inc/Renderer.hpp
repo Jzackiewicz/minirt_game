@@ -28,6 +28,7 @@ class Renderer
                                            const std::string &scene_path);
         private:
         struct RenderState;
+        void mark_scene_dirty(RenderState &st);
         bool init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
                                        int W, int H, int RW, int RH);
         void process_events(RenderState &st, SDL_Window *win, SDL_Renderer *ren,
