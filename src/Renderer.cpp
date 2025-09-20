@@ -1167,10 +1167,14 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
         SDL_Color score_color{255, 255, 255, 255};
         int score_scale = 2;
+        int score_text_height = 7 * score_scale;
+        char required_buf[64];
+        std::snprintf(required_buf, sizeof(required_buf), "REQUIRED: %.2f m^2", scene.minimal_score);
         char score_buf[64];
         std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f m^2", st.last_score);
-        int score_text_height = 7 * score_scale;
-        [[maybe_unused]] int legend_base_y = 5 + score_text_height + 5;
+        int required_y = 5;
+        int score_y = required_y + score_text_height + 2;
+        [[maybe_unused]] int legend_base_y = score_y + score_text_height + 5;
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -1264,7 +1268,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                 int fps_y = std::max(0, H - fps_h - 5);
                 CustomCharacter::draw_text(ren, fps_text, fps_x, fps_y, red, scale);
         }
-        CustomCharacter::draw_text(ren, score_buf, 5, 5, score_color, score_scale);
+        CustomCharacter::draw_text(ren, required_buf, 5, required_y, score_color, score_scale);
+        CustomCharacter::draw_text(ren, score_buf, 5, score_y, score_color, score_scale);
         SDL_RenderPresent(ren);
 }
 

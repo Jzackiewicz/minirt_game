@@ -124,7 +124,8 @@ enum class TableType
         ObjectsCone,
         ObjectsCylinder,
         BeamSource,
-        BeamTarget
+        BeamTarget,
+        Quota
 };
 
 const char *table_name(TableType type)
@@ -151,6 +152,8 @@ const char *table_name(TableType type)
                 return "beam.sources";
         case TableType::BeamTarget:
                 return "beam.targets";
+        case TableType::Quota:
+                return "quota";
         default:
                 return "unknown";
         }
@@ -173,6 +176,7 @@ int table_stage(TableType type)
                 return 3;
         case TableType::BeamSource:
         case TableType::BeamTarget:
+        case TableType::Quota:
                 return 4;
         default:
                 return 0;
@@ -203,6 +207,8 @@ std::string table_header(TableType type)
                 return "[[beam.sources]]";
         case TableType::BeamTarget:
                 return "[[beam.targets]]";
+        case TableType::Quota:
+                return "[quota]";
         default:
                 return "[unknown]";
         }
@@ -982,6 +988,21 @@ bool process_beam_target(const TableData &table, Scene &scene, int &oid, int &mi
         return true;
 }
 
+bool process_quota(const TableData &table, Scene &scene)
+{
+        if (!check_allowed_keys(table, {"target", "minimal_score"}))
+                return false;
+        bool target = false;
+        if (!parse_bool_field(table, "target", target))
+                return false;
+        double minimal = 0.0;
+        if (!parse_non_negative_double_field(table, "minimal_score", minimal))
+                return false;
+        scene.target_required = target;
+        scene.minimal_score = minimal;
+        return true;
+}
+
 } // namespace
 
 std::vector<Material> Parser::materials;
@@ -1001,6 +1022,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         outScene.lights.clear();
         outScene.accel.reset();
         outScene.ambient = Ambient(Vec3(1, 1, 1), 0.0);
+        outScene.target_required = false;
+        outScene.minimal_score = 0.0;
 
         std::filesystem::path scene_dir =
                 std::filesystem::absolute(std::filesystem::path(path)).parent_path();
@@ -1012,6 +1035,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         bool ambient_seen = false;
         bool camera_declared = false;
         bool ambient_declared = false;
+        bool quota_declared = false;
+        bool quota_seen = false;
+        size_t quota_line = 0;
 
         int oid = 0;
         int mid = 0;
@@ -1069,6 +1095,11 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                 case TableType::BeamTarget:
                         ok = process_beam_target(table, outScene, oid, mid, materials, beam_target_ids);
                         break;
+                case TableType::Quota:
+                        quota_line = table.header_line;
+                        ok = process_quota(table, outScene);
+                        quota_seen = quota_seen || ok;
+                        break;
                 default:
                         ok = false;
                         break;
@@ -1120,6 +1151,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                         next_type = TableType::Camera;
                                 else if (name == "lighting.ambient")
                                         next_type = TableType::LightingAmbient;
+                                else if (name == "quota")
+                                        next_type = TableType::Quota;
                                 else
                                         return report_error(line_no, "Unknown table '" + name + "'");
                         }
@@ -1145,7 +1178,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                         message = "Objects section must come after lighting section";
                                         break;
                                 case 4:
-                                        message = "Beam section must come after objects section";
+                                        message = "Beam/quota section must come after objects section";
                                         break;
                                 default:
                                         message = "Sections must follow camera -> lighting -> objects -> beam order";
@@ -1164,6 +1197,11 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                 if (ambient_declared)
                                         return report_error(line_no, "Multiple " + header + " sections are not allowed");
                                 ambient_declared = true;
+                                break;
+                        case TableType::Quota:
+                                if (quota_declared)
+                                        return report_error(line_no, "Multiple " + header + " sections are not allowed");
+                                quota_declared = true;
                                 break;
                         case TableType::LightingLightSource:
                                 if (!ambient_declared)
@@ -1197,8 +1235,16 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                 return report_error(line_no ? line_no : 1, "Camera section is required");
         if (!ambient_seen)
                 return report_error(line_no ? line_no : 1, "Lighting ambient section is required");
+        if (!quota_seen)
+                return report_error(line_no ? line_no : 1, "Quota section is required");
         if (cam_dir.length_squared() == 0.0)
                 return report_error(line_no ? line_no : 1, "Camera look direction cannot be zero");
+
+        if (outScene.target_required && beam_target_ids.empty())
+        {
+                size_t err_line = quota_line ? quota_line : (line_no ? line_no : 1);
+                return report_error(err_line, "[quota] target is true but no beam.targets are defined");
+        }
 
         outCamera = Camera(cam_pos, cam_pos + cam_dir.normalized(), fov,
                            double(width) / double(height));
