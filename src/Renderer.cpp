@@ -20,6 +20,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <random>
 #include <string>
 #include <thread>
@@ -1145,12 +1146,90 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
-        SDL_Color score_color{255, 255, 255, 255};
-        int score_scale = 2;
+        SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
+        const int top_bar_height = std::max(90, H / 8);
+        const int bottom_bar_height = std::max(70, H / 10);
+        const int hud_padding = 12;
+        SDL_Rect top_bar{0, 0, W, top_bar_height};
+        SDL_Rect bottom_bar{0, H - bottom_bar_height, W, bottom_bar_height};
+        SDL_SetRenderDrawColor(ren, 0, 0, 0, 180);
+        SDL_RenderFillRect(ren, &top_bar);
+        SDL_RenderFillRect(ren, &bottom_bar);
+        if (top_bar_height > hud_padding * 2)
+        {
+                SDL_SetRenderDrawColor(ren, 255, 255, 255, 80);
+                SDL_RenderDrawLine(ren, W / 2, hud_padding, W / 2,
+                                                   top_bar_height - hud_padding);
+        }
+        SDL_Color hud_text_color{255, 255, 255, 255};
+        const int hud_scale = 2;
+        const int line_height = 7 * hud_scale + 4;
         char score_buf[64];
         std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f m^2", st.last_score);
-        int score_text_height = 7 * score_scale;
-        [[maybe_unused]] int legend_base_y = 5 + score_text_height + 5;
+        int legend_base_y = top_bar_height + 5;
+        int beam_count = 0;
+        double total_beam_length = 0.0;
+        double max_beam_length = 0.0;
+        double total_beam_intensity = 0.0;
+        for (const auto &obj : scene.objects)
+        {
+                if (!obj->is_beam())
+                        continue;
+                auto laser = std::dynamic_pointer_cast<Laser>(obj);
+                if (!laser)
+                        continue;
+                ++beam_count;
+                total_beam_length += laser->length;
+                max_beam_length = std::max(max_beam_length, laser->length);
+                total_beam_intensity += laser->light_intensity;
+        }
+        double avg_beam_intensity =
+                (beam_count > 0) ? (total_beam_intensity / beam_count) : 0.0;
+        double displayed_length = (beam_count > 0) ? max_beam_length : 0.0;
+        char beam_count_buf[64];
+        char beam_length_buf[64];
+        char beam_intensity_buf[64];
+        std::snprintf(beam_count_buf, sizeof(beam_count_buf), "Active beams: %d",
+                                    beam_count);
+        std::snprintf(beam_length_buf, sizeof(beam_length_buf),
+                                    "Max length: %.1f m", displayed_length);
+        std::snprintf(beam_intensity_buf, sizeof(beam_intensity_buf),
+                                    "Avg intensity: %.2f", avg_beam_intensity);
+        int left_text_y = hud_padding;
+        CustomCharacter::draw_text(ren, "TARGET REQUIREMENTS", hud_padding,
+                                                    left_text_y, hud_text_color, hud_scale);
+        left_text_y += line_height;
+        CustomCharacter::draw_text(ren, score_buf, hud_padding, left_text_y,
+                                                    hud_text_color, hud_scale);
+        left_text_y += line_height;
+        CustomCharacter::draw_text(ren, "TARGET: TBD", hud_padding, left_text_y,
+                                                    hud_text_color, hud_scale);
+        left_text_y += line_height;
+        CustomCharacter::draw_text(ren, "HITS: --", hud_padding, left_text_y,
+                                                    hud_text_color, hud_scale);
+        int right_text_y = hud_padding;
+        std::vector<std::string> beam_lines = {"BEAM ATTRIBUTES", beam_count_buf,
+                                                                 beam_length_buf,
+                                                                 beam_intensity_buf};
+        for (const auto &line : beam_lines)
+        {
+                int text_w = CustomCharacter::text_width(line, hud_scale);
+                int x = std::max(W / 2 + hud_padding, W - hud_padding - text_w);
+                CustomCharacter::draw_text(ren, line, x, right_text_y,
+                                                            hud_text_color, hud_scale);
+                right_text_y += line_height;
+        }
+        int bottom_text_y = H - bottom_bar_height + hud_padding;
+        CustomCharacter::draw_text(ren, "CONTROLS", hud_padding, bottom_text_y,
+                                                    hud_text_color, hud_scale);
+        bottom_text_y += line_height;
+        CustomCharacter::draw_text(ren, "WASD - Move   Mouse - Look", hud_padding,
+                                                    bottom_text_y, hud_text_color, hud_scale);
+        bottom_text_y += line_height;
+        CustomCharacter::draw_text(ren,
+                                                    "Space - Up   Ctrl - Down   Esc - Pause",
+                                                    hud_padding, bottom_text_y, hud_text_color,
+                                                    hud_scale);
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -1233,7 +1312,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                                                     scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
-                CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);
+                CustomCharacter::draw_text(ren, text, W - tw - 5, top_bar_height + 5,
+                                            red, scale);
                 double fps_value = std::min(st.fps, 9999.9);
                 char fps_buf[32];
                 std::snprintf(fps_buf, sizeof(fps_buf), "FPS: %.1f", fps_value);
@@ -1241,10 +1321,9 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                 int fps_w = CustomCharacter::text_width(fps_text, scale);
                 int fps_h = 7 * scale;
                 int fps_x = std::max(0, W - fps_w - 5);
-                int fps_y = std::max(0, H - fps_h - 5);
+                int fps_y = std::max(0, H - bottom_bar_height - fps_h - 5);
                 CustomCharacter::draw_text(ren, fps_text, fps_x, fps_y, red, scale);
         }
-        CustomCharacter::draw_text(ren, score_buf, 5, 5, score_color, score_scale);
         SDL_RenderPresent(ren);
 }
 
