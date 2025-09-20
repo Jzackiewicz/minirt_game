@@ -12,6 +12,7 @@
 #include "Cone.hpp"
 #include "Cylinder.hpp"
 #include "CustomCharacter.hpp"
+#include "Texture.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -29,6 +30,11 @@ static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
 {
         return a * (1.0 - alpha) + b * alpha;
 }
+
+static Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
+                                                 const Material &mat);
+
+static double compute_effective_alpha(const Material &mat, const HitRecord &rec);
 
 static Vec3 normalize_or(const Vec3 &v, const Vec3 &fallback = Vec3(0, 0, 1))
 {
@@ -99,10 +105,12 @@ static bool beam_light_through(const Scene &scene, const std::vector<Material> &
                 if (!hit_any)
                         break;
                 const Material &m = mats[hit_mat];
-                if (m.alpha >= 1.0)
+                double effective_alpha = compute_effective_alpha(m, tmp);
+                if (effective_alpha >= 1.0)
                         return false;
-                color = mix_colors(color, m.base_color, m.alpha);
-                intensity *= (1.0 - m.alpha);
+                Vec3 hit_color = surface_color_at(scene, tmp, m);
+                color = mix_colors(color, hit_color, effective_alpha);
+                intensity *= (1.0 - effective_alpha);
                 shadow_ray.orig = shadow_ray.orig + shadow_ray.dir * (closest + 1e-4);
                 max_dist -= closest + 1e-4;
                 if (intensity <= 1e-4)
@@ -149,10 +157,12 @@ static bool light_through(const Scene &scene, const std::vector<Material> &mats,
                 if (!hit_any)
                         break;
                 const Material &m = mats[hit_mat];
-                if (m.alpha >= 1.0)
+                double effective_alpha = compute_effective_alpha(m, tmp);
+                if (effective_alpha >= 1.0)
                         return false;
-                color = mix_colors(color, m.base_color, m.alpha);
-                intensity *= (1.0 - m.alpha);
+                Vec3 hit_color = surface_color_at(scene, tmp, m);
+                color = mix_colors(color, hit_color, effective_alpha);
+                intensity *= (1.0 - effective_alpha);
                 shadow_ray.orig = shadow_ray.orig + shadow_ray.dir * (closest + 1e-4);
                 max_dist -= closest + 1e-4;
                 if (intensity <= 1e-4)
@@ -209,11 +219,16 @@ Vec3 clamp_color(const Vec3 &c, double lo = 0.0, double hi = 1.0)
                                 std::clamp(c.z, lo, hi));
 }
 
-Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
-                                         const Material &mat)
+static Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
+                                                 const Material &mat)
 {
         Vec3 base = mat.base_color;
         Vec3 col = mat.color;
+        if (mat.has_texture() && mat.texture)
+        {
+                Vec3 tex = mat.texture->sample(rec.u, rec.v);
+                base = col = tex;
+        }
         if (rec.object_id >= 0 &&
                 rec.object_id < static_cast<int>(scene.objects.size()))
         {
@@ -224,7 +239,7 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                         base = col = beam->color;
                 }
         }
-        if (mat.checkered)
+        if (!mat.has_texture() && mat.checkered)
         {
                 Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
                 int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
@@ -236,7 +251,7 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
         return col;
 }
 
-double compute_effective_alpha(const Material &mat, const HitRecord &rec)
+static double compute_effective_alpha(const Material &mat, const HitRecord &rec)
 {
         double alpha = mat.alpha;
         if (mat.random_alpha)

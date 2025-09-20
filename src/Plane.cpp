@@ -22,10 +22,23 @@ bool Plane::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 	}
 	rec.t = t;
 	rec.p = r.at(t);
-	rec.set_face_normal(r, normal);
-	rec.material_id = material_id;
-	rec.object_id = object_id;
-	return true;
+        rec.set_face_normal(r, normal);
+        rec.material_id = material_id;
+        rec.object_id = object_id;
+        Vec3 helper = (std::fabs(normal.x) > 0.9) ? Vec3(0, 1, 0) : Vec3(1, 0, 0);
+        Vec3 u_dir = Vec3::cross(normal, helper);
+        double u_len = u_dir.length();
+        if (u_len > 1e-12)
+                u_dir = u_dir / u_len;
+        else
+                u_dir = Vec3(1, 0, 0);
+        Vec3 v_dir = Vec3::cross(normal, u_dir);
+        Vec3 rel = rec.p - point;
+        double u = Vec3::dot(rel, u_dir);
+        double v = Vec3::dot(rel, v_dir);
+        rec.u = u - std::floor(u);
+        rec.v = v - std::floor(v);
+        return true;
 }
 
 bool Plane::bounding_box(AABB &out) const

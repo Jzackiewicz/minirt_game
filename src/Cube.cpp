@@ -52,14 +52,36 @@ bool Cube::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 		}
 	}
 	rec.t = tmin_local;
-	rec.p = r.at(rec.t);
-	rec.material_id = material_id;
-	rec.object_id = object_id;
+        rec.p = r.at(rec.t);
+        rec.material_id = material_id;
+        rec.object_id = object_id;
 
-	Vec3 normal_world = normal_local.x * axis[0] + normal_local.y * axis[1] +
-						normal_local.z * axis[2];
-	rec.set_face_normal(r, normal_world);
-	return true;
+        Vec3 normal_world = normal_local.x * axis[0] + normal_local.y * axis[1] +
+                                                normal_local.z * axis[2];
+        rec.set_face_normal(r, normal_world);
+        Vec3 local_hit(Vec3::dot(rec.p - center, axis[0]),
+                       Vec3::dot(rec.p - center, axis[1]),
+                       Vec3::dot(rec.p - center, axis[2]));
+        double u = 0.0;
+        double v = 0.0;
+        if (std::fabs(normal_local.x) > 0.5 && half.y > 1e-8 && half.z > 1e-8)
+        {
+                u = (local_hit.y / half.y) * 0.5 + 0.5;
+                v = (local_hit.z / half.z) * 0.5 + 0.5;
+        }
+        else if (std::fabs(normal_local.y) > 0.5 && half.x > 1e-8 && half.z > 1e-8)
+        {
+                u = (local_hit.x / half.x) * 0.5 + 0.5;
+                v = (local_hit.z / half.z) * 0.5 + 0.5;
+        }
+        else if (half.x > 1e-8 && half.y > 1e-8)
+        {
+                u = (local_hit.x / half.x) * 0.5 + 0.5;
+                v = (local_hit.y / half.y) * 0.5 + 0.5;
+        }
+        rec.u = std::clamp(u, 0.0, 1.0);
+        rec.v = std::clamp(v, 0.0, 1.0);
+        return true;
 }
 
 bool Cube::bounding_box(AABB &out) const
