@@ -1506,8 +1506,8 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 {
                         if (control_sections[i])
                         {
-                                active_sections.push_back(i);
-                                break;
+							active_sections.push_back(i);
+							break;
                         }
                 }
                 if (active_sections.empty())
