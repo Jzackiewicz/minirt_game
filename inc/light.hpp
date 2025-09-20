@@ -16,12 +16,14 @@ class PointLight
         double range;
         bool reflected;
         bool beam_spotlight;
+        double spot_radius;
 
         PointLight(const Vec3 &p, const Vec3 &c, double i,
                            std::vector<int> ignore_ids = {}, int attached_id = -1,
                            const Vec3 &dir = Vec3(0, 0, 0), double cutoff_cos = -1.0,
                            double range = -1.0, bool reflected = false,
-                           bool beam_spotlight = false);
+                           bool beam_spotlight = false,
+                           double spot_radius = -1.0);
 };
 
 class Ambient

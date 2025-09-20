@@ -806,6 +806,13 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
         if (beam->laser)
                 beam->laser->scorable = scorable_flag;
         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+        double spot_radius = 0.0;
+        if (beam->laser)
+                spot_radius = beam->laser->radius * 1.2;
+        else if (beam->light)
+                spot_radius = beam->light->radius * 1.2;
+        else
+                spot_radius = beam_radius * 1.2;
         if (with_laser)
         {
                 oid += 2;
@@ -816,7 +823,7 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
                                                            beam->source->object_id,
                                                            beam->source->mid.object_id},
                                           beam->source->object_id, dir_norm, cone_cos, length,
-                                          false, true);
+                                          false, true, spot_radius);
         }
         else
         {
@@ -826,7 +833,7 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
                                           std::vector<int>{beam->source->object_id,
                                                            beam->source->mid.object_id},
                                           beam->source->object_id, dir_norm, cone_cos, length,
-                                          false, true);
+                                          false, true, spot_radius);
         }
         return true;
 }

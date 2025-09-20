@@ -270,7 +270,7 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
                 ignore.push_back(hit_rec.object_id);
                 PointLight new_light(refl_orig, L.color, intensity, ignore, -1,
                                                          refl_dir, L.cutoff_cos, remain, true,
-                                                         L.beam_spotlight);
+                                                         L.beam_spotlight, L.spot_radius);
                 to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
         }
 }
