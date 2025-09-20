@@ -1,0 +1,10 @@
+/* XPM */
+static char * simple_xpm[] = {
+"4 4 2 1",
+". c #FF7F00",
+"X c #0040FF",
+".X.X",
+"X.X.",
+".X.X",
+"X.X."
+};

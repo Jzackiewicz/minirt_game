@@ -11,6 +11,7 @@ color = [255, 255, 255]
 [[objects.planes]]
 id = "plane1"
 color = [50, 50, 50]
+texture = "simple.xpm"
 position = [5.22401, -10.75213, -5.78879]
 dir = [0, 1, 0]
 reflective = false
@@ -22,6 +23,7 @@ transparent = false
 [[objects.planes]]
 id = "plane2"
 color = [150, 150, 150]
+texture = "simple.xpm"
 position = [-15, 10, 0]
 dir = [0, 1, 0]
 reflective = false
@@ -33,6 +35,7 @@ transparent = false
 [[objects.planes]]
 id = "plane3"
 color = [50, 50, 50]
+texture = "simple.xpm"
 position = [0, -10, 10]
 dir = [0, 0, -1]
 reflective = false
@@ -44,6 +47,7 @@ transparent = false
 [[objects.planes]]
 id = "plane4"
 color = [0, 100, 0]
+texture = "simple.xpm"
 position = [-10, 0, 10]
 dir = [1, 0, 0]
 reflective = false
@@ -55,6 +59,7 @@ transparent = false
 [[objects.planes]]
 id = "plane5"
 color = [0, 0, 100]
+texture = "simple.xpm"
 position = [10, 0, 10]
 dir = [1, 0, 0]
 reflective = false
