@@ -56,10 +56,35 @@ bool Cube::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 	rec.material_id = material_id;
 	rec.object_id = object_id;
 
-	Vec3 normal_world = normal_local.x * axis[0] + normal_local.y * axis[1] +
-						normal_local.z * axis[2];
-	rec.set_face_normal(r, normal_world);
-	return true;
+        Vec3 normal_world = normal_local.x * axis[0] + normal_local.y * axis[1] +
+                                                normal_local.z * axis[2];
+        rec.set_face_normal(r, normal_world);
+        Vec3 diff = rec.p - center;
+        double local[3] = {Vec3::dot(diff, axis[0]), Vec3::dot(diff, axis[1]),
+                                           Vec3::dot(diff, axis[2])};
+        double abs_norm[3] = {std::fabs(normal_local.x), std::fabs(normal_local.y),
+                                               std::fabs(normal_local.z)};
+        int axis_idx = 0;
+        if (abs_norm[1] > abs_norm[0] && abs_norm[1] >= abs_norm[2])
+                axis_idx = 1;
+        else if (abs_norm[2] > abs_norm[0] && abs_norm[2] >= abs_norm[1])
+                axis_idx = 2;
+        static const int u_map[3] = {2, 0, 0};
+        static const int v_map[3] = {1, 2, 1};
+        double halves[3] = {half.x, half.y, half.z};
+        int u_idx = u_map[axis_idx];
+        int v_idx = v_map[axis_idx];
+        double u = 0.5 + local[u_idx] / (2.0 * halves[u_idx]);
+        double v = 0.5 - local[v_idx] / (2.0 * halves[v_idx]);
+        if (axis_idx == 0 && normal_local.x < 0)
+                u = 1.0 - u;
+        if (axis_idx == 1 && normal_local.y < 0)
+                v = 1.0 - v;
+        if (axis_idx == 2 && normal_local.z < 0)
+                u = 1.0 - u;
+        rec.u = std::clamp(u, 0.0, 1.0);
+        rec.v = std::clamp(v, 0.0, 1.0);
+        return true;
 }
 
 bool Cube::bounding_box(AABB &out) const

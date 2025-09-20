@@ -1,6 +1,46 @@
 #include "material.hpp"
+#include "Scene.hpp"
+#include "Laser.hpp"
+#include "Texture.hpp"
 #include <algorithm>
 #include <cmath>
+
+Vec3 Material::sample_texture(double u, double v) const
+{
+        if (!texture)
+                return color;
+        return texture->sample(u, v);
+}
+
+Vec3 Material::surface_color(const Scene &scene, const HitRecord &rec) const
+{
+        Vec3 base = base_color;
+        Vec3 current = color;
+        if (rec.object_id >= 0 &&
+                rec.object_id < static_cast<int>(scene.objects.size()))
+        {
+                auto obj = scene.objects[rec.object_id];
+                if (obj && obj->is_beam())
+                {
+                        if (auto beam = std::static_pointer_cast<Laser>(obj))
+                        {
+                                base = current = beam->color;
+                        }
+                }
+        }
+        if (checkered)
+        {
+                Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
+                int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
+                                   static_cast<int>(std::floor(rec.p.y * 5)) +
+                                   static_cast<int>(std::floor(rec.p.z * 5))) &
+                                  1;
+                return chk ? base : inv;
+        }
+        if (texture)
+                return texture->sample(rec.u, rec.v);
+        return current;
+}
 
 Vec3 phong(const Material &m, const Ambient &ambient,
 		   const std::vector<PointLight> &lights, const Vec3 &p, const Vec3 &n,
