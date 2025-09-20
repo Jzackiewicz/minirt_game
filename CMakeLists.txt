@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if (MSVC)
     add_compile_options(/O2 /fp:fast /DNOMINMAX)
 else()
-    add_compile_options(-O3 -ffast-math -fno-exceptions -fno-rtti -march=native)
+    add_compile_options(-O3 -ffast-math -fno-exceptions -march=native)
 endif()
 
 file(GLOB SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
