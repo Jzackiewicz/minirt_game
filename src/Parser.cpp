@@ -530,7 +530,6 @@ bool process_sphere(const TableData &table, Scene &scene, int &oid, int &mid,
         bool rotatable;
         if (!parse_bool_field(table, "rotatable", rotatable))
                 return false;
-        (void)rotatable;
         bool movable;
         if (!parse_bool_field(table, "movable", movable))
                 return false;
@@ -541,6 +540,7 @@ bool process_sphere(const TableData &table, Scene &scene, int &oid, int &mid,
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
         auto sphere = std::make_shared<Sphere>(position, radius, oid++, mid);
+        sphere->rotatable = rotatable;
         sphere->movable = movable;
         sphere->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
@@ -588,7 +588,6 @@ bool process_cube(const TableData &table, Scene &scene, int &oid, int &mid,
         bool rotatable;
         if (!parse_bool_field(table, "rotatable", rotatable))
                 return false;
-        (void)rotatable;
         bool movable;
         if (!parse_bool_field(table, "movable", movable))
                 return false;
@@ -599,6 +598,7 @@ bool process_cube(const TableData &table, Scene &scene, int &oid, int &mid,
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
         auto cube = std::make_shared<Cube>(position, dir.normalized(), length, width, height, oid++, mid);
+        cube->rotatable = rotatable;
         cube->movable = movable;
         cube->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
@@ -643,7 +643,6 @@ bool process_cylinder(const TableData &table, Scene &scene, int &oid, int &mid,
         bool rotatable;
         if (!parse_bool_field(table, "rotatable", rotatable))
                 return false;
-        (void)rotatable;
         bool movable;
         if (!parse_bool_field(table, "movable", movable))
                 return false;
@@ -654,6 +653,7 @@ bool process_cylinder(const TableData &table, Scene &scene, int &oid, int &mid,
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
         auto cylinder = std::make_shared<Cylinder>(position, dir.normalized(), radius, height, oid++, mid);
+        cylinder->rotatable = rotatable;
         cylinder->movable = movable;
         cylinder->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
@@ -698,7 +698,6 @@ bool process_cone(const TableData &table, Scene &scene, int &oid, int &mid,
         bool rotatable;
         if (!parse_bool_field(table, "rotatable", rotatable))
                 return false;
-        (void)rotatable;
         bool movable;
         if (!parse_bool_field(table, "movable", movable))
                 return false;
@@ -709,6 +708,7 @@ bool process_cone(const TableData &table, Scene &scene, int &oid, int &mid,
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
         auto cone = std::make_shared<Cone>(position, dir.normalized(), radius, height, oid++, mid);
+        cone->rotatable = rotatable;
         cone->movable = movable;
         cone->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
@@ -759,7 +759,6 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
         bool rotatable;
         if (!parse_bool_field(table, "rotatable", rotatable))
                 return false;
-        (void)rotatable;
         bool scorable;
         if (!parse_bool_field(table, "scorable", scorable))
                 return false;
@@ -801,11 +800,15 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
         bool movable_flag = movable;
         bool scorable_flag = scorable;
         beam->source->movable = movable_flag;
+        beam->source->rotatable = rotatable;
         beam->source->scorable = scorable_flag;
         beam->source->mid.scorable = scorable_flag;
         beam->source->inner.scorable = scorable_flag;
         if (beam->laser)
+        {
                 beam->laser->scorable = scorable_flag;
+                beam->laser->rotatable = rotatable;
+        }
         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
         double spot_radius = 0.0;
         if (beam->laser)

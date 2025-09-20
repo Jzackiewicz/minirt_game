@@ -73,7 +73,7 @@ std::string object_id_for(const std::string &prefix, int index)
 
 bool is_rotatable(const Hittable &obj)
 {
-        return obj.shape_type() != ShapeType::Plane;
+        return obj.rotatable;
 }
 
 struct PlaneRecord
@@ -292,7 +292,7 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "radius = " << format_double(source->radius) << "\n";
                 out << "length = " << format_double(length) << "\n";
                 out << "movable = " << bool_str(source->movable) << "\n";
-                out << "rotatable = " << bool_str(true) << "\n";
+                out << "rotatable = " << bool_str(source->rotatable) << "\n";
                 out << "scorable = " << bool_str(source->scorable) << "\n";
                 out << "with_laser = " << bool_str(source->beam != nullptr) << "\n\n";
         }

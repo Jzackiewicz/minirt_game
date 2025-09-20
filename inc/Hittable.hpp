@@ -37,6 +37,7 @@ class Hittable
 {
         public:
         bool movable = false;
+        bool rotatable = false;
         bool scorable = false;
         int object_id = 0;
         int material_id = 0;

@@ -687,7 +687,10 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 else if (e.type == SDL_MOUSEBUTTONDOWN &&
                                  e.button.button == SDL_BUTTON_RIGHT)
                 {
-                        if (st.edit_mode)
+                        if (st.edit_mode &&
+                            (g_developer_mode ||
+                             (st.selected_obj >= 0 &&
+                              scene.objects[st.selected_obj]->rotatable)))
                                 st.rotating = true;
                 }
                 else if (e.type == SDL_MOUSEBUTTONUP &&
@@ -713,7 +716,9 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 }
                 else if (st.focused && e.type == SDL_MOUSEMOTION)
                 {
-                        if (st.edit_mode && st.rotating)
+                        if (st.edit_mode && st.rotating &&
+                            (g_developer_mode ||
+                             scene.objects[st.selected_obj]->rotatable))
                         {
                                 double sens = get_mouse_sensitivity();
                                 bool changed = false;
@@ -910,6 +915,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         obj = std::make_shared<Cone>(pos, cam.up, 1.0, 2.0, oid, mid);
                                 else
                                         obj = std::make_shared<Cylinder>(pos, cam.up, 1.0, 2.0, oid, mid);
+                                if (obj)
+                                        obj->rotatable = obj->shape_type() != ShapeType::Plane;
                                 obj->movable = true;
                                 scene.objects.push_back(obj);
                                 scene.update_beams(mats);
@@ -982,7 +989,9 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
 
                 double rot_speed = OBJECT_ROTATE_SPEED * dt;
                 bool changed = false;
-                if (state[SDL_SCANCODE_Q])
+                bool can_rotate = g_developer_mode ||
+                                  scene.objects[st.selected_obj]->rotatable;
+                if (can_rotate && state[SDL_SCANCODE_Q])
                 {
                         scene.objects[st.selected_obj]->rotate(cam.forward, -rot_speed);
                         if (!g_developer_mode && scene.collides(st.selected_obj))
@@ -991,7 +1000,7 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
                         else
                                 changed = true;
                 }
-                if (state[SDL_SCANCODE_E])
+                if (can_rotate && state[SDL_SCANCODE_E])
                 {
                         scene.objects[st.selected_obj]->rotate(cam.forward, rot_speed);
                         if (!g_developer_mode && scene.collides(st.selected_obj))
@@ -1064,7 +1073,8 @@ void Renderer::update_selection(RenderState &st,
                 HitRecord hrec;
                 if (scene.hit(center_ray, 1e-4, 1e9, hrec) &&
                         (g_developer_mode ||
-                         scene.objects[hrec.object_id]->movable))
+                         scene.objects[hrec.object_id]->movable ||
+                         scene.objects[hrec.object_id]->rotatable))
                 {
                         if (st.hover_mat != hrec.material_id)
                         {
