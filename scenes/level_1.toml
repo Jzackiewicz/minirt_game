@@ -150,3 +150,7 @@ radius = 0.60000
 movable = true
 scorable = false
 
+[quota]
+target = true
+minimal_score = 2.0
+
