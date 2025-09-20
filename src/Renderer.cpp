@@ -224,6 +224,11 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                         base = col = beam->color;
                 }
         }
+        if (mat.has_texture() && rec.has_uv)
+        {
+                Vec3 tex = mat.texture->sample(rec.u, rec.v);
+                col = tex;
+        }
         if (mat.checkered)
         {
                 Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
@@ -488,36 +493,13 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	}
         const Material &m = mats[rec.material_id];
         Vec3 eye = (r.dir * -1.0).normalized();
-        Vec3 base = m.base_color;
-        Vec3 col = m.color;
-        if (rec.object_id >= 0 &&
-                rec.object_id < static_cast<int>(scene.objects.size()))
-        {
-                auto obj = scene.objects[rec.object_id];
-                if (obj->is_beam())
-                {
-                        auto beam = std::static_pointer_cast<Laser>(obj);
-                        base = col = beam->color;
-                }
-        }
-	if (m.checkered)
-	{
-		Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
-		int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
-				   static_cast<int>(std::floor(rec.p.y * 5)) +
-				   static_cast<int>(std::floor(rec.p.z * 5))) &
-				  1;
-		col = chk ? base : inv;
-	}
-        Vec3 sum(col.x * scene.ambient.color.x * scene.ambient.intensity,
-                         col.y * scene.ambient.color.y * scene.ambient.intensity,
-                         col.z * scene.ambient.color.z * scene.ambient.intensity);
-        Vec3 surface_color = col;
+        Vec3 surface_color = surface_color_at(scene, rec, m);
+        Vec3 sum = ambient_contribution(scene, surface_color);
         for (const auto &L : scene.lights)
         {
                 sum += light_contribution(scene, mats, L, rec, surface_color, m, rec.p, eye);
         }
-	if (m.mirror)
+        if (m.mirror)
 	{
 		Vec3 refl_dir =
 			r.dir - rec.normal * (2.0 * Vec3::dot(r.dir, rec.normal));
@@ -526,14 +508,9 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                 double refl_ratio = REFLECTION / 100.0;
                 sum = sum * (1.0 - refl_ratio) + refl_col * refl_ratio;
         }
-	double alpha = m.alpha;
-	if (m.random_alpha)
-	{
-		double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-		alpha *= (1.0 - tpos);
-	}
-	if (alpha < 1.0)
-	{
+        double alpha = compute_effective_alpha(m, rec);
+        if (alpha < 1.0)
+        {
                 Ray next(rec.p + r.dir * 1e-4, r.dir);
                 Vec3 behind = trace_ray(scene, mats, next, rng, dist, depth + 1);
                 return sum * alpha + behind * (1.0 - alpha);

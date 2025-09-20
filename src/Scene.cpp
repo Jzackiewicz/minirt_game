@@ -17,6 +17,13 @@ inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
         return v - n * (2.0 * Vec3::dot(v, n));
 }
 
+Vec3 material_surface_color(const Material &mat, const HitRecord &rec)
+{
+        if (mat.has_texture() && rec.has_uv)
+                return mat.texture->sample(rec.u, rec.v);
+        return mat.base_color;
+}
+
 } // namespace
 
 // Remove lights attached to beam segments and collect root laser objects.
@@ -158,8 +165,9 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 if (new_len > 1e-4)
                                 {
                                         Vec3 pass_orig = forward.at(closest) + forward.dir * 1e-4;
+                                        Vec3 surface_col = material_surface_color(hit_mat, hit_rec);
                                         Vec3 new_color = bm->color * (1.0 - hit_mat.alpha) +
-                                                         hit_mat.base_color * hit_mat.alpha;
+                                                         surface_col * hit_mat.alpha;
                                         double new_intens =
                                                 bm->light_intensity * (1.0 - hit_mat.alpha);
                                        auto new_bm = std::make_shared<Laser>(

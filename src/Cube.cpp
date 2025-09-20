@@ -55,6 +55,35 @@ bool Cube::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 	rec.p = r.at(rec.t);
 	rec.material_id = material_id;
 	rec.object_id = object_id;
+	Vec3 local_hit(orig[0] + rec.t * dir[0], orig[1] + rec.t * dir[1],
+	                orig[2] + rec.t * dir[2]);
+	double u = 0.5;
+	double v = 0.5;
+	if (std::fabs(normal_local.x) > 0.5)
+	{
+		double su = (local_hit.z / half.z + 1.0) * 0.5;
+		double sv = (local_hit.y / half.y + 1.0) * 0.5;
+		u = (normal_local.x > 0.0) ? su : (1.0 - su);
+		v = sv;
+	}
+	else if (std::fabs(normal_local.y) > 0.5)
+	{
+		double su = (local_hit.x / half.x + 1.0) * 0.5;
+		double sv = (local_hit.z / half.z + 1.0) * 0.5;
+		u = su;
+		v = (normal_local.y > 0.0) ? (1.0 - sv) : sv;
+	}
+	else if (std::fabs(normal_local.z) > 0.5)
+	{
+		double su = (local_hit.x / half.x + 1.0) * 0.5;
+		double sv = (local_hit.y / half.y + 1.0) * 0.5;
+		u = (normal_local.z > 0.0) ? (1.0 - su) : su;
+		v = sv;
+	}
+	rec.u = std::clamp(u, 0.0, 1.0);
+	rec.v = std::clamp(v, 0.0, 1.0);
+	rec.has_uv = true;
+
 
 	Vec3 normal_world = normal_local.x * axis[0] + normal_local.y * axis[1] +
 						normal_local.z * axis[2];
