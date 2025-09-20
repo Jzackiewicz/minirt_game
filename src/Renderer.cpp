@@ -1132,10 +1132,63 @@ void Renderer::handle_keyboard(RenderState &st, double dt,
 void Renderer::update_selection(RenderState &st,
                                                           std::vector<Material> &mats)
 {
-        if (st.edit_mode)
-        {
+        auto refresh_hud_focus = [&](bool allow_hover) {
                 st.hud_focus_object = -1;
                 st.hud_focus_score = 0.0;
+                Ray center_ray = cam.ray_through(0.5, 0.5);
+                HitRecord hrec;
+                if (!scene.hit(center_ray, 1e-4, 1e9, hrec))
+                {
+                        if (allow_hover && st.hover_mat >= 0)
+                        {
+                                mats[st.hover_mat].color =
+                                        mats[st.hover_mat].base_color;
+                                st.hover_obj = st.hover_mat = -1;
+                        }
+                        return;
+                }
+
+                auto &hit_obj = scene.objects[hrec.object_id];
+                ShapeType shape = hit_obj->shape_type();
+                if (shape != ShapeType::Plane && shape != ShapeType::BeamTarget &&
+                    shape != ShapeType::Beam)
+                {
+                        st.hud_focus_object = hrec.object_id;
+                        st.hud_focus_score =
+                                compute_object_beam_score(scene, mats, hrec.object_id);
+                }
+
+                if (!allow_hover)
+                        return;
+
+                bool selectable = !hit_obj->is_beam() &&
+                                  (g_developer_mode || hit_obj->movable ||
+                                   hit_obj->rotatable);
+                if (selectable)
+                {
+                        if (st.hover_mat != hrec.material_id)
+                        {
+                                if (st.hover_mat >= 0)
+                                        mats[st.hover_mat].color =
+                                                mats[st.hover_mat].base_color;
+                                st.hover_obj = hrec.object_id;
+                                st.hover_mat = hrec.material_id;
+                        }
+                        bool blink = ((SDL_GetTicks() / 250) % 2) == 0;
+                        mats[st.hover_mat].color =
+                                blink ? (Vec3(1.0, 1.0, 1.0) -
+                                         mats[st.hover_mat].base_color)
+                                      : mats[st.hover_mat].base_color;
+                }
+                else if (st.hover_mat >= 0)
+                {
+                        mats[st.hover_mat].color = mats[st.hover_mat].base_color;
+                        st.hover_obj = st.hover_mat = -1;
+                }
+        };
+
+        if (st.edit_mode)
+        {
                 if (st.hover_mat >= 0 && st.hover_mat != st.selected_mat)
                         mats[st.hover_mat].color =
                                 mats[st.hover_mat].base_color;
@@ -1161,59 +1214,12 @@ void Renderer::update_selection(RenderState &st,
                 if (cam_delta.length_squared() > 0)
                         scene.move_camera(cam, cam_delta, mats);
                 st.edit_dist = (st.edit_pos - cam.origin).length();
+
+                refresh_hud_focus(false);
         }
         else
         {
-                st.hud_focus_object = -1;
-                st.hud_focus_score = 0.0;
-                Ray center_ray = cam.ray_through(0.5, 0.5);
-                HitRecord hrec;
-                if (scene.hit(center_ray, 1e-4, 1e9, hrec))
-                {
-                        auto &hit_obj = scene.objects[hrec.object_id];
-                        ShapeType shape = hit_obj->shape_type();
-                        if (shape != ShapeType::Plane && shape != ShapeType::BeamTarget &&
-                            shape != ShapeType::Beam)
-                        {
-                                st.hud_focus_object = hrec.object_id;
-                                st.hud_focus_score =
-                                        compute_object_beam_score(scene, mats, hrec.object_id);
-                        }
-                        bool selectable = !hit_obj->is_beam() &&
-                                          (g_developer_mode || hit_obj->movable ||
-                                           hit_obj->rotatable);
-                        if (selectable)
-                        {
-                                if (st.hover_mat != hrec.material_id)
-                                {
-                                        if (st.hover_mat >= 0)
-                                                mats[st.hover_mat].color =
-                                                        mats[st.hover_mat].base_color;
-                                        st.hover_obj = hrec.object_id;
-                                        st.hover_mat = hrec.material_id;
-                                }
-                                bool blink = ((SDL_GetTicks() / 250) % 2) == 0;
-                                mats[st.hover_mat].color =
-                                        blink ? (Vec3(1.0, 1.0, 1.0) -
-                                                         mats[st.hover_mat].base_color)
-                                              : mats[st.hover_mat].base_color;
-                        }
-                        else if (st.hover_mat >= 0)
-                        {
-                                mats[st.hover_mat].color =
-                                        mats[st.hover_mat].base_color;
-                                st.hover_obj = st.hover_mat = -1;
-                        }
-                }
-                else
-                {
-                        if (st.hover_mat >= 0)
-                                mats[st.hover_mat].color =
-                                        mats[st.hover_mat].base_color;
-                        st.hover_obj = st.hover_mat = -1;
-                        st.hud_focus_object = -1;
-                        st.hud_focus_score = 0.0;
-                }
+                refresh_hud_focus(true);
         }
 }
 
