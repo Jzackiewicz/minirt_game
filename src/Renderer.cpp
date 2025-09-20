@@ -1256,6 +1256,28 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         if (st.hud_focus_object >= 0 &&
             st.hud_focus_object < static_cast<int>(scene.objects.size()))
                 focus_obj = scene.objects[st.hud_focus_object];
+        std::optional<std::string> focus_hint_label;
+        auto shape_label_for = [](ShapeType shape) {
+                switch (shape)
+                {
+                case ShapeType::Sphere:
+                        return std::string("SPHERE");
+                case ShapeType::Cube:
+                        return std::string("CUBE");
+                case ShapeType::Cylinder:
+                        return std::string("CYLINDER");
+                case ShapeType::Cone:
+                        return std::string("CONE");
+                case ShapeType::Plane:
+                        return std::string("PLANE");
+                case ShapeType::BeamTarget:
+                        return std::string("TARGET");
+                case ShapeType::Beam:
+                        return std::string("LASER");
+                default:
+                        return std::string("OBJECT");
+                }
+        };
         if (focus_obj)
         {
                 if (auto source = std::dynamic_pointer_cast<BeamSource>(focus_obj))
@@ -1322,31 +1344,12 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         std::snprintf(score_line, sizeof(score_line), "OBJECT SCORE: %.2f",
                                       st.hud_focus_score);
                         right_lines.push_back({score_line, SDL_Color{255, 255, 255, 255}});
+                        focus_hint_label = std::string("BEAM SOURCE");
                 }
                 else
                 {
                         auto shape = focus_obj->shape_type();
-                        auto shape_label = [&]() {
-                                switch (shape)
-                                {
-                                case ShapeType::Sphere:
-                                        return std::string("SPHERE");
-                                case ShapeType::Cube:
-                                        return std::string("CUBE");
-                                case ShapeType::Cylinder:
-                                        return std::string("CYLINDER");
-                                case ShapeType::Cone:
-                                        return std::string("CONE");
-                                case ShapeType::Plane:
-                                        return std::string("PLANE");
-                                case ShapeType::BeamTarget:
-                                        return std::string("TARGET");
-                                case ShapeType::Beam:
-                                        return std::string("LASER");
-                                default:
-                                        return std::string("OBJECT");
-                                }
-                        }();
+                        auto shape_label = shape_label_for(shape);
 
                         SDL_Color status_color{200, 200, 200, 255};
                         std::string status_text = shape_label + " - STATIONARY";
@@ -1370,6 +1373,9 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         std::snprintf(score_line, sizeof(score_line), "OBJECT SCORE: %.2f",
                                       st.hud_focus_score);
                         right_lines.push_back({score_line, SDL_Color{255, 255, 255, 255}});
+                        if (shape != ShapeType::Plane && shape != ShapeType::BeamTarget &&
+                            shape != ShapeType::Beam)
+                                focus_hint_label = shape_label;
                 }
         }
 
@@ -1391,12 +1397,12 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         const size_t slot_secondary = 3;
         const size_t slot_pause = 4;
 
-        set_control(slot_pause, "Pause: ESC", neutral);
+        set_control(slot_pause, "PAUSE: ESC", neutral);
 
         if (!st.focused)
         {
-                set_control(slot_move, "Focus lost", warning);
-                set_control(slot_rotate, "Click to focus", neutral);
+                set_control(slot_move, "FOCUS LOST", warning);
+                set_control(slot_rotate, "CLICK TO FOCUS", neutral);
         }
         else if (st.edit_mode)
         {
@@ -1405,7 +1411,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                     st.selected_obj < static_cast<int>(scene.objects.size()))
                         selected_obj = scene.objects[st.selected_obj];
 
-                set_control(slot_move, "Move camera", neutral);
+                set_control(slot_move, "MOVE CAMERA:\nWSAD\nCTRL/SPACE", neutral);
 
                 if (selected_obj)
                 {
@@ -1416,39 +1422,42 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         if (can_move)
                         {
                                 set_control(slot_rotate,
-                                            "Rotate Yaw/Pitch: hold RPM + mouse; Rotate Roll: Q/E",
+                                            "ROTATE YAW/PITCH: HOLD RPM + MOUSE\nROTATE ROLL: Q/E",
                                             neutral);
-                                set_control(slot_primary, "Place: LPM", accent);
-                                std::string move_text = "Move object: mouse + scroll";
+                                set_control(slot_primary, "PLACE:\nLPM", accent);
+                                std::string move_text = "MOVE OBJECT: MOUSE + SCROLL";
                                 if (g_developer_mode)
-                                        move_text += "; Resize: scroll; Delete: MMB";
+                                        move_text += "\nDEV: RESIZE: SCROLL; DELETE: MMB";
                                 set_control(slot_secondary, move_text, neutral);
                         }
                         else if (can_rotate)
                         {
                                 set_control(slot_rotate,
-                                            "Rotate object: hold RPM + mouse; Roll: Q/E", neutral);
-                                set_control(slot_primary, "Place: LPM", accent);
+                                            "ROTATE OBJECT: HOLD RPM + MOUSE\nROLL: Q/E",
+                                            neutral);
+                                set_control(slot_primary, "PLACE:\nLPM", accent);
                                 if (g_developer_mode)
                                         set_control(slot_secondary,
-                                                    "Dev: Resize: scroll; Delete: MMB", danger);
+                                                    "DEV: RESIZE: SCROLL; DELETE: MMB",
+                                                    danger);
                         }
                         else
                         {
-                                set_control(slot_primary, "Place: LPM", accent);
+                                set_control(slot_primary, "PLACE:\nLPM", accent);
                                 if (g_developer_mode)
                                         set_control(slot_secondary,
-                                                    "Dev: Resize: scroll; Delete: MMB", danger);
+                                                    "DEV: RESIZE: SCROLL; DELETE: MMB",
+                                                    danger);
                         }
                 }
                 else
                 {
-                        set_control(slot_primary, "Place: LPM", accent);
+                        set_control(slot_primary, "PLACE:\nLPM", accent);
                 }
         }
         else
         {
-                set_control(slot_move, "Move: WSAD\nSpace=Up Ctrl=Down", neutral);
+                set_control(slot_move, "MOVING:\nWSAD\nCTRL/SPACE", neutral);
 
                 bool show_grab = false;
                 if (focus_obj)
@@ -1460,7 +1469,13 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 }
 
                 if (show_grab)
-                        set_control(slot_secondary, "Grab: LPM", accent);
+                {
+                        std::string grab_label = "GRAB";
+                        if (focus_hint_label && !focus_hint_label->empty())
+                                grab_label += " \"" + *focus_hint_label + "\"";
+                        grab_label += ":";
+                        set_control(slot_secondary, grab_label + "\nLPM", accent);
+                }
         }
 
         auto split_lines = [](const std::string &text) {
@@ -1496,6 +1511,26 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 if (!section_lines[i].empty())
                         max_control_lines =
                                 std::max(max_control_lines, section_lines[i].size());
+        }
+        std::vector<size_t> active_sections;
+        active_sections.reserve(control_sections.size());
+        for (size_t i = 0; i < control_sections.size(); ++i)
+        {
+                if (!section_lines[i].empty())
+                        active_sections.push_back(i);
+        }
+        if (active_sections.empty())
+        {
+                for (size_t i = 0; i < control_sections.size(); ++i)
+                {
+                        if (control_sections[i])
+                        {
+                                active_sections.push_back(i);
+                                break;
+                        }
+                }
+                if (active_sections.empty())
+                        active_sections.push_back(0);
         }
 
         size_t top_count = std::max(left_lines.size(), right_lines.size());
@@ -1540,13 +1575,15 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
 
         int controls_top = H - bottom_bar_height + hud_padding;
-        size_t section_count = control_sections.size();
-        double section_span = static_cast<double>(W) / section_count;
+        size_t section_count = active_sections.size();
+        double section_span = static_cast<double>(W) /
+                              static_cast<double>(std::max<size_t>(section_count, 1));
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 96);
-        for (size_t i = 0; i < control_sections.size(); ++i)
+        for (size_t pos = 0; pos < active_sections.size(); ++pos)
         {
-                int start_x = static_cast<int>(std::round(i * section_span));
-                int end_x = static_cast<int>(std::round((i + 1) * section_span));
+                size_t i = active_sections[pos];
+                int start_x = static_cast<int>(std::round(pos * section_span));
+                int end_x = static_cast<int>(std::round((pos + 1) * section_span));
                 int available = std::max(1, end_x - start_x);
                 auto compute_text_x = [&](int width) {
                         int min_x = start_x + hud_padding;
@@ -1576,7 +1613,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                 text_y += hud_line_height;
                         }
                 }
-                if (i + 1 < control_sections.size())
+                if (pos + 1 < active_sections.size())
                         SDL_RenderDrawLine(ren, end_x, H - bottom_bar_height, end_x, H);
         }
 
