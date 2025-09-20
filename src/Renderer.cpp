@@ -24,6 +24,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <random>
 #include <string>
 #include <thread>
@@ -338,7 +339,7 @@ double luminance(const Vec3 &c)
 double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &mats,
                                                          const PointLight &L, const Vec3 &axis_dir,
                                                          const Vec3 &sample_origin,
-                                                         double sample_area)
+                                                         double sample_area, int limit_object = -1)
 {
         if (L.intensity <= 1e-4)
                 return 0.0;
@@ -377,7 +378,8 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                 travelled += closest;
                 Vec3 point = ray.at(closest);
 
-                if (hit_obj && hit_obj->scorable && !hit_obj->is_beam())
+                if (hit_obj && hit_obj->scorable && !hit_obj->is_beam() &&
+                    (limit_object < 0 || hit_obj->object_id == limit_object))
                 {
                         Vec3 ldir = dir * -1.0;
                         double cos_incident =
@@ -481,6 +483,59 @@ double compute_beam_score(const Scene &scene, const std::vector<Material> &mats)
         return score;
 }
 
+double integrate_spotlight_area_for_object(const Scene &scene,
+                                          const std::vector<Material> &mats,
+                                          const PointLight &L, int object_id)
+{
+        if (object_id < 0)
+                return 0.0;
+        if (!L.beam_spotlight || L.intensity <= 0.0)
+                return 0.0;
+        if (L.spot_radius <= 0.0)
+                return 0.0;
+        Basis basis = make_basis(L.direction);
+        Vec3 axis_dir = basis.w;
+        const int grid = 16;
+        double disk_area = M_PI * L.spot_radius * L.spot_radius;
+        if (disk_area <= 1e-12)
+                return 0.0;
+        double sample_area = disk_area / (grid * grid);
+
+        double total = 0.0;
+        for (int iy = 0; iy < grid; ++iy)
+        {
+                for (int ix = 0; ix < grid; ++ix)
+                {
+                        double su = (ix + 0.5) / static_cast<double>(grid);
+                        double sv = (iy + 0.5) / static_cast<double>(grid);
+                        double radius = L.spot_radius * std::sqrt(su);
+                        double phi = 2.0 * M_PI * sv;
+                        Vec3 offset = basis.u * (std::cos(phi) * radius) +
+                                      basis.v * (std::sin(phi) * radius);
+                        Vec3 sample_origin = L.position + offset + axis_dir * 1e-4;
+                        total += trace_spotlight_sample(scene, mats, L, axis_dir,
+                                                        sample_origin, sample_area,
+                                                        object_id);
+                }
+        }
+        return total;
+}
+
+double compute_object_beam_score(const Scene &scene,
+                                const std::vector<Material> &mats, int object_id)
+{
+        if (object_id < 0)
+                return 0.0;
+        double score = 0.0;
+        for (const auto &L : scene.lights)
+        {
+                if (!L.beam_spotlight)
+                        continue;
+                score += integrate_spotlight_area_for_object(scene, mats, L, object_id);
+        }
+        return score;
+}
+
 } // namespace
 
 namespace
@@ -532,17 +587,6 @@ bool target_blinking(const Scene &scene)
                         return true;
         }
         return false;
-}
-
-std::shared_ptr<BeamSource> primary_beam_source(const Scene &scene)
-{
-        for (const auto &obj : scene.objects)
-        {
-                auto source = std::dynamic_pointer_cast<BeamSource>(obj);
-                if (source)
-                        return source;
-        }
-        return nullptr;
 }
 
 } // namespace
@@ -607,6 +651,8 @@ struct Renderer::RenderState
         double last_score = 0.0;
         int level_number = 0;
         std::string level_label;
+        int hud_focus_object = -1;
+        double hud_focus_score = 0.0;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1088,6 +1134,8 @@ void Renderer::update_selection(RenderState &st,
 {
         if (st.edit_mode)
         {
+                st.hud_focus_object = -1;
+                st.hud_focus_score = 0.0;
                 if (st.hover_mat >= 0 && st.hover_mat != st.selected_mat)
                         mats[st.hover_mat].color =
                                 mats[st.hover_mat].base_color;
@@ -1116,11 +1164,21 @@ void Renderer::update_selection(RenderState &st,
         }
         else
         {
+                st.hud_focus_object = -1;
+                st.hud_focus_score = 0.0;
                 Ray center_ray = cam.ray_through(0.5, 0.5);
                 HitRecord hrec;
                 if (scene.hit(center_ray, 1e-4, 1e9, hrec))
                 {
                         auto &hit_obj = scene.objects[hrec.object_id];
+                        ShapeType shape = hit_obj->shape_type();
+                        if (shape != ShapeType::Plane && shape != ShapeType::BeamTarget &&
+                            shape != ShapeType::Beam)
+                        {
+                                st.hud_focus_object = hrec.object_id;
+                                st.hud_focus_score =
+                                        compute_object_beam_score(scene, mats, hrec.object_id);
+                        }
                         bool selectable = !hit_obj->is_beam() &&
                                           (g_developer_mode || hit_obj->movable ||
                                            hit_obj->rotatable);
@@ -1153,6 +1211,8 @@ void Renderer::update_selection(RenderState &st,
                                 mats[st.hover_mat].color =
                                         mats[st.hover_mat].base_color;
                         st.hover_obj = st.hover_mat = -1;
+                        st.hud_focus_object = -1;
+                        st.hud_focus_score = 0.0;
                 }
         }
 }
@@ -1184,66 +1244,126 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         left_lines.push_back({score_buf, SDL_Color{255, 255, 255, 255}});
 
         std::vector<HudTextLine> right_lines;
-        auto source = primary_beam_source(scene);
-        SDL_Color beam_color{200, 200, 200, 255};
-        std::string beam_status = "BEAM - NONE";
-        double beam_length = 0.0;
-        double beam_power = 0.0;
-        bool have_source = static_cast<bool>(source);
-        if (source)
+        std::shared_ptr<Hittable> focus_obj;
+        if (st.hud_focus_object >= 0 &&
+            st.hud_focus_object < static_cast<int>(scene.objects.size()))
+                focus_obj = scene.objects[st.hud_focus_object];
+        if (focus_obj)
         {
-                if (source->movable)
+                if (auto source = std::dynamic_pointer_cast<BeamSource>(focus_obj))
                 {
-                        beam_status = "BEAM - MOVABLE";
-                        beam_color = SDL_Color{96, 255, 128, 255};
-                }
-                else if (source->rotatable)
-                {
-                        beam_status = "BEAM - ROTATABLE";
-                        beam_color = SDL_Color{255, 220, 96, 255};
+                        SDL_Color beam_color{200, 200, 200, 255};
+                        std::string beam_status = "BEAM - NONE";
+                        double beam_length = 0.0;
+                        double beam_power = 0.0;
+                        if (source->movable)
+                        {
+                                beam_status = "BEAM - MOVABLE";
+                                beam_color = SDL_Color{96, 255, 128, 255};
+                        }
+                        else if (source->rotatable)
+                        {
+                                beam_status = "BEAM - ROTATABLE";
+                                beam_color = SDL_Color{255, 220, 96, 255};
+                        }
+                        else
+                        {
+                                beam_status = "BEAM - STATIONARY";
+                                beam_color = SDL_Color{255, 96, 96, 255};
+                        }
+                        if (source->beam)
+                        {
+                                beam_length = source->beam->total_length;
+                                beam_power = source->beam->light_intensity;
+                        }
+                        if (beam_power <= 0.0 && source->light)
+                                beam_power = source->light->intensity;
+                        if (beam_length <= 0.0)
+                        {
+                                for (const auto &L : scene.lights)
+                                {
+                                        if (L.attached_id == source->object_id)
+                                        {
+                                                if (L.range > 0.0)
+                                                        beam_length = L.range;
+                                                if (beam_power <= 0.0)
+                                                        beam_power = L.intensity;
+                                                break;
+                                        }
+                                }
+                        }
+                        right_lines.push_back({beam_status, beam_color});
+
+                        char length_buf[64];
+                        if (beam_length > 0.0)
+                                std::snprintf(length_buf, sizeof(length_buf),
+                                              "LENGTH: %.1f m", beam_length);
+                        else
+                                std::snprintf(length_buf, sizeof(length_buf), "LENGTH: --");
+                        right_lines.push_back({length_buf, SDL_Color{255, 255, 255, 255}});
+
+                        char power_buf[64];
+                        if (beam_power > 0.0)
+                                std::snprintf(power_buf, sizeof(power_buf), "POWER: %.2f",
+                                              beam_power);
+                        else
+                                std::snprintf(power_buf, sizeof(power_buf), "POWER: --");
+                        right_lines.push_back({power_buf, SDL_Color{255, 255, 255, 255}});
+
+                        char score_line[64];
+                        std::snprintf(score_line, sizeof(score_line), "OBJECT SCORE: %.2f",
+                                      st.hud_focus_score);
+                        right_lines.push_back({score_line, SDL_Color{255, 255, 255, 255}});
                 }
                 else
                 {
-                        beam_status = "BEAM - STATIONARY";
-                        beam_color = SDL_Color{255, 96, 96, 255};
-                }
-                if (source->beam)
-                {
-                        beam_length = source->beam->total_length;
-                        beam_power = source->beam->light_intensity;
-                }
-                if (beam_power <= 0.0 && source->light)
-                        beam_power = source->light->intensity;
-                if (beam_length <= 0.0)
-                {
-                        for (const auto &L : scene.lights)
-                        {
-                                if (L.attached_id == source->object_id)
+                        auto shape = focus_obj->shape_type();
+                        auto shape_label = [&]() {
+                                switch (shape)
                                 {
-                                        if (L.range > 0.0)
-                                                beam_length = L.range;
-                                        if (beam_power <= 0.0)
-                                                beam_power = L.intensity;
-                                        break;
+                                case ShapeType::Sphere:
+                                        return std::string("SPHERE");
+                                case ShapeType::Cube:
+                                        return std::string("CUBE");
+                                case ShapeType::Cylinder:
+                                        return std::string("CYLINDER");
+                                case ShapeType::Cone:
+                                        return std::string("CONE");
+                                case ShapeType::Plane:
+                                        return std::string("PLANE");
+                                case ShapeType::BeamTarget:
+                                        return std::string("TARGET");
+                                case ShapeType::Beam:
+                                        return std::string("LASER");
+                                default:
+                                        return std::string("OBJECT");
                                 }
+                        }();
+
+                        SDL_Color status_color{200, 200, 200, 255};
+                        std::string status_text = shape_label + " - STATIONARY";
+                        if (focus_obj->movable)
+                        {
+                                status_text = shape_label + " - MOVABLE";
+                                status_color = SDL_Color{96, 255, 128, 255};
                         }
+                        else if (focus_obj->rotatable)
+                        {
+                                status_text = shape_label + " - ROTATABLE";
+                                status_color = SDL_Color{255, 220, 96, 255};
+                        }
+                        else
+                        {
+                                status_color = SDL_Color{255, 96, 96, 255};
+                        }
+                        right_lines.push_back({status_text, status_color});
+
+                        char score_line[64];
+                        std::snprintf(score_line, sizeof(score_line), "OBJECT SCORE: %.2f",
+                                      st.hud_focus_score);
+                        right_lines.push_back({score_line, SDL_Color{255, 255, 255, 255}});
                 }
         }
-
-        right_lines.push_back({beam_status, beam_color});
-        char length_buf[64];
-        if (have_source && beam_length > 0.0)
-                std::snprintf(length_buf, sizeof(length_buf), "LENGTH: %.1f m", beam_length);
-        else
-                std::snprintf(length_buf, sizeof(length_buf), "LENGTH: --");
-        right_lines.push_back({length_buf, SDL_Color{255, 255, 255, 255}});
-
-        char power_buf[64];
-        if (have_source && beam_power > 0.0)
-                std::snprintf(power_buf, sizeof(power_buf), "POWER: %.2f", beam_power);
-        else
-                std::snprintf(power_buf, sizeof(power_buf), "POWER: --");
-        right_lines.push_back({power_buf, SDL_Color{255, 255, 255, 255}});
 
         std::vector<HudTextLine> control_lines;
         if (!st.focused)
