@@ -1,11 +1,12 @@
 #include "Cone.hpp"
 #include <cmath>
 
-Cone::Cone(const Vec3 &c, const Vec3 &ax, double r, double h, int oid, int mid)
-	: center(c), axis(ax.normalized()), radius(r), height(h)
+Cone::Cone(const Vec3 &c, const Vec3 &ax, double r, double h, int oid, int mid,
+           bool with_cap)
+        : center(c), axis(ax.normalized()), radius(r), height(h), capped(with_cap)
 {
-	object_id = oid;
-	material_id = mid;
+        object_id = oid;
+        material_id = mid;
 }
 
 bool Cone::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
@@ -59,28 +60,32 @@ bool Cone::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 		}
 	}
 
-	Vec3 base_center = center - axis * (height * 0.5);
-	double denom = Vec3::dot(r.dir, (-1) * axis);
-	if (std::fabs(denom) > 1e-9)
-	{
-		double t = Vec3::dot(base_center - r.orig, (-1) * axis) / denom;
-		if (t >= tmin && t <= closest)
-		{
-			Vec3 p = r.at(t);
-			if ((p - base_center).length_squared() <= radius * radius)
-			{
-				rec.t = t;
-				rec.p = p;
-				rec.object_id = object_id;
-				rec.material_id = material_id;
-				rec.set_face_normal(r, (-1) * axis);
-				closest = t;
-				hit_any = true;
-			}
-		}
-	}
+        if (capped)
+        {
+                Vec3 base_center = center - axis * (height * 0.5);
+                double denom = Vec3::dot(r.dir, (-1) * axis);
+                if (std::fabs(denom) > 1e-9)
+                {
+                        double t = Vec3::dot(base_center - r.orig, (-1) * axis) /
+                                   denom;
+                        if (t >= tmin && t <= closest)
+                        {
+                                Vec3 p = r.at(t);
+                                if ((p - base_center).length_squared() <= radius * radius)
+                                {
+                                        rec.t = t;
+                                        rec.p = p;
+                                        rec.object_id = object_id;
+                                        rec.material_id = material_id;
+                                        rec.set_face_normal(r, (-1) * axis);
+                                        closest = t;
+                                        hit_any = true;
+                                }
+                        }
+                }
+        }
 
-	return hit_any;
+        return hit_any;
 }
 
 bool Cone::bounding_box(AABB &out) const
