@@ -465,7 +465,7 @@ double compute_beam_score(const Scene &scene, const std::vector<Material> &mats)
         double score = 0.0;
         for (const auto &L : scene.lights)
         {
-                if (!L.beam_spotlight || L.reflected)
+                if (!L.beam_spotlight)
                         continue;
                 score += integrate_spotlight_area(scene, mats, L);
         }
