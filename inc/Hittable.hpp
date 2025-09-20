@@ -23,14 +23,16 @@ class Material;
 class HitRecord
 {
 	public:
-	Vec3 p;
-	Vec3 normal;
-	double t;
-	int object_id;
-	int material_id;
-	bool front_face;
-	double beam_ratio = 0.0;
-	void set_face_normal(const Ray &r, const Vec3 &outward_normal);
+        Vec3 p;
+        Vec3 normal;
+        double t;
+        int object_id;
+        int material_id;
+        bool front_face;
+        double beam_ratio = 0.0;
+        double u = 0.0;
+        double v = 0.0;
+        void set_face_normal(const Ray &r, const Vec3 &outward_normal);
 };
 
 class Hittable

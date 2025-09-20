@@ -200,7 +200,10 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "rotatable = " << bool_str(false) << "\n";
                 out << "movable = " << bool_str(rec.plane->movable) << "\n";
                 out << "scorable = " << bool_str(rec.plane->scorable) << "\n";
-                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n\n";
+                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n";
+                if (!rec.mat->texture_path.empty())
+                        out << "texture = \"" << rec.mat->texture_path << "\"\n";
+                out << "\n";
         }
 
         int cube_index = 1;
@@ -218,7 +221,10 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "rotatable = " << bool_str(is_rotatable(*rec.cube)) << "\n";
                 out << "movable = " << bool_str(rec.cube->movable) << "\n";
                 out << "scorable = " << bool_str(rec.cube->scorable) << "\n";
-                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n\n";
+                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n";
+                if (!rec.mat->texture_path.empty())
+                        out << "texture = \"" << rec.mat->texture_path << "\"\n";
+                out << "\n";
         }
 
         int sphere_index = 1;
@@ -234,7 +240,10 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "rotatable = " << bool_str(is_rotatable(*rec.sphere)) << "\n";
                 out << "movable = " << bool_str(rec.sphere->movable) << "\n";
                 out << "scorable = " << bool_str(rec.sphere->scorable) << "\n";
-                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n\n";
+                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n";
+                if (!rec.mat->texture_path.empty())
+                        out << "texture = \"" << rec.mat->texture_path << "\"\n";
+                out << "\n";
         }
 
         int cone_index = 1;
@@ -251,7 +260,10 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "rotatable = " << bool_str(is_rotatable(*rec.cone)) << "\n";
                 out << "movable = " << bool_str(rec.cone->movable) << "\n";
                 out << "scorable = " << bool_str(rec.cone->scorable) << "\n";
-                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n\n";
+                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n";
+                if (!rec.mat->texture_path.empty())
+                        out << "texture = \"" << rec.mat->texture_path << "\"\n";
+                out << "\n";
         }
 
         int cylinder_index = 1;
@@ -268,7 +280,10 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "rotatable = " << bool_str(is_rotatable(*rec.cylinder)) << "\n";
                 out << "movable = " << bool_str(rec.cylinder->movable) << "\n";
                 out << "scorable = " << bool_str(rec.cylinder->scorable) << "\n";
-                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n\n";
+                out << "transparent = " << bool_str(material_is_transparent(*rec.mat)) << "\n";
+                if (!rec.mat->texture_path.empty())
+                        out << "texture = \"" << rec.mat->texture_path << "\"\n";
+                out << "\n";
         }
 
         int beam_source_index = 1;
