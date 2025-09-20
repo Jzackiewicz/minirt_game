@@ -1371,32 +1371,76 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 }
         }
 
-        std::vector<HudTextLine> control_lines;
+        std::vector<HudTextLine> control_sections;
+        auto push_control = [&](const std::string &label, SDL_Color color) {
+                control_sections.push_back({label, color});
+        };
+        SDL_Color neutral{255, 255, 255, 255};
+        SDL_Color accent{96, 255, 128, 255};
+        SDL_Color warning{255, 220, 96, 255};
+        SDL_Color danger{255, 96, 96, 255};
+
         if (!st.focused)
         {
-                control_lines.push_back({"FOCUS LOST", SDL_Color{255, 220, 96, 255}});
-                control_lines.push_back({"Click to regain mouse control.",
-                                         SDL_Color{255, 255, 255, 255}});
+                push_control("FOCUS LOST", warning);
+                push_control("CLICK TO FOCUS", neutral);
         }
         else if (st.edit_mode)
         {
-                control_lines.push_back({"EDIT MODE CONTROLS", SDL_Color{255, 255, 255, 255}});
-                control_lines.push_back({"Move: WASD/Space/Ctrl | Rotate: hold RMB | Confirm: LMB",
-                                         SDL_Color{255, 255, 255, 255}});
-                if (g_developer_mode)
-                        control_lines.push_back({"Adjust size: Scroll | Delete: MMB",
-                                                 SDL_Color{255, 255, 255, 255}});
-                else
-                        control_lines.push_back({"Adjust distance: Scroll wheel",
-                                                 SDL_Color{255, 255, 255, 255}});
+                std::shared_ptr<Hittable> selected_obj;
+                if (st.selected_obj >= 0 &&
+                    st.selected_obj < static_cast<int>(scene.objects.size()))
+                        selected_obj = scene.objects[st.selected_obj];
+
+                bool can_move = false;
+                if (selected_obj)
+                        can_move = g_developer_mode ||
+                                    (!selected_obj->is_beam() && selected_obj->movable);
+                bool can_rotate = selected_obj &&
+                                  (g_developer_mode || selected_obj->rotatable);
+
+                if (can_move)
+                {
+                        push_control("MOVE: WSAD", neutral);
+                        push_control("ASCEND: SPACE", neutral);
+                        push_control("DESCEND: CTRL", neutral);
+                        if (!g_developer_mode)
+                                push_control("ADJUST DIST: SCROLL", neutral);
+                }
+
+                if (can_rotate)
+                {
+                        push_control("ROTATE: HOLD RPM", neutral);
+                        push_control("ROLL: Q/E", neutral);
+                }
+
+                if (g_developer_mode && selected_obj)
+                {
+                        push_control("RESIZE: SCROLL", neutral);
+                        push_control("DELETE: MMB", danger);
+                }
+
+                push_control("PLACE: LPM", accent);
+                push_control("PAUSE: ESC", neutral);
         }
         else
         {
-                control_lines.push_back({"CAMERA CONTROLS", SDL_Color{255, 255, 255, 255}});
-                control_lines.push_back({"Move: WASD/Space/Ctrl | Look: Mouse | Select: LMB",
-                                         SDL_Color{255, 255, 255, 255}});
-                control_lines.push_back({"Scroll: Vertical thrust | Pause: ESC",
-                                         SDL_Color{255, 255, 255, 255}});
+                push_control("MOVE: WSAD", neutral);
+                push_control("ASCEND: SPACE", neutral);
+                push_control("DESCEND: CTRL", neutral);
+                push_control("PAUSE: ESC", neutral);
+
+                bool show_grab = false;
+                if (focus_obj)
+                {
+                        bool grabbable = !focus_obj->is_beam() &&
+                                         (g_developer_mode || focus_obj->movable ||
+                                          focus_obj->rotatable);
+                        show_grab = grabbable;
+                }
+
+                if (show_grab)
+                        push_control("GRAB: LPM", accent);
         }
 
         size_t top_count = std::max(left_lines.size(), right_lines.size());
@@ -1405,10 +1449,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         int top_bar_height = static_cast<int>(top_count) * hud_line_height + 2 * hud_padding;
         top_bar_height = std::max(top_bar_height, hud_line_height + 2 * hud_padding);
 
-        size_t bottom_count = control_lines.empty() ? 1 : control_lines.size();
-        int bottom_bar_height = static_cast<int>(bottom_count) * hud_line_height +
-                                2 * hud_padding;
-        bottom_bar_height = std::max(bottom_bar_height, hud_line_height + 2 * hud_padding);
+        int bottom_bar_height = hud_line_height + 2 * hud_padding;
 
         SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(ren, 0, 0, 0, 180);
@@ -1443,13 +1484,26 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
 
         int controls_y = H - bottom_bar_height + hud_padding;
-        for (const auto &line : control_lines)
+        size_t section_count = control_sections.empty() ? 1 : control_sections.size();
+        double section_span = static_cast<double>(W) / section_count;
+        if (!control_sections.empty())
         {
-                int width = CustomCharacter::text_width(line.text, hud_scale);
-                int text_x = std::max(hud_padding, (W - width) / 2);
-                CustomCharacter::draw_text(ren, line.text, text_x, controls_y, line.color,
-                                            hud_scale);
-                controls_y += hud_line_height;
+                SDL_SetRenderDrawColor(ren, 255, 255, 255, 96);
+        }
+        for (size_t i = 0; i < control_sections.size(); ++i)
+        {
+                int start_x = static_cast<int>(std::round(i * section_span));
+                int end_x = static_cast<int>(std::round((i + 1) * section_span));
+                int width = CustomCharacter::text_width(control_sections[i].text, hud_scale);
+                int available = std::max(1, end_x - start_x);
+                int centered = start_x + (available - width) / 2;
+                int min_x = start_x + hud_padding;
+                int max_x = end_x - hud_padding - width;
+                int text_x = std::clamp(centered, min_x, std::max(min_x, max_x));
+                CustomCharacter::draw_text(ren, control_sections[i].text, text_x, controls_y,
+                                            control_sections[i].color, hud_scale);
+                if (i + 1 < control_sections.size())
+                        SDL_RenderDrawLine(ren, end_x, H - bottom_bar_height, end_x, H);
         }
 
         SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_NONE);
