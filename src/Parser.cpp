@@ -21,6 +21,7 @@
 #include <unordered_set>
 #include <vector>
 
+#define SPOTLIGHT_LASER_RATIO 20.0
 namespace
 {
 
@@ -808,11 +809,11 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
         const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
         double spot_radius = 0.0;
         if (beam->laser)
-                spot_radius = beam->laser->radius * 1.2;
+                spot_radius = beam->laser->radius * SPOTLIGHT_LASER_RATIO;
         else if (beam->light)
-                spot_radius = beam->light->radius * 1.2;
+                spot_radius = beam->light->radius * SPOTLIGHT_LASER_RATIO;
         else
-                spot_radius = beam_radius * 1.2;
+                spot_radius = beam_radius * SPOTLIGHT_LASER_RATIO;
         if (with_laser)
         {
                 oid += 2;
