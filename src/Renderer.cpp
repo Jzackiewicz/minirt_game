@@ -34,13 +34,33 @@ static bool light_through(const Scene &scene, const std::vector<Material> &mats,
                                                 const Vec3 &p, const PointLight &L,
                                                 Vec3 &color, double &intensity)
 {
-        Vec3 to_light = L.position - p;
-        double dist_to_light = to_light.length();
-        if (L.range > 0.0 && dist_to_light > L.range)
-                return false;
-        Vec3 dir = to_light.normalized();
-        Ray shadow_ray(p + dir * 1e-4, dir);
-        double max_dist = dist_to_light - 1e-4;
+        Vec3 dir;
+        Vec3 shadow_origin;
+        double max_dist;
+        if (L.beam_spotlight)
+        {
+                Vec3 axis;
+                Vec3 radial;
+                double axial = 0.0;
+                if (!beam_light_geometry(L, p, axis, axial, radial))
+                        return false;
+                dir = axis * -1.0;
+                shadow_origin = p + dir * 1e-4;
+                max_dist = axial;
+        }
+        else
+        {
+                Vec3 to_light = L.position - p;
+                double dist_to_light = to_light.length();
+                if (dist_to_light <= 1e-6)
+                        return false;
+                if (L.range > 0.0 && dist_to_light > L.range)
+                        return false;
+                dir = to_light / dist_to_light;
+                shadow_origin = p + dir * 1e-4;
+                max_dist = dist_to_light - 1e-4;
+        }
+        Ray shadow_ray(shadow_origin, dir);
         color = L.color;
         intensity = L.intensity;
         while (max_dist > 1e-4)
@@ -180,16 +200,31 @@ Vec3 light_contribution(const Scene &scene, const std::vector<Material> &mats,
 {
         if (light_ignores(light, rec.object_id))
                 return Vec3(0.0, 0.0, 0.0);
-        Vec3 to_light = light.position - point;
-        double dist = to_light.length();
-        if (dist <= 1e-6)
-                return Vec3(0.0, 0.0, 0.0);
-        Vec3 ldir = to_light / dist;
-        if (light.cutoff_cos > -1.0)
+        Vec3 ldir;
+        double dist = 0.0;
+        if (light.beam_spotlight)
         {
-                Vec3 spot_dir = (point - light.position).normalized();
-                if (Vec3::dot(light.direction, spot_dir) < light.cutoff_cos)
+                Vec3 axis;
+                Vec3 radial;
+                double axial = 0.0;
+                if (!beam_light_geometry(light, point, axis, axial, radial))
                         return Vec3(0.0, 0.0, 0.0);
+                ldir = axis * -1.0;
+                dist = axial;
+        }
+        else
+        {
+                Vec3 to_light = light.position - point;
+                dist = to_light.length();
+                if (dist <= 1e-6)
+                        return Vec3(0.0, 0.0, 0.0);
+                ldir = to_light / dist;
+                if (light.cutoff_cos > -1.0)
+                {
+                        Vec3 spot_dir = (point - light.position).normalized();
+                        if (Vec3::dot(light.direction, spot_dir) < light.cutoff_cos)
+                                return Vec3(0.0, 0.0, 0.0);
+                }
         }
         Vec3 lcolor;
         double lintensity;
@@ -224,21 +259,22 @@ double luminance(const Vec3 &c)
 }
 
 double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &mats,
-                                                         const PointLight &L, const Vec3 &dir,
-                                                         double sample_weight)
+                                                         const PointLight &L, const Vec3 &origin,
+                                                         const Vec3 &dir, double sample_weight)
 {
         if (L.intensity <= 1e-4)
                 return 0.0;
         const double max_range = (L.range > 0.0) ? L.range : 1e9;
         double travelled = 0.0;
-        Vec3 origin = L.position;
+        Vec3 ray_origin = origin;
+        Vec3 ray_dir = dir;
         double transmittance = 1.0;
         double total_area = 0.0;
 
         while (travelled < max_range - 1e-4 && transmittance > 1e-4)
         {
-                Ray ray(origin, dir);
-                double closest = max_range - travelled;
+                Ray ray(ray_origin, ray_dir);
+                double remaining = max_range - travelled;
                 HitRecord rec;
                 bool hit_any = false;
                 Hittable *hit_obj = nullptr;
@@ -249,9 +285,9 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                         if (light_ignores(L, obj->object_id))
                                 continue;
                         HitRecord tmp;
-                        if (obj->hit(ray, 1e-4, closest, tmp))
+                        if (obj->hit(ray, 1e-4, remaining, tmp))
                         {
-                                closest = tmp.t;
+                                remaining = tmp.t;
                                 rec = tmp;
                                 hit_any = true;
                                 hit_obj = obj.get();
@@ -260,55 +296,48 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                 if (!hit_any)
                         break;
 
-                travelled += closest;
-                Vec3 point = ray.at(closest);
+                travelled += remaining;
+                Vec3 point = ray.at(remaining);
 
                 if (hit_obj && hit_obj->scorable && !hit_obj->is_beam())
                 {
-                        Vec3 to_light = L.position - point;
-                        double dist2 = to_light.length_squared();
-                        if (dist2 > 1e-8)
+                        Vec3 ldir = ray_dir * -1.0;
+                        double cos_incident = std::max(0.0, Vec3::dot(rec.normal, ldir));
+                        if (cos_incident > 1e-6)
                         {
-                                double dist = std::sqrt(dist2);
-                                Vec3 ldir = to_light / dist;
-                                double cos_incident =
-                                        std::max(0.0, Vec3::dot(rec.normal, ldir));
-                                if (cos_incident > 1e-6)
+                                const Material &mat = mats[rec.material_id];
+                                Vec3 surface_color = surface_color_at(scene, rec, mat);
+                                Vec3 view_dir = rec.normal.normalized();
+                                Vec3 base = ambient_contribution(scene, surface_color);
+                                for (const auto &other : scene.lights)
                                 {
-                                        const Material &mat = mats[rec.material_id];
-                                        Vec3 surface_color = surface_color_at(scene, rec, mat);
-                                        Vec3 view_dir = rec.normal.normalized();
-                                        Vec3 base = ambient_contribution(scene, surface_color);
-                                        for (const auto &other : scene.lights)
+                                        if (&other == &L)
+                                                continue;
+                                        base += light_contribution(scene, mats, other, rec,
+                                                                   surface_color, mat, point,
+                                                                   view_dir);
+                                }
+                                Vec3 beam_contrib = light_contribution(
+                                        scene, mats, L, rec, surface_color, mat, point,
+                                        view_dir);
+                                if (beam_contrib.length_squared() > 1e-12)
+                                {
+                                        Vec3 base_clamped = clamp_color(base);
+                                        Vec3 with_clamped =
+                                                clamp_color(base + beam_contrib);
+                                        Vec3 delta = with_clamped - base_clamped;
+                                        delta.x = std::max(0.0, delta.x);
+                                        delta.y = std::max(0.0, delta.y);
+                                        delta.z = std::max(0.0, delta.z);
+                                        double delta_luma = luminance(delta);
+                                        if (delta_luma > 1e-6)
                                         {
-                                                if (&other == &L)
-                                                        continue;
-                                                base += light_contribution(scene, mats, other, rec,
-                                                                           surface_color, mat, point,
-                                                                           view_dir);
-                                        }
-                                        Vec3 beam_contrib = light_contribution(
-                                                scene, mats, L, rec, surface_color, mat, point,
-                                                view_dir);
-                                        if (beam_contrib.length_squared() > 1e-12)
-                                        {
-                                                Vec3 base_clamped = clamp_color(base);
-                                                Vec3 with_clamped =
-                                                        clamp_color(base + beam_contrib);
-                                                Vec3 delta = with_clamped - base_clamped;
-                                                delta.x = std::max(0.0, delta.x);
-                                                delta.y = std::max(0.0, delta.y);
-                                                delta.z = std::max(0.0, delta.z);
-                                                double delta_luma = luminance(delta);
-                                                if (delta_luma > 1e-6)
-                                                {
-                                                        double area =
-                                                                (dist2 * sample_weight) /
-                                                                cos_incident;
-                                                        double alpha =
-                                                                compute_effective_alpha(mat, rec);
-                                                        total_area += area * delta_luma * alpha;
-                                                }
+                                                double area =
+                                                        sample_weight /
+                                                        std::max(1e-6, cos_incident);
+                                                double alpha =
+                                                        compute_effective_alpha(mat, rec);
+                                                total_area += area * delta_luma * alpha;
                                         }
                                 }
                         }
@@ -324,7 +353,7 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                         break;
 
                 travelled += 1e-4;
-                origin = point + dir * 1e-4;
+                ray_origin = point + ray_dir * 1e-4;
         }
 
         return total_area;
@@ -335,13 +364,16 @@ double integrate_spotlight_area(const Scene &scene, const std::vector<Material> 
 {
         if (!L.beam_spotlight || L.intensity <= 0.0)
                 return 0.0;
-        Basis basis = make_basis(L.direction);
-        double cos_max = std::clamp(L.cutoff_cos, -1.0, 1.0);
-        double solid_angle = 2.0 * M_PI * (1.0 - cos_max);
-        if (solid_angle <= 0.0)
-                solid_angle = 1e-6;
-        const int grid = (solid_angle > 1.0) ? 24 : 16;
-        double sample_weight = solid_angle / (grid * grid);
+        double dir_len2 = L.direction.length_squared();
+        if (dir_len2 <= 1e-12)
+                return 0.0;
+        Vec3 axis = L.direction / std::sqrt(dir_len2);
+        double radius = std::max(0.0, L.beam_radius);
+        if (radius <= 0.0)
+                return 0.0;
+        Basis basis = make_basis(axis);
+        const int grid = 16;
+        double sample_weight = (M_PI * radius * radius) / (grid * grid);
 
         double total = 0.0;
         for (int iy = 0; iy < grid; ++iy)
@@ -350,16 +382,13 @@ double integrate_spotlight_area(const Scene &scene, const std::vector<Material> 
                 {
                         double su = (ix + 0.5) / static_cast<double>(grid);
                         double sv = (iy + 0.5) / static_cast<double>(grid);
-                        double cos_theta = 1.0 - (1.0 - cos_max) * su;
-                        cos_theta = std::clamp(cos_theta, -1.0, 1.0);
-                        double sin_theta =
-                                std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
+                        double r = radius * std::sqrt(su);
                         double phi = 2.0 * M_PI * sv;
-                        Vec3 dir = basis.u * (std::cos(phi) * sin_theta) +
-                                   basis.v * (std::sin(phi) * sin_theta) +
-                                   basis.w * cos_theta;
-                        dir = dir.normalized();
-                        total += trace_spotlight_sample(scene, mats, L, dir, sample_weight);
+                        Vec3 offset = basis.u * (std::cos(phi) * r) +
+                                      basis.v * (std::sin(phi) * r);
+                        Vec3 origin = L.position + offset;
+                        total += trace_spotlight_sample(scene, mats, L, origin, axis,
+                                                        sample_weight);
                 }
         }
         return total;
@@ -419,37 +448,7 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                          col.z * scene.ambient.color.z * scene.ambient.intensity);
         for (const auto &L : scene.lights)
         {
-                if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
-                                          rec.object_id) != L.ignore_ids.end())
-                        continue;
-                Vec3 to_light = L.position - rec.p;
-                double dist = to_light.length();
-                Vec3 ldir = to_light / dist;
-                if (L.cutoff_cos > -1.0)
-                {
-                        Vec3 spot_dir = (rec.p - L.position).normalized();
-                        if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
-                                continue;
-                }
-                Vec3 lcolor;
-                double lintensity;
-                if (!light_through(scene, mats, rec.p, L, lcolor, lintensity))
-                        continue;
-                double atten = 1.0;
-                if (L.range > 0.0)
-                        atten = std::max(0.0, 1.0 - dist / L.range);
-                double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
-                Vec3 h = (ldir + eye).normalized();
-                double spec =
-                        std::pow(std::max(0.0, Vec3::dot(rec.normal, h)), m.specular_exp) *
-                        m.specular_k;
-                double diff_term = lintensity * diff * atten;
-                sum += Vec3(col.x * lcolor.x * lintensity * diff * atten +
-                                                lcolor.x * spec * atten,
-                                        col.y * lcolor.y * lintensity * diff * atten +
-                                                lcolor.y * spec * atten,
-                                        col.z * lcolor.z * lintensity * diff * atten +
-                                                lcolor.z * spec * atten);
+                sum += light_contribution(scene, mats, L, rec, col, m, rec.p, eye);
         }
 	if (m.mirror)
 	{

@@ -170,15 +170,15 @@ void Scene::process_beams(const std::vector<Material> &mats,
         {
                 auto bm = pl.beam;
                 Vec3 light_col = bm->color;
-                const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
                 double remain = bm->total_length - bm->start;
                 double ratio =
                         (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
+                double beam_radius = bm->radius * 1.2;
                 lights.emplace_back(bm->path.orig, light_col,
                                                         bm->light_intensity * ratio,
                                                         std::vector<int>{bm->object_id, pl.hit_id},
-                                                        bm->object_id, bm->path.dir, cone_cos, bm->length,
-                                                        false, true);
+                                                        bm->object_id, bm->path.dir, -1.0, bm->length,
+                                                        false, true, beam_radius);
         }
 }
 
@@ -270,7 +270,7 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
                 ignore.push_back(hit_rec.object_id);
                 PointLight new_light(refl_orig, L.color, intensity, ignore, -1,
                                                          refl_dir, L.cutoff_cos, remain, true,
-                                                         L.beam_spotlight);
+                                                         L.beam_spotlight, L.beam_radius);
                 to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
         }
 }
