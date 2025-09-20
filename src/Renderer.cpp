@@ -1145,12 +1145,133 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
-        SDL_Color score_color{255, 255, 255, 255};
-        int score_scale = 2;
+        SDL_Color hud_text_color{255, 255, 255, 255};
+        const int hud_scale = 2;
+        const int glyph_height = 7 * hud_scale;
+        const int line_spacing = 4;
+        const int hud_padding = 12;
+        auto block_height = [&](const std::vector<std::string> &lines) -> int {
+                if (lines.empty())
+                        return 0;
+                int content_height = static_cast<int>(lines.size()) * glyph_height;
+                if (lines.size() > 1)
+                        content_height += static_cast<int>(lines.size() - 1) * line_spacing;
+                return hud_padding * 2 + content_height;
+        };
+
         char score_buf[64];
-        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f m^2", st.last_score);
-        int score_text_height = 7 * score_scale;
-        [[maybe_unused]] int legend_base_y = 5 + score_text_height + 5;
+        std::snprintf(score_buf, sizeof(score_buf), "Score: %.2f m^2", st.last_score);
+        std::vector<std::string> top_left_lines{"LEVEL GOALS", score_buf,
+                                                "Targets hit: --/--",
+                                                "Bonus objective: TBD"};
+
+        int active_beams = 0;
+        double total_beam_length = 0.0;
+        double max_intensity = 0.0;
+        for (const auto &obj : scene.objects)
+        {
+                if (!obj->is_beam())
+                        continue;
+                auto beam = std::static_pointer_cast<Laser>(obj);
+                ++active_beams;
+                total_beam_length += beam->length;
+                max_intensity = std::max(max_intensity, beam->light_intensity);
+        }
+
+        std::vector<std::string> top_right_lines;
+        top_right_lines.emplace_back("BEAM ATTRIBUTES");
+        char beam_count_buf[64];
+        std::snprintf(beam_count_buf, sizeof(beam_count_buf), "Active beams: %d",
+                      active_beams);
+        top_right_lines.emplace_back(beam_count_buf);
+        if (active_beams > 0)
+        {
+                char beam_len_buf[64];
+                std::snprintf(beam_len_buf, sizeof(beam_len_buf), "Total length: %.1f m",
+                              total_beam_length);
+                top_right_lines.emplace_back(beam_len_buf);
+                char beam_power_buf[64];
+                std::snprintf(beam_power_buf, sizeof(beam_power_buf), "Max intensity: %.1f",
+                              max_intensity);
+                top_right_lines.emplace_back(beam_power_buf);
+        }
+        else
+        {
+                top_right_lines.emplace_back("Total length: --");
+                top_right_lines.emplace_back("Max intensity: --");
+        }
+
+        std::vector<std::string> bottom_lines;
+        bottom_lines.emplace_back("CONTROLS");
+        if (!st.focused)
+        {
+                bottom_lines.emplace_back("Left click to focus the window");
+                bottom_lines.emplace_back("W/A/S/D - Move  |  Mouse - Look");
+                bottom_lines.emplace_back("ESC - Pause menu");
+        }
+        else if (st.edit_mode)
+        {
+                bottom_lines.emplace_back("W/A/S/D/Space/Ctrl - Move camera");
+                bottom_lines.emplace_back("Mouse wheel - Adjust distance");
+                bottom_lines.emplace_back("Hold RMB + move mouse - Rotate object");
+                bottom_lines.emplace_back("LMB - Confirm placement");
+                if (g_developer_mode)
+                        bottom_lines.emplace_back("MMB - Delete object (developer)");
+        }
+        else
+        {
+                bottom_lines.emplace_back("W/A/S/D/Space/Ctrl - Move");
+                bottom_lines.emplace_back("Mouse - Look  |  LMB - Interact");
+                bottom_lines.emplace_back("ESC - Pause menu");
+        }
+
+        const int top_bar_height = block_height(top_left_lines.size() >= top_right_lines.size()
+                                                                ? top_left_lines
+                                                                : top_right_lines);
+        const int bottom_bar_height = block_height(bottom_lines);
+
+        SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
+        if (top_bar_height > 0)
+        {
+                SDL_Rect top_bar{0, 0, W, top_bar_height};
+                SDL_SetRenderDrawColor(ren, 0, 0, 0, 160);
+                SDL_RenderFillRect(ren, &top_bar);
+                SDL_SetRenderDrawColor(ren, 255, 255, 255, 96);
+                SDL_RenderDrawLine(ren, W / 2, top_bar.y + hud_padding,
+                                   W / 2, top_bar.y + top_bar_height - hud_padding);
+                int left_y = top_bar.y + hud_padding;
+                for (const auto &line : top_left_lines)
+                {
+                        CustomCharacter::draw_text(ren, line, hud_padding, left_y,
+                                                    hud_text_color, hud_scale);
+                        left_y += glyph_height + line_spacing;
+                }
+                int right_y = top_bar.y + hud_padding;
+                for (const auto &line : top_right_lines)
+                {
+                        int line_width = CustomCharacter::text_width(line, hud_scale);
+                        int right_x = std::max(hud_padding, W - hud_padding - line_width);
+                        CustomCharacter::draw_text(ren, line, right_x, right_y,
+                                                    hud_text_color, hud_scale);
+                        right_y += glyph_height + line_spacing;
+                }
+        }
+
+        if (bottom_bar_height > 0)
+        {
+                SDL_Rect bottom_bar{0, H - bottom_bar_height, W, bottom_bar_height};
+                SDL_SetRenderDrawColor(ren, 0, 0, 0, 160);
+                SDL_RenderFillRect(ren, &bottom_bar);
+                int bottom_y = bottom_bar.y + hud_padding;
+                for (const auto &line : bottom_lines)
+                {
+                        CustomCharacter::draw_text(ren, line, hud_padding, bottom_y,
+                                                    hud_text_color, hud_scale);
+                        bottom_y += glyph_height + line_spacing;
+                }
+        }
+        SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_NONE);
+        [[maybe_unused]] int legend_base_y = top_bar_height + 10;
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -1241,10 +1362,9 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                 int fps_w = CustomCharacter::text_width(fps_text, scale);
                 int fps_h = 7 * scale;
                 int fps_x = std::max(0, W - fps_w - 5);
-                int fps_y = std::max(0, H - fps_h - 5);
+                int fps_y = std::max(0, H - bottom_bar_height - fps_h - 5);
                 CustomCharacter::draw_text(ren, fps_text, fps_x, fps_y, red, scale);
         }
-        CustomCharacter::draw_text(ren, score_buf, 5, 5, score_color, score_scale);
         SDL_RenderPresent(ren);
 }
 
