@@ -42,6 +42,7 @@ class Renderer
                                           std::vector<unsigned char> &pixels, int RW,
                                           int RH, int W, int H, int T,
                                           std::vector<Material> &mats);
+        int render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H);
         Scene &scene;
         Camera &cam;
 };
