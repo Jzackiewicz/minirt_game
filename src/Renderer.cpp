@@ -209,6 +209,16 @@ Vec3 clamp_color(const Vec3 &c, double lo = 0.0, double hi = 1.0)
                                 std::clamp(c.z, lo, hi));
 }
 
+static Vec3 brighten_color(const Vec3 &color, double amount = 0.35)
+{
+        return clamp_color(color + (Vec3(1.0, 1.0, 1.0) - color) * amount);
+}
+
+static Vec3 darken_color(const Vec3 &color, double amount = 0.35)
+{
+        return clamp_color(color * (1.0 - amount));
+}
+
 Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                                          const Material &mat)
 {
@@ -231,12 +241,13 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
         }
         if (mat.checkered)
         {
-                Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
+                Vec3 brighter = brighten_color(base);
+                Vec3 darker = darken_color(base);
                 int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
                                    static_cast<int>(std::floor(rec.p.y * 5)) +
                                    static_cast<int>(std::floor(rec.p.z * 5))) &
                                   1;
-                col = chk ? base : inv;
+                col = chk ? brighter : darker;
         }
         return col;
 }
@@ -1062,10 +1073,12 @@ void Renderer::update_selection(RenderState &st,
                                         st.hover_mat = hrec.material_id;
                                 }
                                 bool blink = ((SDL_GetTicks() / 250) % 2) == 0;
-                                mats[st.hover_mat].color =
-                                        blink ? (Vec3(1.0, 1.0, 1.0) -
-                                                         mats[st.hover_mat].base_color)
-                                              : mats[st.hover_mat].base_color;
+                                Vec3 base_color = mats[st.hover_mat].base_color;
+                                Vec3 alt_color =
+                                        (luminance(base_color) >= 0.5)
+                                                ? darken_color(base_color)
+                                                : brighten_color(base_color);
+                                mats[st.hover_mat].color = blink ? alt_color : base_color;
                         }
                         else if (st.hover_mat >= 0)
                         {
