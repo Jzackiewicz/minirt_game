@@ -1,5 +1,7 @@
 #include "Renderer.hpp"
 #include "AABB.hpp"
+#include "BeamSource.hpp"
+#include "BeamTarget.hpp"
 #include "Config.hpp"
 #include "Settings.hpp"
 #include "MapSaver.hpp"
@@ -18,6 +20,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cctype>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -479,6 +483,70 @@ double compute_beam_score(const Scene &scene, const std::vector<Material> &mats)
 
 } // namespace
 
+namespace
+{
+
+struct HudTextLine
+{
+        std::string text;
+        SDL_Color color;
+};
+
+int parse_level_number_from_path(const std::string &scene_path)
+{
+        namespace fs = std::filesystem;
+        fs::path path(scene_path);
+        std::string stem = path.stem().string();
+        int value = 0;
+        bool found_digit = false;
+        for (char ch : stem)
+        {
+                if (std::isdigit(static_cast<unsigned char>(ch)))
+                {
+                        value = value * 10 + (ch - '0');
+                        found_digit = true;
+                }
+                else if (found_digit)
+                {
+                        break;
+                }
+        }
+        return found_digit ? value : 0;
+}
+
+std::string level_label_from_path(const std::string &scene_path)
+{
+        namespace fs = std::filesystem;
+        fs::path path(scene_path);
+        return path.stem().string();
+}
+
+bool target_blinking(const Scene &scene)
+{
+        for (const auto &obj : scene.objects)
+        {
+                if (obj->shape_type() != ShapeType::BeamTarget)
+                        continue;
+                auto target = std::static_pointer_cast<BeamTarget>(obj);
+                if (target->goal_active || target->goal_phase != 0)
+                        return true;
+        }
+        return false;
+}
+
+std::shared_ptr<BeamSource> primary_beam_source(const Scene &scene)
+{
+        for (const auto &obj : scene.objects)
+        {
+                auto source = std::dynamic_pointer_cast<BeamSource>(obj);
+                if (source)
+                        return source;
+        }
+        return nullptr;
+}
+
+} // namespace
+
 static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                                           const Ray &r, std::mt19937 &rng,
                                           std::uniform_real_distribution<double> &dist,
@@ -534,9 +602,11 @@ struct Renderer::RenderState
         Vec3 edit_pos;
         int spawn_key = -1;
         double fps = 0.0;
-		bool scene_dirty = false;
+        bool scene_dirty = false;
         Uint32 last_auto_save = 0;
-		double last_score = 0.0;
+        double last_score = 0.0;
+        int level_number = 0;
+        std::string level_label;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1087,6 +1157,179 @@ void Renderer::update_selection(RenderState &st,
         }
 }
 
+int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
+{
+        const int hud_scale = 2;
+        const int hud_padding = 12;
+        const int hud_line_height = 7 * hud_scale + 4;
+
+        std::vector<HudTextLine> left_lines;
+        std::string level_line;
+        if (st.level_number > 0)
+                level_line = "LEVEL " + std::to_string(st.level_number);
+        else if (!st.level_label.empty())
+                level_line = "LEVEL " + st.level_label;
+        else
+                level_line = "LEVEL ?";
+        left_lines.push_back({level_line, SDL_Color{255, 255, 255, 255}});
+
+        bool target_hit = target_blinking(scene);
+        SDL_Color target_color = target_hit ? SDL_Color{96, 255, 128, 255}
+                                            : SDL_Color{255, 96, 96, 255};
+        left_lines.push_back(
+                {std::string("TARGET: ") + (target_hit ? "HIT" : "NOT HIT"), target_color});
+
+        char score_buf[64];
+        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f/0", st.last_score);
+        left_lines.push_back({score_buf, SDL_Color{255, 255, 255, 255}});
+
+        std::vector<HudTextLine> right_lines;
+        auto source = primary_beam_source(scene);
+        SDL_Color beam_color{200, 200, 200, 255};
+        std::string beam_status = "BEAM - NONE";
+        double beam_length = 0.0;
+        double beam_power = 0.0;
+        bool have_source = static_cast<bool>(source);
+        if (source)
+        {
+                if (source->movable)
+                {
+                        beam_status = "BEAM - MOVABLE";
+                        beam_color = SDL_Color{96, 255, 128, 255};
+                }
+                else if (source->rotatable)
+                {
+                        beam_status = "BEAM - ROTATABLE";
+                        beam_color = SDL_Color{255, 220, 96, 255};
+                }
+                else
+                {
+                        beam_status = "BEAM - STATIONARY";
+                        beam_color = SDL_Color{255, 96, 96, 255};
+                }
+                if (source->beam)
+                {
+                        beam_length = source->beam->total_length;
+                        beam_power = source->beam->light_intensity;
+                }
+                if (beam_power <= 0.0 && source->light)
+                        beam_power = source->light->intensity;
+                if (beam_length <= 0.0)
+                {
+                        for (const auto &L : scene.lights)
+                        {
+                                if (L.attached_id == source->object_id)
+                                {
+                                        if (L.range > 0.0)
+                                                beam_length = L.range;
+                                        if (beam_power <= 0.0)
+                                                beam_power = L.intensity;
+                                        break;
+                                }
+                        }
+                }
+        }
+
+        right_lines.push_back({beam_status, beam_color});
+        char length_buf[64];
+        if (have_source && beam_length > 0.0)
+                std::snprintf(length_buf, sizeof(length_buf), "LENGTH: %.1f m", beam_length);
+        else
+                std::snprintf(length_buf, sizeof(length_buf), "LENGTH: --");
+        right_lines.push_back({length_buf, SDL_Color{255, 255, 255, 255}});
+
+        char power_buf[64];
+        if (have_source && beam_power > 0.0)
+                std::snprintf(power_buf, sizeof(power_buf), "POWER: %.2f", beam_power);
+        else
+                std::snprintf(power_buf, sizeof(power_buf), "POWER: --");
+        right_lines.push_back({power_buf, SDL_Color{255, 255, 255, 255}});
+
+        std::vector<HudTextLine> control_lines;
+        if (!st.focused)
+        {
+                control_lines.push_back({"FOCUS LOST", SDL_Color{255, 220, 96, 255}});
+                control_lines.push_back({"Click to regain mouse control.",
+                                         SDL_Color{255, 255, 255, 255}});
+        }
+        else if (st.edit_mode)
+        {
+                control_lines.push_back({"EDIT MODE CONTROLS", SDL_Color{255, 255, 255, 255}});
+                control_lines.push_back({"Move: WASD/Space/Ctrl | Rotate: hold RMB | Confirm: LMB",
+                                         SDL_Color{255, 255, 255, 255}});
+                if (g_developer_mode)
+                        control_lines.push_back({"Adjust size: Scroll | Delete: MMB",
+                                                 SDL_Color{255, 255, 255, 255}});
+                else
+                        control_lines.push_back({"Adjust distance: Scroll wheel",
+                                                 SDL_Color{255, 255, 255, 255}});
+        }
+        else
+        {
+                control_lines.push_back({"CAMERA CONTROLS", SDL_Color{255, 255, 255, 255}});
+                control_lines.push_back({"Move: WASD/Space/Ctrl | Look: Mouse | Select: LMB",
+                                         SDL_Color{255, 255, 255, 255}});
+                control_lines.push_back({"Scroll: Vertical thrust | Pause: ESC",
+                                         SDL_Color{255, 255, 255, 255}});
+        }
+
+        size_t top_count = std::max(left_lines.size(), right_lines.size());
+        if (top_count == 0)
+                top_count = 1;
+        int top_bar_height = static_cast<int>(top_count) * hud_line_height + 2 * hud_padding;
+        top_bar_height = std::max(top_bar_height, hud_line_height + 2 * hud_padding);
+
+        size_t bottom_count = control_lines.empty() ? 1 : control_lines.size();
+        int bottom_bar_height = static_cast<int>(bottom_count) * hud_line_height +
+                                2 * hud_padding;
+        bottom_bar_height = std::max(bottom_bar_height, hud_line_height + 2 * hud_padding);
+
+        SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(ren, 0, 0, 0, 180);
+        SDL_Rect top_bar{0, 0, W, top_bar_height};
+        SDL_RenderFillRect(ren, &top_bar);
+        SDL_Rect bottom_bar{0, H - bottom_bar_height, W, bottom_bar_height};
+        SDL_RenderFillRect(ren, &bottom_bar);
+
+        if (top_bar_height > 2 * hud_padding)
+        {
+                SDL_SetRenderDrawColor(ren, 255, 255, 255, 96);
+                SDL_RenderDrawLine(ren, W / 2, hud_padding, W / 2,
+                                   top_bar_height - hud_padding);
+        }
+
+        int left_y = hud_padding;
+        for (const auto &line : left_lines)
+        {
+                CustomCharacter::draw_text(ren, line.text, hud_padding, left_y, line.color,
+                                            hud_scale);
+                left_y += hud_line_height;
+        }
+
+        int right_y = hud_padding;
+        for (const auto &line : right_lines)
+        {
+                int width = CustomCharacter::text_width(line.text, hud_scale);
+                int text_x = std::max(hud_padding, W - hud_padding - width);
+                CustomCharacter::draw_text(ren, line.text, text_x, right_y, line.color,
+                                            hud_scale);
+                right_y += hud_line_height;
+        }
+
+        int controls_y = H - bottom_bar_height + hud_padding;
+        for (const auto &line : control_lines)
+        {
+                int width = CustomCharacter::text_width(line.text, hud_scale);
+                int text_x = std::max(hud_padding, (W - width) / 2);
+                CustomCharacter::draw_text(ren, line.text, text_x, controls_y, line.color,
+                                            hud_scale);
+                controls_y += hud_line_height;
+        }
+
+        SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_NONE);
+        return top_bar_height;
+}
+
 /// Render the current frame and display it to the window.
 void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex,
                                                        std::vector<Vec3> &framebuffer,
@@ -1145,148 +1388,7 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
-        SDL_Color hud_color{255, 255, 255, 255};
-        int hud_scale = 2;
-        int hud_padding = 12;
-        int hud_line_height = 7 * hud_scale + 4;
-
-        char score_value_buf[64];
-        std::snprintf(score_value_buf, sizeof(score_value_buf), "Score: %.2f m^2",
-                      st.last_score);
-
-        std::vector<std::string> requirement_lines{
-                "LEVEL REQUIREMENTS",
-                std::string(score_value_buf),
-                "Target score: TBD",
-                "Targets hit: TBD"};
-
-        int beam_count = 0;
-        double longest_beam = 0.0;
-        double total_beam_length = 0.0;
-        double max_power_ratio = 0.0;
-        for (const auto &obj : scene.objects)
-        {
-                if (!obj->is_beam())
-                        continue;
-                auto laser = std::dynamic_pointer_cast<Laser>(obj);
-                if (!laser)
-                        continue;
-                ++beam_count;
-                longest_beam = std::max(longest_beam, laser->length);
-                total_beam_length += laser->length;
-                double remain = std::max(0.0, laser->total_length - laser->start);
-                double ratio = 0.0;
-                if (laser->total_length > 1e-6)
-                        ratio = remain / laser->total_length;
-                ratio = std::clamp(ratio, 0.0, 1.0);
-                max_power_ratio = std::max(max_power_ratio, ratio);
-        }
-        double average_beam_length =
-                (beam_count > 0) ? total_beam_length / static_cast<double>(beam_count) : 0.0;
-
-        std::vector<std::string> beam_lines;
-        beam_lines.push_back("BEAM ATTRIBUTES");
-        if (beam_count == 0)
-        {
-                beam_lines.push_back("No active beams");
-        }
-        else
-        {
-                char beam_count_buf[64];
-                std::snprintf(beam_count_buf, sizeof(beam_count_buf),
-                              "Active beams: %d", beam_count);
-                char beam_length_buf[64];
-                std::snprintf(beam_length_buf, sizeof(beam_length_buf),
-                              "Longest length: %.1f m", longest_beam);
-                char beam_avg_buf[64];
-                std::snprintf(beam_avg_buf, sizeof(beam_avg_buf),
-                              "Average length: %.1f m", average_beam_length);
-                char beam_power_buf[64];
-                std::snprintf(beam_power_buf, sizeof(beam_power_buf),
-                              "Max power: %.0f%%", max_power_ratio * 100.0);
-                beam_lines.emplace_back(beam_count_buf);
-                beam_lines.emplace_back(beam_length_buf);
-                beam_lines.emplace_back(beam_avg_buf);
-                beam_lines.emplace_back(beam_power_buf);
-        }
-
-        std::vector<std::string> control_lines;
-        if (!st.focused)
-        {
-                control_lines.push_back("FOCUS LOST");
-                control_lines.push_back("Click to regain mouse control.");
-        }
-        else if (st.edit_mode)
-        {
-                control_lines.push_back("EDIT MODE CONTROLS");
-                control_lines.push_back(
-                        "Move: WASD/Space/Ctrl | Rotate: hold RMB | Confirm: LMB");
-                if (g_developer_mode)
-                        control_lines.push_back("Adjust size: Scroll | Delete: MMB");
-                else
-                        control_lines.push_back("Adjust distance: Scroll wheel");
-        }
-        else
-        {
-                control_lines.push_back("CAMERA CONTROLS");
-                control_lines.push_back(
-                        "Move: WASD/Space/Ctrl | Look: Mouse | Select: LMB");
-                control_lines.push_back("Scroll: Vertical thrust | Pause: ESC");
-        }
-
-        int top_lines = std::max(static_cast<int>(requirement_lines.size()),
-                                 static_cast<int>(beam_lines.size()));
-        int top_bar_height =
-                std::max(H / 8, top_lines * hud_line_height + 2 * hud_padding);
-        int bottom_lines = static_cast<int>(control_lines.size());
-        int bottom_bar_height =
-                std::max(H / 10, bottom_lines * hud_line_height + 2 * hud_padding);
-
-        SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(ren, 0, 0, 0, 180);
-        SDL_Rect top_bar{0, 0, W, top_bar_height};
-        SDL_RenderFillRect(ren, &top_bar);
-        SDL_Rect bottom_bar{0, H - bottom_bar_height, W, bottom_bar_height};
-        SDL_RenderFillRect(ren, &bottom_bar);
-
-        if (top_bar_height > 2 * hud_padding)
-        {
-                SDL_SetRenderDrawColor(ren, 255, 255, 255, 96);
-                int separator_x = W / 2;
-                SDL_RenderDrawLine(ren, separator_x, hud_padding, separator_x,
-                                   top_bar_height - hud_padding);
-        }
-
-        int left_y = hud_padding;
-        for (const auto &line : requirement_lines)
-        {
-                CustomCharacter::draw_text(ren, line, hud_padding, left_y, hud_color,
-                                            hud_scale);
-                left_y += hud_line_height;
-        }
-
-        int right_y = hud_padding;
-        int right_limit = W - hud_padding;
-        for (const auto &line : beam_lines)
-        {
-                int text_width = CustomCharacter::text_width(line, hud_scale);
-                int text_x = std::max(hud_padding, right_limit - text_width);
-                CustomCharacter::draw_text(ren, line, text_x, right_y, hud_color,
-                                            hud_scale);
-                right_y += hud_line_height;
-        }
-
-        int controls_y = H - bottom_bar_height + hud_padding;
-        for (const auto &line : control_lines)
-        {
-                int text_width = CustomCharacter::text_width(line, hud_scale);
-                int text_x = std::max(hud_padding, (W - text_width) / 2);
-                CustomCharacter::draw_text(ren, line, text_x, controls_y, hud_color,
-                                            hud_scale);
-                controls_y += hud_line_height;
-        }
-        SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_NONE);
-
+        int top_bar_height = render_hud(st, ren, W, H);
         int legend_base_y = top_bar_height + 5;
         if (st.edit_mode && g_developer_mode)
         {
@@ -1477,6 +1579,8 @@ void Renderer::render_window(std::vector<Material> &mats,
                 return;
 
         RenderState st;
+        st.level_number = parse_level_number_from_path(scene_path);
+        st.level_label = level_label_from_path(scene_path);
         st.focused = true;
         SDL_SetRelativeMouseMode(SDL_TRUE);
         SDL_ShowCursor(SDL_DISABLE);
