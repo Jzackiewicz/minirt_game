@@ -180,25 +180,26 @@ Vec3 light_contribution(const Scene &scene, const std::vector<Material> &mats,
 {
         if (light_ignores(light, rec.object_id))
                 return Vec3(0.0, 0.0, 0.0);
+        double axial_dist = 0.0;
+        if (!spotlight_covers_point(light, point, &axial_dist))
+                return Vec3(0.0, 0.0, 0.0);
         Vec3 to_light = light.position - point;
         double dist = to_light.length();
         if (dist <= 1e-6)
                 return Vec3(0.0, 0.0, 0.0);
         Vec3 ldir = to_light / dist;
-        if (light.cutoff_cos > -1.0)
-        {
-                Vec3 spot_dir = (point - light.position).normalized();
-                if (Vec3::dot(light.direction, spot_dir) < light.cutoff_cos)
-                        return Vec3(0.0, 0.0, 0.0);
-        }
         Vec3 lcolor;
         double lintensity;
         if (!light_through(scene, mats, point, light, lcolor, lintensity))
                 return Vec3(0.0, 0.0, 0.0);
         double atten = 1.0;
+        double effective_dist =
+                (light.beam_spotlight && light.spot_radius > 0.0)
+                        ? std::max(0.0, axial_dist)
+                        : dist;
         if (light.range > 0.0)
         {
-                atten = std::max(0.0, 1.0 - dist / light.range);
+                atten = std::max(0.0, 1.0 - effective_dist / light.range);
                 if (atten <= 0.0)
                         return Vec3(0.0, 0.0, 0.0);
         }
@@ -224,20 +225,20 @@ double luminance(const Vec3 &c)
 }
 
 double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &mats,
-                                                         const PointLight &L, const Vec3 &dir,
-                                                         double sample_weight)
+                                                        const PointLight &L, const Vec3 &origin,
+                                                        const Vec3 &dir, double sample_weight)
 {
         if (L.intensity <= 1e-4)
                 return 0.0;
         const double max_range = (L.range > 0.0) ? L.range : 1e9;
         double travelled = 0.0;
-        Vec3 origin = L.position;
+        Vec3 current_origin = origin;
         double transmittance = 1.0;
         double total_area = 0.0;
 
         while (travelled < max_range - 1e-4 && transmittance > 1e-4)
         {
-                Ray ray(origin, dir);
+                Ray ray(current_origin, dir);
                 double closest = max_range - travelled;
                 HitRecord rec;
                 bool hit_any = false;
@@ -265,12 +266,14 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
 
                 if (hit_obj && hit_obj->scorable && !hit_obj->is_beam())
                 {
-                        Vec3 to_light = L.position - point;
+                        Vec3 to_light = origin - point;
                         double dist2 = to_light.length_squared();
                         if (dist2 > 1e-8)
                         {
                                 double dist = std::sqrt(dist2);
                                 Vec3 ldir = to_light / dist;
+                                if (L.beam_spotlight && L.spot_radius > 0.0)
+                                        ldir = (-dir).normalized();
                                 double cos_incident =
                                         std::max(0.0, Vec3::dot(rec.normal, ldir));
                                 if (cos_incident > 1e-6)
@@ -302,9 +305,13 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                                                 double delta_luma = luminance(delta);
                                                 if (delta_luma > 1e-6)
                                                 {
-                                                        double area =
-                                                                (dist2 * sample_weight) /
-                                                                cos_incident;
+                                                        double area;
+                                                        if (L.beam_spotlight && L.spot_radius > 0.0)
+                                                                area = sample_weight /
+                                                                       std::max(1e-6, cos_incident);
+                                                        else
+                                                                area = (dist2 * sample_weight) /
+                                                                       cos_incident;
                                                         double alpha =
                                                                 compute_effective_alpha(mat, rec);
                                                         total_area += area * delta_luma * alpha;
@@ -324,7 +331,7 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                         break;
 
                 travelled += 1e-4;
-                origin = point + dir * 1e-4;
+                current_origin = point + dir * 1e-4;
         }
 
         return total_area;
@@ -336,6 +343,34 @@ double integrate_spotlight_area(const Scene &scene, const std::vector<Material> 
         if (!L.beam_spotlight || L.intensity <= 0.0)
                 return 0.0;
         Basis basis = make_basis(L.direction);
+        if (L.spot_radius > 0.0)
+        {
+                const int grid = 16;
+                double disk_area = M_PI * L.spot_radius * L.spot_radius;
+                double sample_weight = disk_area / (grid * grid);
+                Vec3 axis_dir = basis.w;
+                if (axis_dir.length_squared() <= 1e-12)
+                        axis_dir = Vec3(0, 0, 1);
+
+                double total = 0.0;
+                for (int iy = 0; iy < grid; ++iy)
+                {
+                        for (int ix = 0; ix < grid; ++ix)
+                        {
+                                double su = (ix + 0.5) / static_cast<double>(grid);
+                                double sv = (iy + 0.5) / static_cast<double>(grid);
+                                double r = L.spot_radius * std::sqrt(su);
+                                double phi = 2.0 * M_PI * sv;
+                                Vec3 offset = basis.u * (std::cos(phi) * r) +
+                                              basis.v * (std::sin(phi) * r);
+                                Vec3 sample_origin = L.position + offset;
+                                total += trace_spotlight_sample(scene, mats, L, sample_origin,
+                                                                axis_dir, sample_weight);
+                        }
+                }
+                return total;
+        }
+
         double cos_max = std::clamp(L.cutoff_cos, -1.0, 1.0);
         double solid_angle = 2.0 * M_PI * (1.0 - cos_max);
         if (solid_angle <= 0.0)
@@ -359,7 +394,8 @@ double integrate_spotlight_area(const Scene &scene, const std::vector<Material> 
                                    basis.v * (std::sin(phi) * sin_theta) +
                                    basis.w * cos_theta;
                         dir = dir.normalized();
-                        total += trace_spotlight_sample(scene, mats, L, dir, sample_weight);
+                        total += trace_spotlight_sample(scene, mats, L, L.position, dir,
+                                                        sample_weight);
                 }
         }
         return total;
@@ -422,22 +458,29 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                 if (std::find(L.ignore_ids.begin(), L.ignore_ids.end(),
                                           rec.object_id) != L.ignore_ids.end())
                         continue;
+                double axial_dist = 0.0;
+                if (!spotlight_covers_point(L, rec.p, &axial_dist))
+                        continue;
                 Vec3 to_light = L.position - rec.p;
                 double dist = to_light.length();
+                if (dist <= 1e-6)
+                        continue;
                 Vec3 ldir = to_light / dist;
-                if (L.cutoff_cos > -1.0)
-                {
-                        Vec3 spot_dir = (rec.p - L.position).normalized();
-                        if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
-                                continue;
-                }
                 Vec3 lcolor;
                 double lintensity;
                 if (!light_through(scene, mats, rec.p, L, lcolor, lintensity))
                         continue;
                 double atten = 1.0;
+                double effective_dist =
+                        (L.beam_spotlight && L.spot_radius > 0.0)
+                                ? std::max(0.0, axial_dist)
+                                : dist;
                 if (L.range > 0.0)
-                        atten = std::max(0.0, 1.0 - dist / L.range);
+                {
+                        atten = std::max(0.0, 1.0 - effective_dist / L.range);
+                        if (atten <= 0.0)
+                                continue;
+                }
                 double diff = std::max(0.0, Vec3::dot(rec.normal, ldir));
                 Vec3 h = (ldir + eye).normalized();
                 double spec =

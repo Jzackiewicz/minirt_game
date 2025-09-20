@@ -816,7 +816,7 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
                                                            beam->source->object_id,
                                                            beam->source->mid.object_id},
                                           beam->source->object_id, dir_norm, cone_cos, length,
-                                          false, true);
+                                          false, true, Laser::kDefaultRadius * 1.2);
         }
         else
         {
@@ -826,7 +826,7 @@ bool process_beam_source(const TableData &table, Scene &scene, int &oid, int &mi
                                           std::vector<int>{beam->source->object_id,
                                                            beam->source->mid.object_id},
                                           beam->source->object_id, dir_norm, cone_cos, length,
-                                          false, true);
+                                          false, true, Laser::kDefaultRadius * 1.2);
         }
         return true;
 }

@@ -6,6 +6,7 @@
 class Laser : public Hittable
 {
         public:
+       static constexpr double kDefaultRadius = 0.1;
        Ray path;
        const double radius;
        double length;

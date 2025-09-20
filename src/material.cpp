@@ -21,26 +21,31 @@ Vec3 phong(const Material &m, const Ambient &ambient,
 	c = Vec3(col.x * ambient.color.x * ambient.intensity,
 			 col.y * ambient.color.y * ambient.intensity,
 			 col.z * ambient.color.z * ambient.intensity);
-	for (const auto &L : lights)
-	{
-		Vec3 to_light = L.position - p;
-		double dist = to_light.length();
-		if (L.range > 0.0 && dist > L.range)
-			continue;
-		Vec3 ldir = to_light.normalized();
-		if (L.cutoff_cos > -1.0)
-		{
-			Vec3 spot_dir = (p - L.position).normalized();
-			if (Vec3::dot(L.direction, spot_dir) < L.cutoff_cos)
-				continue;
-		}
-		double atten = 1.0;
-		if (L.range > 0.0)
-			atten = std::max(0.0, 1.0 - dist / L.range);
-		double diff = std::max(0.0, Vec3::dot(n, ldir));
-		Vec3 h = (ldir + eye).normalized();
-		double spec = std::pow(std::max(0.0, Vec3::dot(n, h)), m.specular_exp) *
-					  m.specular_k;
+        for (const auto &L : lights)
+        {
+                Vec3 to_light = L.position - p;
+                double dist = to_light.length();
+                double axial_dist = 0.0;
+                if (!spotlight_covers_point(L, p, &axial_dist))
+                        continue;
+                if (dist <= 1e-6)
+                        continue;
+                Vec3 ldir = to_light / dist;
+                double atten = 1.0;
+                double effective_dist =
+                        (L.beam_spotlight && L.spot_radius > 0.0)
+                                ? std::max(0.0, axial_dist)
+                                : dist;
+                if (L.range > 0.0)
+                {
+                        atten = std::max(0.0, 1.0 - effective_dist / L.range);
+                        if (atten <= 0.0)
+                                continue;
+                }
+                double diff = std::max(0.0, Vec3::dot(n, ldir));
+                Vec3 h = (ldir + eye).normalized();
+                double spec = std::pow(std::max(0.0, Vec3::dot(n, h)), m.specular_exp) *
+                                          m.specular_k;
 		c += Vec3(col.x * L.color.x * L.intensity * diff * atten +
 					  L.color.x * spec * atten,
 				  col.y * L.color.y * L.intensity * diff * atten +

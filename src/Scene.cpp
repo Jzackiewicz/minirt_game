@@ -178,7 +178,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                         bm->light_intensity * ratio,
                                                         std::vector<int>{bm->object_id, pl.hit_id},
                                                         bm->object_id, bm->path.dir, cone_cos, bm->length,
-                                                        false, true);
+                                                        false, true,
+                                                        Laser::kDefaultRadius * 1.2);
         }
 }
 
@@ -270,7 +271,7 @@ void Scene::reflect_lights(const std::vector<Material> &mats)
                 ignore.push_back(hit_rec.object_id);
                 PointLight new_light(refl_orig, L.color, intensity, ignore, -1,
                                                          refl_dir, L.cutoff_cos, remain, true,
-                                                         L.beam_spotlight);
+                                                         L.beam_spotlight, L.spot_radius);
                 to_process.push_back({new_light, new_start, seg.total, seg.depth + 1});
         }
 }
