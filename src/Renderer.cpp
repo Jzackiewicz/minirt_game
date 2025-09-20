@@ -1389,6 +1389,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         std::array<std::optional<HudControlEntry>, kControlSections> control_sections;
         control_sections.fill(std::nullopt);
         const SDL_Color bar_neutral{72, 72, 72, 220};
+        const SDL_Color command_divider{150, 150, 150, 200};
         auto set_control = [&](size_t index, const std::string &label, SDL_Color text_color) {
                 if (index < control_sections.size())
                         control_sections[index] = HudControlEntry{label, text_color, bar_neutral};
@@ -1532,6 +1533,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         SDL_SetRenderDrawColor(ren, 0, 0, 0, 180);
         SDL_Rect top_bar{0, 0, W, top_bar_height};
         SDL_RenderFillRect(ren, &top_bar);
+        SDL_SetRenderDrawColor(ren, 0, 0, 0, 150);
         SDL_Rect bottom_bar{0, H - bottom_bar_height, W, bottom_bar_height};
         SDL_RenderFillRect(ren, &bottom_bar);
 
@@ -1597,12 +1599,11 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                 SDL_RenderFillRect(ren, &bar_rect);
                         }
                         const auto &entry = *control_sections[i];
-                        int remaining_lines = static_cast<int>(max_control_lines -
-                                                               section_lines[i].size());
-                        int top_offset = (remaining_lines * hud_line_height) / 2;
-                        int text_y = controls_top + top_offset;
-                        for (const auto &line : section_lines[i])
+                        int text_y = controls_top;
+                        for (size_t line_idx = 0; line_idx < section_lines[i].size();
+                             ++line_idx)
                         {
+                                const auto &line = section_lines[i][line_idx];
                                 if (!line.empty())
                                 {
                                         int line_width =
@@ -1611,6 +1612,31 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                         CustomCharacter::draw_text(ren, line, text_x, text_y,
                                                                     entry.text_color,
                                                                     hud_scale);
+                                }
+                                if (line_idx == 0 && section_lines[i].size() > 1)
+                                {
+                                        int divider_left = start_x + hud_padding;
+                                        int divider_right = end_x - hud_padding;
+                                        if (divider_right > divider_left)
+                                        {
+                                                int divider_height = 2;
+                                                int divider_gap = 2;
+                                                int divider_top = text_y + hud_line_height -
+                                                                  divider_height -
+                                                                  divider_gap;
+                                                divider_top = std::clamp(divider_top, bar_top,
+                                                                         bar_top + bar_height -
+                                                                                 divider_height);
+                                                SDL_Rect divider_rect{divider_left, divider_top,
+                                                                      divider_right - divider_left,
+                                                                      divider_height};
+                                                SDL_SetRenderDrawColor(
+                                                        ren, command_divider.r,
+                                                        command_divider.g,
+                                                        command_divider.b,
+                                                        command_divider.a);
+                                                SDL_RenderFillRect(ren, &divider_rect);
+                                        }
                                 }
                                 text_y += hud_line_height;
                         }
