@@ -693,32 +693,37 @@ void Renderer::update_selection(RenderState &st,
         }
         else
         {
-                Ray center_ray = cam.ray_through(0.5, 0.5);
-                HitRecord hrec;
-                if (scene.hit(center_ray, 1e-4, 1e9, hrec) &&
-                        scene.objects[hrec.object_id]->movable)
-                {
-                        if (st.hover_mat != hrec.material_id)
-                        {
-                                if (st.hover_mat >= 0)
-                                        mats[st.hover_mat].color =
-                                                mats[st.hover_mat].base_color;
-                                st.hover_obj = hrec.object_id;
-                                st.hover_mat = hrec.material_id;
-                        }
-                        bool blink = ((SDL_GetTicks() / 250) % 2) == 0;
-                        mats[st.hover_mat].color =
-                                blink ? (Vec3(1.0, 1.0, 1.0) -
-                                                 mats[st.hover_mat].base_color)
-                                          : mats[st.hover_mat].base_color;
-                }
-                else
-                {
-                        if (st.hover_mat >= 0)
-                                mats[st.hover_mat].color =
-                                        mats[st.hover_mat].base_color;
-                        st.hover_obj = st.hover_mat = -1;
-                }
+		Ray center_ray = cam.ray_through(0.5, 0.5);
+		HitRecord hrec;
+		bool selectable = false;
+		if (scene.hit(center_ray, 1e-4, 1e9, hrec))
+		{
+			auto obj = scene.objects[hrec.object_id];
+			if (obj && !obj->is_beam() && (g_developer_mode || obj->movable))
+			{
+				selectable = true;
+				if (st.hover_mat != hrec.material_id)
+				{
+					if (st.hover_mat >= 0)
+						mats[st.hover_mat].color =
+							mats[st.hover_mat].base_color;
+					st.hover_obj = hrec.object_id;
+					st.hover_mat = hrec.material_id;
+				}
+				bool blink = ((SDL_GetTicks() / 250) % 2) == 0;
+				mats[st.hover_mat].color =
+					blink ? (Vec3(1.0, 1.0, 1.0) -
+						mats[st.hover_mat].base_color)
+					      : mats[st.hover_mat].base_color;
+			}
+		}
+		if (!selectable)
+		{
+			if (st.hover_mat >= 0)
+				mats[st.hover_mat].color =
+					mats[st.hover_mat].base_color;
+			st.hover_obj = st.hover_mat = -1;
+		}
         }
 }
 
