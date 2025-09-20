@@ -88,6 +88,11 @@ Vec3 &Vec3::operator*=(double scalar)
 	return *this;
 }
 
+Vec3 Vec3::operator-() const
+{
+	return Vec3(-x, -y, -z);
+}
+
 double Vec3::dot(const Vec3 &a, const Vec3 &b)
 {
 	double result;

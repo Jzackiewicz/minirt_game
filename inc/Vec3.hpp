@@ -30,6 +30,7 @@ class Vec3
 	Vec3 operator/(double scalar) const;
 	Vec3 &operator+=(const Vec3 &rhs);
 	Vec3 &operator*=(double scalar);
+	Vec3 operator-() const;
 
 	static double dot(const Vec3 &a, const Vec3 &b);
 	static Vec3 cross(const Vec3 &a, const Vec3 &b);
