@@ -1397,12 +1397,12 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         const size_t slot_secondary = 3;
         const size_t slot_pause = 4;
 
-        set_control(slot_pause, "PAUSE: ESC", neutral);
+        set_control(slot_pause, "PAUSE:\nESC", neutral);
 
         if (!st.focused)
         {
-                set_control(slot_move, "FOCUS LOST", warning);
-                set_control(slot_rotate, "CLICK TO FOCUS", neutral);
+                set_control(slot_move, "FOCUS LOST:\nCLICK WINDOW", warning);
+                set_control(slot_rotate, "RESUME CONTROL:\nCLICK", neutral);
         }
         else if (st.edit_mode)
         {
@@ -1422,42 +1422,62 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         if (can_move)
                         {
                                 set_control(slot_rotate,
-                                            "ROTATE YAW/PITCH: HOLD RPM + MOUSE\nROTATE ROLL: Q/E",
+                                            "ROTATING:\nHOLD RPM + MOUSE\nQ/E",
                                             neutral);
-                                set_control(slot_primary, "PLACE:\nLPM", accent);
-                                std::string move_text = "MOVE OBJECT: MOUSE + SCROLL";
+                                std::string place_text = "PLACE";
+                                if (focus_hint_label && !focus_hint_label->empty())
+                                        place_text += " \"" + *focus_hint_label + "\"";
+                                place_text += ":\nLPM";
+                                set_control(slot_primary, place_text, accent);
+                                std::string move_text = "MOVE OBJECT:\nMOUSE + SCROLL";
                                 if (g_developer_mode)
-                                        move_text += "\nDEV: RESIZE: SCROLL; DELETE: MMB";
+                                {
+                                        move_text += "\nDEV RESIZE:\nSCROLL";
+                                        move_text += "\nDEV DELETE:\nMMB";
+                                }
                                 set_control(slot_secondary, move_text, neutral);
                         }
                         else if (can_rotate)
                         {
                                 set_control(slot_rotate,
-                                            "ROTATE OBJECT: HOLD RPM + MOUSE\nROLL: Q/E",
+                                            "ROTATING:\nHOLD RPM + MOUSE\nQ/E",
                                             neutral);
-                                set_control(slot_primary, "PLACE:\nLPM", accent);
+                                std::string place_text = "PLACE";
+                                if (focus_hint_label && !focus_hint_label->empty())
+                                        place_text += " \"" + *focus_hint_label + "\"";
+                                place_text += ":\nLPM";
+                                set_control(slot_primary, place_text, accent);
                                 if (g_developer_mode)
-                                        set_control(slot_secondary,
-                                                    "DEV: RESIZE: SCROLL; DELETE: MMB",
-                                                    danger);
+                                {
+                                        std::string dev_text =
+                                                "DEV TOOLS:\nRESIZE - SCROLL\nDELETE - MMB";
+                                        set_control(slot_secondary, dev_text, danger);
+                                }
                         }
                         else
                         {
-                                set_control(slot_primary, "PLACE:\nLPM", accent);
+                                std::string place_text = "PLACE";
+                                if (focus_hint_label && !focus_hint_label->empty())
+                                        place_text += " \"" + *focus_hint_label + "\"";
+                                place_text += ":\nLPM";
+                                set_control(slot_primary, place_text, accent);
                                 if (g_developer_mode)
-                                        set_control(slot_secondary,
-                                                    "DEV: RESIZE: SCROLL; DELETE: MMB",
-                                                    danger);
+                                {
+                                        std::string dev_text =
+                                                "DEV TOOLS:\nRESIZE - SCROLL\nDELETE - MMB";
+                                        set_control(slot_secondary, dev_text, danger);
+                                }
                         }
                 }
                 else
                 {
-                        set_control(slot_primary, "PLACE:\nLPM", accent);
+                        std::string place_text = "PLACE:\nLPM";
+                        set_control(slot_primary, place_text, accent);
                 }
         }
         else
         {
-                set_control(slot_move, "MOVING:\nWSAD\nCTRL/SPACE", neutral);
+                set_control(slot_move, "MOVE CAMERA:\nWSAD\nCTRL/SPACE", neutral);
 
                 bool show_grab = false;
                 if (focus_obj)
@@ -1473,8 +1493,8 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         std::string grab_label = "GRAB";
                         if (focus_hint_label && !focus_hint_label->empty())
                                 grab_label += " \"" + *focus_hint_label + "\"";
-                        grab_label += ":";
-                        set_control(slot_secondary, grab_label + "\nLPM", accent);
+                        grab_label += ":\nLPM";
+                        set_control(slot_secondary, grab_label, accent);
                 }
         }
 
