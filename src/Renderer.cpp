@@ -216,6 +216,16 @@ Vec3 clamp_color(const Vec3 &c, double lo = 0.0, double hi = 1.0)
                                 std::clamp(c.z, lo, hi));
 }
 
+static Vec3 brighten_color(const Vec3 &color, double amount = 0.35)
+{
+        return clamp_color(color + (Vec3(1.0, 1.0, 1.0) - color) * amount);
+}
+
+static Vec3 darken_color(const Vec3 &color, double amount = 0.35)
+{
+        return clamp_color(color * (1.0 - amount));
+}
+
 Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                                          const Material &mat)
 {
@@ -238,12 +248,13 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
         }
         if (mat.checkered)
         {
-                Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
+                Vec3 brighter = brighten_color(base);
+                Vec3 darker = darken_color(base);
                 int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
                                    static_cast<int>(std::floor(rec.p.y * 5)) +
                                    static_cast<int>(std::floor(rec.p.z * 5))) &
                                   1;
-                col = chk ? base : inv;
+                col = chk ? brighter : darker;
         }
         return col;
 }
@@ -475,12 +486,22 @@ double integrate_spotlight_area(const Scene &scene, const std::vector<Material> 
 
 double compute_beam_score(const Scene &scene, const std::vector<Material> &mats)
 {
+        std::vector<Material> base_mats;
+        base_mats.reserve(mats.size());
+        for (const auto &mat : mats)
+        {
+                Material copy = mat;
+                copy.color = copy.base_color;
+                copy.checkered = false;
+                base_mats.push_back(std::move(copy));
+        }
+
         double score = 0.0;
         for (const auto &L : scene.lights)
         {
                 if (!L.beam_spotlight)
                         continue;
-                score += integrate_spotlight_area(scene, mats, L);
+                score += integrate_spotlight_area(scene, base_mats, L);
         }
         return score;
 }
@@ -914,10 +935,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                            OBJECT_MAX_DIST);
                                 }
                         }
-                        else if (st.focused)
-                        {
-                                scene.move_camera(cam, cam.up * step, mats);
-                        }
+                        // In free camera mode scrolling should not move the camera.
                 }
                 else if (g_developer_mode && st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_C)
@@ -1327,6 +1345,13 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                                 break;
                                         }
                                 }
+                                bool blink = ((SDL_GetTicks() / 250) % 2) == 0;
+                                Vec3 base_color = mats[st.hover_mat].base_color;
+                                Vec3 alt_color =
+                                        (luminance(base_color) >= 0.5)
+                                                ? darken_color(base_color)
+                                                : brighten_color(base_color);
+                                mats[st.hover_mat].color = blink ? alt_color : base_color;
                         }
                         right_lines.push_back({beam_status, beam_color});
 
@@ -1738,6 +1763,16 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         SDL_RenderCopy(ren, tex, nullptr, nullptr);
         int top_bar_height = render_hud(st, ren, W, H);
         int legend_base_y = top_bar_height + 5;
+        SDL_Color score_color{255, 255, 255, 255};
+        int score_scale = 2;
+        int score_text_height = 7 * score_scale;
+        char required_buf[64];
+        std::snprintf(required_buf, sizeof(required_buf), "REQUIRED: %.2f m^2", scene.minimal_score);
+        char score_buf[64];
+        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f m^2", st.last_score);
+        int required_y = 5;
+        int score_y = required_y + score_text_height + 2;
+        [[maybe_unused]] int legend_base_y = score_y + score_text_height + 5;
         if (st.edit_mode && g_developer_mode)
         {
                 auto project = [&](const Vec3 &p, int &sx, int &sy) -> bool
@@ -1831,6 +1866,8 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                 int fps_y = std::max(0, H - fps_h - 5);
                 CustomCharacter::draw_text(ren, fps_text, fps_x, fps_y, red, scale);
         }
+        CustomCharacter::draw_text(ren, required_buf, 5, required_y, score_color, score_scale);
+        CustomCharacter::draw_text(ren, score_buf, 5, score_y, score_color, score_scale);
         SDL_RenderPresent(ren);
 }
 

@@ -13,10 +13,12 @@ class Laser;
 class Scene
 {
 	public:
-	std::vector<HittablePtr> objects;
-	std::vector<PointLight> lights;
+        std::vector<HittablePtr> objects;
+        std::vector<PointLight> lights;
         Ambient ambient{Vec3(1, 1, 1), 0.0};
         std::shared_ptr<Hittable> accel;
+        bool target_required = false;
+        double minimal_score = 0.0;
 
         // Update beam objects and associated lights in the scene.
         void update_beams(const std::vector<Material> &materials);

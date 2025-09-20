@@ -2,21 +2,42 @@
 #include <algorithm>
 #include <cmath>
 
-Vec3 phong(const Material &m, const Ambient &ambient,
-		   const std::vector<PointLight> &lights, const Vec3 &p, const Vec3 &n,
-		   const Vec3 &eye)
+namespace
 {
-	Vec3 base = m.base_color;
-	Vec3 col = m.color;
-	if (m.checkered)
-	{
-		Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
-		int chk = (static_cast<int>(std::floor(p.x * 5)) +
-				   static_cast<int>(std::floor(p.y * 5)) +
-				   static_cast<int>(std::floor(p.z * 5))) &
-				  1;
-		col = chk ? base : inv;
-	}
+constexpr double kAltColorAmount = 0.35;
+
+Vec3 brighten_color(const Vec3 &color)
+{
+        return Vec3(std::clamp(color.x + (1.0 - color.x) * kAltColorAmount, 0.0, 1.0),
+                                std::clamp(color.y + (1.0 - color.y) * kAltColorAmount, 0.0, 1.0),
+                                std::clamp(color.z + (1.0 - color.z) * kAltColorAmount, 0.0, 1.0));
+}
+
+Vec3 darken_color(const Vec3 &color)
+{
+        double factor = 1.0 - kAltColorAmount;
+        return Vec3(std::clamp(color.x * factor, 0.0, 1.0),
+                                std::clamp(color.y * factor, 0.0, 1.0),
+                                std::clamp(color.z * factor, 0.0, 1.0));
+}
+}
+
+Vec3 phong(const Material &m, const Ambient &ambient,
+                   const std::vector<PointLight> &lights, const Vec3 &p, const Vec3 &n,
+                   const Vec3 &eye)
+{
+        Vec3 base = m.base_color;
+        Vec3 col = m.color;
+        if (m.checkered)
+        {
+                Vec3 brighter = brighten_color(base);
+                Vec3 darker = darken_color(base);
+                int chk = (static_cast<int>(std::floor(p.x * 5)) +
+                                   static_cast<int>(std::floor(p.y * 5)) +
+                                   static_cast<int>(std::floor(p.z * 5))) &
+                                  1;
+                col = chk ? brighter : darker;
+        }
 	Vec3 c(0, 0, 0);
 	c = Vec3(col.x * ambient.color.x * ambient.intensity,
 			 col.y * ambient.color.y * ambient.intensity,
