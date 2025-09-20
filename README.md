@@ -11,7 +11,7 @@ Puzzle game based on miniRT 42School project.
 **Note:** Do not use WSL2 for this setup, as it hinders mouse usage and makes movement control very difficult.
 
 1. Install [MSYS2](https://www.msys2.org/) and open the **MSYS2 UCRT64** shell.
-2. Update the system and install dependencies (the MSYS2 terminal might need to restart during installation, so you may need to paste and run these commands twice—before and after restarting):
+2. Update the system and install dependencies (the MSYS2 terminal might need to restart during installation, so you may need to paste and run these commands again):
    ```bash
    pacman -Syu
    pacman -S --needed base-devel mingw-w64-ucrt-x86_64-toolchain \
