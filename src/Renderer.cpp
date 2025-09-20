@@ -549,6 +549,13 @@ struct HudTextLine
         SDL_Color color;
 };
 
+struct HudControlEntry
+{
+        std::string text;
+        SDL_Color text_color;
+        SDL_Color bar_color;
+};
+
 int parse_level_number_from_path(const std::string &scene_path)
 {
         namespace fs = std::filesystem;
@@ -1227,7 +1234,7 @@ void Renderer::update_selection(RenderState &st,
 
 int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 {
-        int hud_scale = 2;
+        const int hud_scale = 2;
         const int hud_padding = 12;
 
         std::vector<HudTextLine> left_lines;
@@ -1379,11 +1386,12 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
 
         constexpr size_t kControlSections = 5;
-        std::array<std::optional<HudTextLine>, kControlSections> control_sections;
+        std::array<std::optional<HudControlEntry>, kControlSections> control_sections;
         control_sections.fill(std::nullopt);
-        auto set_control = [&](size_t index, const std::string &label, SDL_Color color) {
+        const SDL_Color bar_neutral{72, 72, 72, 220};
+        auto set_control = [&](size_t index, const std::string &label, SDL_Color text_color) {
                 if (index < control_sections.size())
-                        control_sections[index] = HudTextLine{label, color};
+                        control_sections[index] = HudControlEntry{label, text_color, bar_neutral};
         };
         SDL_Color neutral{255, 255, 255, 255};
         SDL_Color accent{96, 255, 128, 255};
@@ -1396,12 +1404,12 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         const size_t slot_secondary = 3;
         const size_t slot_pause = 4;
 
-        set_control(slot_pause, "PAUSE:\nESC", neutral);
+        set_control(slot_pause, "PAUSE\nESC", neutral);
 
         if (!st.focused)
         {
-                set_control(slot_move, "FOCUS LOST:\nCLICK WINDOW", warning);
-                set_control(slot_rotate, "RESUME CONTROL:\nCLICK", neutral);
+                set_control(slot_move, "FOCUS LOST\nCLICK WINDOW", warning);
+                set_control(slot_rotate, "RESUME CONTROL\nCLICK", neutral);
         }
         else if (st.edit_mode)
         {
@@ -1410,8 +1418,6 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                     st.selected_obj < static_cast<int>(scene.objects.size()))
                         selected_obj = scene.objects[st.selected_obj];
 
-                set_control(slot_move, "MOVE CAMERA:\nWSAD\nCTRL/SPACE", neutral);
-
                 if (selected_obj)
                 {
                         bool can_move = !selected_obj->is_beam() &&
@@ -1419,64 +1425,27 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         bool can_rotate = g_developer_mode || selected_obj->rotatable;
 
                         if (can_move)
+                                set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
+                        if (can_rotate)
+                                set_control(slot_rotate, "ROTATE\nHOLD RBM\nQ/E", neutral);
+
+                        set_control(slot_primary, "PLACE\nLBM", accent);
+                        if (g_developer_mode)
                         {
-                                set_control(slot_rotate,
-                                            "ROTATING:\nHOLD RPM + MOUSE\nQ/E",
-                                            neutral);
-                                std::string place_text = "PLACE";
-                                if (focus_hint_label && !focus_hint_label->empty())
-                                        place_text += " \"" + *focus_hint_label + "\"";
-                                place_text += ":\nLPM";
-                                set_control(slot_primary, place_text, accent);
-                                std::string move_text = "MOVE OBJECT:\nMOUSE\nSCROLL";
-                                if (g_developer_mode)
-                                {
-                                        move_text += "\nDEV RESIZE:\nSCROLL";
-                                        move_text += "\nDEV DELETE:\nMMB";
-                                }
-                                set_control(slot_secondary, move_text, neutral);
-                        }
-                        else if (can_rotate)
-                        {
-                                set_control(slot_rotate,
-                                            "ROTATING:\nHOLD RPM + MOUSE\nQ/E",
-                                            neutral);
-                                std::string place_text = "PLACE";
-                                if (focus_hint_label && !focus_hint_label->empty())
-                                        place_text += " \"" + *focus_hint_label + "\"";
-                                place_text += ":\nLPM";
-                                set_control(slot_primary, place_text, accent);
-                                if (g_developer_mode)
-                                {
-                                        std::string dev_text =
-                                                "DEV TOOLS:\nRESIZE - SCROLL\nDELETE - MMB";
-                                        set_control(slot_secondary, dev_text, danger);
-                                }
-                        }
-                        else
-                        {
-                                std::string place_text = "PLACE";
-                                if (focus_hint_label && !focus_hint_label->empty())
-                                        place_text += " \"" + *focus_hint_label + "\"";
-                                place_text += ":\nLPM";
-                                set_control(slot_primary, place_text, accent);
-                                if (g_developer_mode)
-                                {
-                                        std::string dev_text =
-                                                "DEV TOOLS:\nRESIZE - SCROLL\nDELETE - MMB";
-                                        set_control(slot_secondary, dev_text, danger);
-                                }
+                                std::string dev_text =
+                                        "DEV TOOLS\nRESIZE - SCROLL\nDELETE - MMB";
+                                set_control(slot_secondary, dev_text, danger);
                         }
                 }
                 else
                 {
-                        std::string place_text = "PLACE:\nLPM";
-                        set_control(slot_primary, place_text, accent);
+                        set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
+                        set_control(slot_primary, "PLACE\nLBM", accent);
                 }
         }
         else
         {
-                set_control(slot_move, "MOVE CAMERA:\nWSAD\nCTRL/SPACE", neutral);
+                set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
 
                 bool show_grab = false;
                 if (focus_obj)
@@ -1489,11 +1458,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 
                 if (show_grab)
                 {
-                        std::string grab_label = "GRAB";
-                        if (focus_hint_label && !focus_hint_label->empty())
-                                grab_label += " \"" + *focus_hint_label + "\"";
-                        grab_label += ":\nLPM";
-                        set_control(slot_secondary, grab_label, accent);
+                        set_control(slot_secondary, "GRAB\nLBM", accent);
                 }
         }
 
@@ -1552,30 +1517,6 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         active_sections.push_back(0);
         }
 
-        auto fits_scale = [&](int scale) {
-                size_t section_count = std::max<size_t>(active_sections.size(), 1);
-                double section_span = static_cast<double>(W) /
-                                      static_cast<double>(section_count);
-                for (size_t pos = 0; pos < active_sections.size(); ++pos)
-                {
-                        size_t idx = active_sections[pos];
-                        int start_x = static_cast<int>(std::round(pos * section_span));
-                        int end_x = static_cast<int>(std::round((pos + 1) * section_span));
-                        int available = std::max(1, end_x - start_x);
-                        int inner_width = std::max(0, available - 2 * hud_padding);
-                        for (const auto &line : section_lines[idx])
-                        {
-                                int width = CustomCharacter::text_width(line, scale);
-                                if (width > inner_width)
-                                        return false;
-                        }
-                }
-                return true;
-        };
-
-        while (hud_scale > 1 && !fits_scale(hud_scale))
-                --hud_scale;
-
         const int hud_line_height = 7 * hud_scale + 4;
 
         size_t top_count = std::max(left_lines.size(), right_lines.size());
@@ -1623,13 +1564,20 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         size_t section_count = active_sections.size();
         double section_span = static_cast<double>(W) /
                               static_cast<double>(std::max<size_t>(section_count, 1));
-        SDL_SetRenderDrawColor(ren, 255, 255, 255, 96);
+        int bar_vertical_margin = std::max(2, hud_padding / 2);
+        int bar_horizontal_margin = std::max(2, hud_padding / 2);
+        int bar_top = H - bottom_bar_height + bar_vertical_margin;
+        int bar_height = std::max(0, bottom_bar_height - 2 * bar_vertical_margin);
+        SDL_Color separator_color{255, 255, 255, 96};
         for (size_t pos = 0; pos < active_sections.size(); ++pos)
         {
                 size_t i = active_sections[pos];
                 int start_x = static_cast<int>(std::round(pos * section_span));
                 int end_x = static_cast<int>(std::round((pos + 1) * section_span));
                 int available = std::max(1, end_x - start_x);
+                int bar_left = start_x + bar_horizontal_margin;
+                int bar_width = std::max(0, available - 2 * bar_horizontal_margin);
+                SDL_Rect bar_rect{bar_left, bar_top, bar_width, bar_height};
                 auto compute_text_x = [&](int width) {
                         int min_x = start_x + hud_padding;
                         int max_x = end_x - hud_padding - width;
@@ -1640,6 +1588,15 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 };
                 if (control_sections[i] && !section_lines[i].empty())
                 {
+                        if (bar_rect.w > 0 && bar_rect.h > 0)
+                        {
+                                const auto &entry = *control_sections[i];
+                                SDL_SetRenderDrawColor(ren, entry.bar_color.r,
+                                                       entry.bar_color.g, entry.bar_color.b,
+                                                       entry.bar_color.a);
+                                SDL_RenderFillRect(ren, &bar_rect);
+                        }
+                        const auto &entry = *control_sections[i];
                         int remaining_lines = static_cast<int>(max_control_lines -
                                                                section_lines[i].size());
                         int top_offset = (remaining_lines * hud_line_height) / 2;
@@ -1652,14 +1609,18 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                                 CustomCharacter::text_width(line, hud_scale);
                                         int text_x = compute_text_x(line_width);
                                         CustomCharacter::draw_text(ren, line, text_x, text_y,
-                                                                    control_sections[i]->color,
+                                                                    entry.text_color,
                                                                     hud_scale);
                                 }
                                 text_y += hud_line_height;
                         }
                 }
                 if (pos + 1 < active_sections.size())
+                {
+                        SDL_SetRenderDrawColor(ren, separator_color.r, separator_color.g,
+                                               separator_color.b, separator_color.a);
                         SDL_RenderDrawLine(ren, end_x, H - bottom_bar_height, end_x, H);
+                }
         }
 
         SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_NONE);
