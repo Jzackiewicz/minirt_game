@@ -15,7 +15,7 @@ public:
     bool bounding_box(AABB &out) const override { return Sphere::bounding_box(out); }
     void translate(const Vec3 &delta) override;
     bool blocks_when_transparent() const override { return true; }
-    bool casts_shadow() const override { return false; }
+    bool casts_shadow() const override { return goal_active; }
     ShapeType shape_type() const override { return ShapeType::BeamTarget; }
     void start_goal();
     void update_goal(double dt, std::vector<Material> &mats);
