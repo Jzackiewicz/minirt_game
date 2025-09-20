@@ -209,7 +209,7 @@ bool BeamSource::hit_cone(const Ray &r, double tmin, double tmax, HitRecord &rec
                 HitRecord candidate;
                 candidate.t = root;
                 candidate.p = p;
-                candidate.object_id = inner.object_id;
+                candidate.object_id = object_id;
                 candidate.material_id = inner.material_id;
                 candidate.set_face_normal(r, normal);
 
