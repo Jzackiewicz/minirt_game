@@ -25,11 +25,14 @@ class HitRecord
 	public:
 	Vec3 p;
 	Vec3 normal;
-	double t;
-	int object_id;
-	int material_id;
-	bool front_face;
+	double t = 0.0;
+	int object_id = -1;
+	int material_id = -1;
+	bool front_face = false;
 	double beam_ratio = 0.0;
+	double u = 0.0;
+	double v = 0.0;
+	bool has_uv = false;
 	void set_face_normal(const Ray &r, const Vec3 &outward_normal);
 };
 

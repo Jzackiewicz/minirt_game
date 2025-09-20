@@ -64,6 +64,12 @@ bool material_is_transparent(const Material &mat)
         return std::fabs(mat.alpha - kTransparentAlpha) < 1e-6;
 }
 
+void write_texture_line(std::ofstream &out, const Material &mat)
+{
+        if (!mat.texture_path.empty())
+                out << "texture = \"" << mat.texture_path << "\"\n";
+}
+
 std::string object_id_for(const std::string &prefix, int index)
 {
         std::ostringstream oss;
@@ -194,6 +200,7 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "[[objects.planes]]\n";
                 out << "id = \"" << object_id_for("plane", plane_index++) << "\"\n";
                 out << "color = " << format_color_array(rec.mat->base_color) << "\n";
+                write_texture_line(out, *rec.mat);
                 out << "position = " << format_vec3_array(rec.plane->point) << "\n";
                 out << "dir = " << format_vec3_array(rec.plane->normal.normalized()) << "\n";
                 out << "reflective = " << bool_str(rec.mat->mirror) << "\n";
@@ -209,6 +216,7 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "[[objects.boxes]]\n";
                 out << "id = \"" << object_id_for("box", cube_index++) << "\"\n";
                 out << "color = " << format_color_array(rec.mat->base_color) << "\n";
+                write_texture_line(out, *rec.mat);
                 out << "position = " << format_vec3_array(rec.cube->center) << "\n";
                 out << "dir = " << format_vec3_array(rec.cube->axis[2]) << "\n";
                 out << "width = " << format_double(rec.cube->half.y * 2.0) << "\n";
@@ -227,6 +235,7 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "[[objects.spheres]]\n";
                 out << "id = \"" << object_id_for("sphere", sphere_index++) << "\"\n";
                 out << "color = " << format_color_array(rec.mat->base_color) << "\n";
+                write_texture_line(out, *rec.mat);
                 out << "position = " << format_vec3_array(rec.sphere->center) << "\n";
                 out << "dir = [0.0, 1.0, 0.0]\n";
                 out << "radius = " << format_double(rec.sphere->radius) << "\n";
@@ -243,6 +252,7 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "[[objects.cones]]\n";
                 out << "id = \"" << object_id_for("cone", cone_index++) << "\"\n";
                 out << "color = " << format_color_array(rec.mat->base_color) << "\n";
+                write_texture_line(out, *rec.mat);
                 out << "position = " << format_vec3_array(rec.cone->center) << "\n";
                 out << "dir = " << format_vec3_array(rec.cone->axis) << "\n";
                 out << "radius = " << format_double(rec.cone->radius) << "\n";
@@ -260,6 +270,7 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "[[objects.cylinders]]\n";
                 out << "id = \"" << object_id_for("cylinder", cylinder_index++) << "\"\n";
                 out << "color = " << format_color_array(rec.mat->base_color) << "\n";
+                write_texture_line(out, *rec.mat);
                 out << "position = " << format_vec3_array(rec.cylinder->center) << "\n";
                 out << "dir = " << format_vec3_array(rec.cylinder->axis) << "\n";
                 out << "radius = " << format_double(rec.cylinder->radius) << "\n";
