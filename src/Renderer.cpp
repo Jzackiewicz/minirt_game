@@ -478,12 +478,22 @@ double integrate_spotlight_area(const Scene &scene, const std::vector<Material> 
 
 double compute_beam_score(const Scene &scene, const std::vector<Material> &mats)
 {
+        std::vector<Material> base_mats;
+        base_mats.reserve(mats.size());
+        for (const auto &mat : mats)
+        {
+                Material copy = mat;
+                copy.color = copy.base_color;
+                copy.checkered = false;
+                base_mats.push_back(std::move(copy));
+        }
+
         double score = 0.0;
         for (const auto &L : scene.lights)
         {
                 if (!L.beam_spotlight)
                         continue;
-                score += integrate_spotlight_area(scene, mats, L);
+                score += integrate_spotlight_area(scene, base_mats, L);
         }
         return score;
 }
