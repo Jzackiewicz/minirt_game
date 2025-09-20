@@ -78,11 +78,11 @@ void Scene::process_beams(const std::vector<Material> &mats,
                         std::static_pointer_cast<BeamTarget>(obj)->goal_active = false;
         int next_oid = static_cast<int>(objects.size());
         std::vector<std::shared_ptr<Laser>> to_process = roots;
-        class PendingLight
+        struct PendingLight
         {
-        public:
                 std::shared_ptr<Laser> beam;
                 int hit_id;
+                bool ignore_hit;
         };
         std::vector<PendingLight> pending_lights;
         for (size_t i = 0; i < to_process.size(); ++i)
@@ -114,13 +114,21 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 if (hit_any)
                 {
                         bm->length = closest;
+                        std::shared_ptr<Hittable> hit_obj;
                         if (hit_rec.object_id >= 0 &&
                                 hit_rec.object_id < static_cast<int>(objects.size()))
                         {
-                                auto hit_obj = objects[hit_rec.object_id];
-                                if (hit_obj->shape_type() == ShapeType::BeamTarget &&
-                                        hit_obj->scorable)
+                                hit_obj = objects[hit_rec.object_id];
+                                if (hit_obj->shape_type() == ShapeType::BeamTarget)
                                         std::static_pointer_cast<BeamTarget>(hit_obj)->start_goal();
+                        }
+                        bool block_transparent = false;
+                        bool ignore_hit_for_light = true;
+                        if (hit_obj)
+                        {
+                                block_transparent = hit_obj->blocks_when_transparent();
+                                if (hit_obj->shape_type() == ShapeType::BeamTarget)
+                                        ignore_hit_for_light = false;
                         }
                         const Material &hit_mat = mats[hit_rec.material_id];
                         if (hit_mat.mirror)
@@ -139,10 +147,11 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                         new_bm->scorable = bm->scorable;
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
-                                        pending_lights.push_back({new_bm, hit_rec.object_id});
+                                        pending_lights.push_back(
+                                                {new_bm, hit_rec.object_id, ignore_hit_for_light});
                                 }
                         }
-                        else if (hit_mat.alpha < 1.0)
+                        else if (hit_mat.alpha < 1.0 && !block_transparent)
                         {
                                 double new_start = bm->start + closest;
                                 double new_len = bm->total_length - new_start;
@@ -160,7 +169,8 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                         new_bm->scorable = bm->scorable;
                                         new_bm->source = bm->source;
                                         to_process.push_back(new_bm);
-                                        pending_lights.push_back({new_bm, hit_rec.object_id});
+                                        pending_lights.push_back(
+                                                {new_bm, hit_rec.object_id, ignore_hit_for_light});
                                 }
                         }
                 }
@@ -174,11 +184,13 @@ void Scene::process_beams(const std::vector<Material> &mats,
                 double remain = bm->total_length - bm->start;
                 double ratio =
                         (bm->total_length > 0.0) ? remain / bm->total_length : 0.0;
+                std::vector<int> ignore_ids{bm->object_id};
+                if (pl.ignore_hit && pl.hit_id >= 0)
+                        ignore_ids.push_back(pl.hit_id);
                 lights.emplace_back(bm->path.orig, light_col,
                                                         bm->light_intensity * ratio,
-                                                        std::vector<int>{bm->object_id, pl.hit_id},
-                                                        bm->object_id, bm->path.dir, cone_cos, bm->length,
-                                                        false, true);
+                                                        ignore_ids, bm->object_id, bm->path.dir,
+                                                        cone_cos, bm->length, false, true);
         }
 }
 
