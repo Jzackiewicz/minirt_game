@@ -13,8 +13,10 @@
 #include <cmath>
 #include <cctype>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -26,6 +28,18 @@ namespace
 {
 
 constexpr double kTransparentAlpha = 125.0 / 255.0;
+
+std::filesystem::path g_scene_directory;
+std::vector<std::filesystem::path> g_texture_search_paths;
+
+struct TextureData
+{
+        int width = 0;
+        int height = 0;
+        std::vector<Vec3> pixels;
+};
+
+std::unordered_map<std::string, TextureData> texture_cache;
 
 std::string trim(const std::string &s)
 {
@@ -53,6 +67,263 @@ std::string strip_comments(const std::string &line)
                 result.push_back(c);
         }
         return result;
+}
+
+int hex_value(char c)
+{
+        if (c >= '0' && c <= '9')
+                return c - '0';
+        if (c >= 'a' && c <= 'f')
+                return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F')
+                return c - 'A' + 10;
+        return -1;
+}
+
+bool parse_hex_color_code(const std::string &input, Vec3 &out)
+{
+        if (input.empty())
+                return false;
+        std::string hex = input;
+        if (hex.size() == 3)
+        {
+                std::string expanded;
+                expanded.reserve(6);
+                for (char c : hex)
+                {
+                        expanded.push_back(c);
+                        expanded.push_back(c);
+                }
+                hex = expanded;
+        }
+        else if (hex.size() >= 6)
+        {
+                hex = hex.substr(0, 6);
+        }
+        else
+        {
+                return false;
+        }
+        int components[3] = {0, 0, 0};
+        for (int i = 0; i < 3; ++i)
+        {
+                int hi = hex_value(hex[i * 2]);
+                int lo = hex_value(hex[i * 2 + 1]);
+                if (hi < 0 || lo < 0)
+                        return false;
+                components[i] = hi * 16 + lo;
+        }
+        out = Vec3(components[0] / 255.0, components[1] / 255.0, components[2] / 255.0);
+        return true;
+}
+
+bool parse_named_color(const std::string &spec, Vec3 &out)
+{
+        static const std::unordered_map<std::string, Vec3> kNamedColors = {
+                {"none", Vec3(0.0, 0.0, 0.0)},       {"transparent", Vec3(0.0, 0.0, 0.0)},
+                {"black", Vec3(0.0, 0.0, 0.0)},       {"white", Vec3(1.0, 1.0, 1.0)},
+                {"red", Vec3(1.0, 0.0, 0.0)},         {"green", Vec3(0.0, 1.0, 0.0)},
+                {"blue", Vec3(0.0, 0.0, 1.0)},        {"yellow", Vec3(1.0, 1.0, 0.0)},
+                {"magenta", Vec3(1.0, 0.0, 1.0)},     {"cyan", Vec3(0.0, 1.0, 1.0)},
+                {"grey", Vec3(0.5, 0.5, 0.5)},        {"gray", Vec3(0.5, 0.5, 0.5)},
+                {"orange", Vec3(1.0, 0.5, 0.0)},      {"brown", Vec3(0.6, 0.4, 0.2)}};
+
+        std::istringstream iss(spec);
+        std::string token;
+        while (iss >> token)
+        {
+                std::string lower;
+                lower.reserve(token.size());
+                for (char c : token)
+                        lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+                if (lower == "c" || lower == "m" || lower == "g" || lower == "s")
+                        continue;
+                auto it = kNamedColors.find(lower);
+                if (it != kNamedColors.end())
+                {
+                        out = it->second;
+                        return true;
+                }
+        }
+        return false;
+}
+
+bool parse_xpm_color_spec(const std::string &spec, Vec3 &out)
+{
+        size_t hash_pos = spec.find('#');
+        if (hash_pos != std::string::npos)
+        {
+                size_t pos = hash_pos + 1;
+                std::string hex;
+                while (pos < spec.size() && std::isxdigit(static_cast<unsigned char>(spec[pos])))
+                {
+                        hex.push_back(spec[pos]);
+                        ++pos;
+                }
+                if (!hex.empty() && parse_hex_color_code(hex, out))
+                        return true;
+        }
+        return parse_named_color(spec, out);
+}
+
+bool load_xpm_texture(const std::filesystem::path &path, TextureData &out, std::string &error)
+{
+        std::ifstream in(path);
+        if (!in)
+        {
+                error = "Failed to open texture file '" + path.string() + "'";
+                return false;
+        }
+        std::vector<std::string> lines;
+        std::string line;
+        while (std::getline(in, line))
+        {
+                size_t first = line.find('"');
+                if (first == std::string::npos)
+                        continue;
+                size_t last = line.find('"', first + 1);
+                if (last == std::string::npos)
+                        continue;
+                lines.push_back(line.substr(first + 1, last - first - 1));
+        }
+        if (lines.empty())
+        {
+                error = "Texture file '" + path.string() + "' has no XPM data";
+                return false;
+        }
+        std::istringstream header(lines[0]);
+        int width = 0;
+        int height = 0;
+        int color_count = 0;
+        int chars_per_pixel = 0;
+        if (!(header >> width >> height >> color_count >> chars_per_pixel))
+        {
+                error = "Invalid XPM header in '" + path.string() + "'";
+                return false;
+        }
+        if (width <= 0 || height <= 0 || color_count <= 0 || chars_per_pixel <= 0)
+        {
+                error = "Invalid XPM dimensions in '" + path.string() + "'";
+                return false;
+        }
+        if (static_cast<int>(lines.size()) < 1 + color_count + height)
+        {
+                error = "Incomplete XPM data in '" + path.string() + "'";
+                return false;
+        }
+        std::unordered_map<std::string, Vec3> palette;
+        palette.reserve(static_cast<size_t>(color_count));
+        for (int i = 0; i < color_count; ++i)
+        {
+                const std::string &entry = lines[1 + i];
+                if (static_cast<int>(entry.size()) < chars_per_pixel)
+                {
+                        error = "Invalid XPM color entry in '" + path.string() + "'";
+                        return false;
+                }
+                std::string key = entry.substr(0, chars_per_pixel);
+                std::string rest = entry.substr(chars_per_pixel);
+                Vec3 color;
+                if (!parse_xpm_color_spec(rest, color))
+                {
+                        error = "Failed to parse color specification in '" + path.string() + "'";
+                        return false;
+                }
+                palette[key] = color;
+        }
+        std::vector<Vec3> pixels;
+        pixels.resize(static_cast<size_t>(width) * static_cast<size_t>(height));
+        for (int y = 0; y < height; ++y)
+        {
+                const std::string &row = lines[1 + color_count + y];
+                if (static_cast<int>(row.size()) < chars_per_pixel * width)
+                {
+                        error = "Invalid XPM pixel data in '" + path.string() + "'";
+                        return false;
+                }
+                for (int x = 0; x < width; ++x)
+                {
+                        std::string key = row.substr(static_cast<size_t>(x) * chars_per_pixel, chars_per_pixel);
+                        auto it = palette.find(key);
+                        if (it == palette.end())
+                        {
+                                error = "Undefined color key in '" + path.string() + "'";
+                                return false;
+                        }
+                        pixels[static_cast<size_t>(y) * static_cast<size_t>(width) +
+                               static_cast<size_t>(x)] = it->second;
+                }
+        }
+        out.width = width;
+        out.height = height;
+        out.pixels = std::move(pixels);
+        return true;
+}
+
+bool resolve_texture_path(const std::string &filename, std::filesystem::path &out)
+{
+        std::filesystem::path candidate(filename);
+        std::error_code ec;
+        if (candidate.is_absolute())
+        {
+                if (std::filesystem::exists(candidate, ec) && !ec)
+                {
+                        out = candidate;
+                        return true;
+                }
+                return false;
+        }
+        if (!g_scene_directory.empty())
+        {
+                std::filesystem::path scene_relative = g_scene_directory / candidate;
+                if (std::filesystem::exists(scene_relative, ec) && !ec)
+                {
+                        out = scene_relative;
+                        return true;
+                }
+        }
+        for (const auto &base : g_texture_search_paths)
+        {
+                if (base.empty())
+                        continue;
+                std::filesystem::path combined = base / candidate;
+                if (std::filesystem::exists(combined, ec) && !ec)
+                {
+                        out = combined;
+                        return true;
+                }
+        }
+        if (std::filesystem::exists(candidate, ec) && !ec)
+        {
+                out = std::filesystem::absolute(candidate);
+                return true;
+        }
+        return false;
+}
+
+bool apply_texture(Material &mat, const std::string &name, size_t line)
+{
+        if (name.empty())
+                return report_error(line, "Texture path cannot be empty");
+        std::filesystem::path resolved;
+        if (!resolve_texture_path(name, resolved))
+                return report_error(line, "Texture file '" + name + "' not found");
+        std::string cache_key = resolved.lexically_normal().string();
+        auto it = texture_cache.find(cache_key);
+        if (it == texture_cache.end())
+        {
+                TextureData data;
+                std::string error;
+                if (!load_xpm_texture(resolved, data, error))
+                        return report_error(line, error);
+                it = texture_cache.emplace(cache_key, std::move(data)).first;
+        }
+        const TextureData &data = it->second;
+        mat.texture_width = data.width;
+        mat.texture_height = data.height;
+        mat.texture_data = data.pixels;
+        mat.texture_path = name;
+        return true;
 }
 
 bool to_double(std::string_view sv, double &out)
@@ -369,6 +640,24 @@ bool parse_string_field(const TableData &table, const std::string &key, std::str
         return true;
 }
 
+bool parse_optional_string_field(const TableData &table, const std::string &key, std::string &out,
+                                 size_t &line, bool &present)
+{
+        auto it = table.values.find(key);
+        if (it == table.values.end())
+        {
+                present = false;
+                return true;
+        }
+        std::string trimmed = trim(it->second.first);
+        line = it->second.second;
+        if (trimmed.size() < 2 || trimmed.front() != '"' || trimmed.back() != '"')
+                return report_error(line, "Expected string for '" + key + "'");
+        out = trimmed.substr(1, trimmed.size() - 2);
+        present = true;
+        return true;
+}
+
 Material make_material(const std::array<int, 3> &rgb, bool reflective, bool transparent)
 {
         Material mat;
@@ -454,7 +743,7 @@ bool process_plane(const TableData &table, Scene &scene, int &oid, int &mid,
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "reflective", "rotatable",
-                                 "movable", "scorable", "transparent"}))
+                                 "movable", "scorable", "transparent", "texture"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -491,10 +780,20 @@ bool process_plane(const TableData &table, Scene &scene, int &oid, int &mid,
         bool transparent;
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
+        std::string texture_name;
+        size_t texture_line = table.header_line;
+        bool has_texture = false;
+        if (!parse_optional_string_field(table, "texture", texture_name, texture_line, has_texture))
+                return false;
         auto plane = std::make_shared<Plane>(position, normal.normalized(), oid++, mid);
         plane->movable = movable;
         plane->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        if (has_texture)
+        {
+                if (!apply_texture(materials.back(), texture_name, texture_line))
+                        return false;
+        }
         scene.objects.push_back(plane);
         ++mid;
         return true;
@@ -505,7 +804,7 @@ bool process_sphere(const TableData &table, Scene &scene, int &oid, int &mid,
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "radius", "reflective",
-                                 "rotatable", "movable", "scorable", "transparent"}))
+                                 "rotatable", "movable", "scorable", "transparent", "texture"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -540,10 +839,20 @@ bool process_sphere(const TableData &table, Scene &scene, int &oid, int &mid,
         bool transparent;
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
+        std::string texture_name;
+        size_t texture_line = table.header_line;
+        bool has_texture = false;
+        if (!parse_optional_string_field(table, "texture", texture_name, texture_line, has_texture))
+                return false;
         auto sphere = std::make_shared<Sphere>(position, radius, oid++, mid);
         sphere->movable = movable;
         sphere->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        if (has_texture)
+        {
+                if (!apply_texture(materials.back(), texture_name, texture_line))
+                        return false;
+        }
         scene.objects.push_back(sphere);
         ++mid;
         return true;
@@ -554,7 +863,8 @@ bool process_cube(const TableData &table, Scene &scene, int &oid, int &mid,
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "width", "height", "length",
-                                 "reflective", "rotatable", "movable", "scorable", "transparent"}))
+                                 "reflective", "rotatable", "movable", "scorable", "transparent",
+                                 "texture"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -598,10 +908,20 @@ bool process_cube(const TableData &table, Scene &scene, int &oid, int &mid,
         bool transparent;
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
+        std::string texture_name;
+        size_t texture_line = table.header_line;
+        bool has_texture = false;
+        if (!parse_optional_string_field(table, "texture", texture_name, texture_line, has_texture))
+                return false;
         auto cube = std::make_shared<Cube>(position, dir.normalized(), length, width, height, oid++, mid);
         cube->movable = movable;
         cube->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        if (has_texture)
+        {
+                if (!apply_texture(materials.back(), texture_name, texture_line))
+                        return false;
+        }
         scene.objects.push_back(cube);
         ++mid;
         return true;
@@ -612,7 +932,8 @@ bool process_cylinder(const TableData &table, Scene &scene, int &oid, int &mid,
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "radius", "height",
-                                 "reflective", "rotatable", "movable", "scorable", "transparent"}))
+                                 "reflective", "rotatable", "movable", "scorable", "transparent",
+                                 "texture"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -653,10 +974,20 @@ bool process_cylinder(const TableData &table, Scene &scene, int &oid, int &mid,
         bool transparent;
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
+        std::string texture_name;
+        size_t texture_line = table.header_line;
+        bool has_texture = false;
+        if (!parse_optional_string_field(table, "texture", texture_name, texture_line, has_texture))
+                return false;
         auto cylinder = std::make_shared<Cylinder>(position, dir.normalized(), radius, height, oid++, mid);
         cylinder->movable = movable;
         cylinder->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        if (has_texture)
+        {
+                if (!apply_texture(materials.back(), texture_name, texture_line))
+                        return false;
+        }
         scene.objects.push_back(cylinder);
         ++mid;
         return true;
@@ -667,7 +998,8 @@ bool process_cone(const TableData &table, Scene &scene, int &oid, int &mid,
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "radius", "height",
-                                 "reflective", "rotatable", "movable", "scorable", "transparent"}))
+                                 "reflective", "rotatable", "movable", "scorable", "transparent",
+                                 "texture"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -708,10 +1040,20 @@ bool process_cone(const TableData &table, Scene &scene, int &oid, int &mid,
         bool transparent;
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
+        std::string texture_name;
+        size_t texture_line = table.header_line;
+        bool has_texture = false;
+        if (!parse_optional_string_field(table, "texture", texture_name, texture_line, has_texture))
+                return false;
         auto cone = std::make_shared<Cone>(position, dir.normalized(), radius, height, oid++, mid);
         cone->movable = movable;
         cone->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        if (has_texture)
+        {
+                if (!apply_texture(materials.back(), texture_name, texture_line))
+                        return false;
+        }
         scene.objects.push_back(cone);
         ++mid;
         return true;
@@ -909,6 +1251,19 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                 std::cerr << "Failed to open scene file: " << path << '\n';
                 return false;
         }
+
+        std::error_code ec;
+        g_scene_directory = std::filesystem::absolute(std::filesystem::path(path), ec).parent_path();
+        g_texture_search_paths.clear();
+        if (!g_scene_directory.empty())
+        {
+                g_texture_search_paths.push_back(g_scene_directory / "textures");
+                std::filesystem::path parent = g_scene_directory.parent_path();
+                if (!parent.empty())
+                        g_texture_search_paths.push_back(parent / "textures");
+        }
+        std::filesystem::path cwd_textures = std::filesystem::absolute(std::filesystem::path("textures"), ec);
+        g_texture_search_paths.push_back(cwd_textures);
 
         materials.clear();
         outScene.objects.clear();

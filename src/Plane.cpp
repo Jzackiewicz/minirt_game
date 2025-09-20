@@ -20,12 +20,36 @@ bool Plane::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 	{
 		return false;
 	}
-	rec.t = t;
-	rec.p = r.at(t);
-	rec.set_face_normal(r, normal);
-	rec.material_id = material_id;
-	rec.object_id = object_id;
-	return true;
+        rec.t = t;
+        rec.p = r.at(t);
+        rec.set_face_normal(r, normal);
+        rec.material_id = material_id;
+        rec.object_id = object_id;
+        Vec3 tangent = Vec3::cross((std::fabs(normal.y) < 0.999) ? Vec3(0, 1, 0) : Vec3(1, 0, 0), normal);
+        double tangent_len = tangent.length();
+        if (tangent_len <= 1e-8)
+                tangent = Vec3(1, 0, 0);
+        else
+                tangent = tangent / tangent_len;
+        Vec3 bitangent = Vec3::cross(normal, tangent);
+        double bitangent_len = bitangent.length();
+        if (bitangent_len <= 1e-8)
+                bitangent = Vec3(0, 0, 1);
+        else
+                bitangent = bitangent / bitangent_len;
+        Vec3 rel = rec.p - point;
+        double u = Vec3::dot(rel, tangent);
+        double v = Vec3::dot(rel, bitangent);
+        u -= std::floor(u);
+        v -= std::floor(v);
+        if (u < 0.0)
+                u += 1.0;
+        if (v < 0.0)
+                v += 1.0;
+        rec.u = u;
+        rec.v = v;
+        rec.has_uv = true;
+        return true;
 }
 
 bool Plane::bounding_box(AABB &out) const

@@ -209,8 +209,7 @@ Vec3 clamp_color(const Vec3 &c, double lo = 0.0, double hi = 1.0)
                                 std::clamp(c.z, lo, hi));
 }
 
-Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
-                                         const Material &mat)
+Vec3 evaluate_material_color(const Scene &scene, const HitRecord &rec, const Material &mat)
 {
         Vec3 base = mat.base_color;
         Vec3 col = mat.color;
@@ -224,6 +223,8 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                         base = col = beam->color;
                 }
         }
+        if (mat.has_texture() && rec.has_uv)
+                return mat.sample_texture(rec.u, rec.v);
         if (mat.checkered)
         {
                 Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
@@ -231,9 +232,15 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                                    static_cast<int>(std::floor(rec.p.y * 5)) +
                                    static_cast<int>(std::floor(rec.p.z * 5))) &
                                   1;
-                col = chk ? base : inv;
+                return chk ? base : inv;
         }
         return col;
+}
+
+Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
+                                         const Material &mat)
+{
+        return evaluate_material_color(scene, rec, mat);
 }
 
 double compute_effective_alpha(const Material &mat, const HitRecord &rec)
@@ -488,31 +495,10 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	}
         const Material &m = mats[rec.material_id];
         Vec3 eye = (r.dir * -1.0).normalized();
-        Vec3 base = m.base_color;
-        Vec3 col = m.color;
-        if (rec.object_id >= 0 &&
-                rec.object_id < static_cast<int>(scene.objects.size()))
-        {
-                auto obj = scene.objects[rec.object_id];
-                if (obj->is_beam())
-                {
-                        auto beam = std::static_pointer_cast<Laser>(obj);
-                        base = col = beam->color;
-                }
-        }
-	if (m.checkered)
-	{
-		Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
-		int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
-				   static_cast<int>(std::floor(rec.p.y * 5)) +
-				   static_cast<int>(std::floor(rec.p.z * 5))) &
-				  1;
-		col = chk ? base : inv;
-	}
-        Vec3 sum(col.x * scene.ambient.color.x * scene.ambient.intensity,
-                         col.y * scene.ambient.color.y * scene.ambient.intensity,
-                         col.z * scene.ambient.color.z * scene.ambient.intensity);
-        Vec3 surface_color = col;
+        Vec3 surface_color = evaluate_material_color(scene, rec, m);
+        Vec3 sum(surface_color.x * scene.ambient.color.x * scene.ambient.intensity,
+                         surface_color.y * scene.ambient.color.y * scene.ambient.intensity,
+                         surface_color.z * scene.ambient.color.z * scene.ambient.intensity);
         for (const auto &L : scene.lights)
         {
                 sum += light_contribution(scene, mats, L, rec, surface_color, m, rec.p, eye);

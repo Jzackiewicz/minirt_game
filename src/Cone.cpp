@@ -1,5 +1,42 @@
 #include "Cone.hpp"
+#include <algorithm>
 #include <cmath>
+
+namespace
+{
+struct OrthonormalBasis
+{
+        Vec3 u;
+        Vec3 v;
+        Vec3 w;
+};
+
+OrthonormalBasis make_basis(const Vec3 &axis)
+{
+        OrthonormalBasis basis{};
+        double len2 = axis.length_squared();
+        if (len2 <= 1e-12)
+        {
+                basis.w = Vec3(0, 0, 1);
+                basis.u = Vec3(1, 0, 0);
+                basis.v = Vec3(0, 1, 0);
+                return basis;
+        }
+        basis.w = axis / std::sqrt(len2);
+        Vec3 helper = (std::fabs(basis.w.z) < 0.999) ? Vec3(0, 0, 1) : Vec3(0, 1, 0);
+        Vec3 u = Vec3::cross(helper, basis.w);
+        double ulen = u.length();
+        if (ulen <= 1e-12)
+        {
+                helper = Vec3(0, 1, 0);
+                u = Vec3::cross(helper, basis.w);
+                ulen = u.length();
+        }
+        basis.u = (ulen > 1e-12) ? u / ulen : Vec3(1, 0, 0);
+        basis.v = Vec3::cross(basis.w, basis.u);
+        return basis;
+}
+} // namespace
 
 Cone::Cone(const Vec3 &c, const Vec3 &ax, double r, double h, int oid, int mid)
 	: center(c), axis(ax.normalized()), radius(r), height(h)
@@ -13,9 +50,10 @@ bool Cone::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 	bool hit_any = false;
 	double closest = tmax;
 
-	Vec3 apex = center + axis * (height * 0.5);
-	Vec3 down = (-1) * axis;
-	double k = radius / height;
+        Vec3 apex = center + axis * (height * 0.5);
+        Vec3 down = (-1) * axis;
+        double k = radius / height;
+        OrthonormalBasis basis = make_basis(axis);
 
 	Vec3 oc = r.orig - apex;
 	double oc_dot_d = Vec3::dot(oc, down);
@@ -53,11 +91,26 @@ bool Cone::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 			rec.p = p;
 			rec.object_id = object_id;
 			rec.material_id = material_id;
-			rec.set_face_normal(r, normal);
-			closest = root;
-			hit_any = true;
-		}
-	}
+                        rec.set_face_normal(r, normal);
+                        Vec3 to_center = p - center;
+                        double height_param = Vec3::dot(to_center, axis);
+                        Vec3 radial = to_center - axis * height_param;
+                        double radial_len = radial.length();
+                        Vec3 radial_dir = (radial_len > 1e-12) ? radial / radial_len : basis.u;
+                        double angle = std::atan2(Vec3::dot(radial_dir, basis.v), Vec3::dot(radial_dir, basis.u));
+                        double tex_u = 1.0 - (angle + M_PI) / (2.0 * M_PI);
+                        tex_u -= std::floor(tex_u);
+                        if (tex_u < 0.0)
+                                tex_u += 1.0;
+                        double tex_v = (height_param + height * 0.5) / height;
+                        tex_v = std::clamp(tex_v, 0.0, 1.0);
+                        rec.u = tex_u;
+                        rec.v = tex_v;
+                        rec.has_uv = true;
+                        closest = root;
+                        hit_any = true;
+                }
+        }
 
 	Vec3 base_center = center - axis * (height * 0.5);
 	double denom = Vec3::dot(r.dir, (-1) * axis);
@@ -67,16 +120,28 @@ bool Cone::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 		if (t >= tmin && t <= closest)
 		{
 			Vec3 p = r.at(t);
-			if ((p - base_center).length_squared() <= radius * radius)
-			{
-				rec.t = t;
-				rec.p = p;
-				rec.object_id = object_id;
-				rec.material_id = material_id;
-				rec.set_face_normal(r, (-1) * axis);
-				closest = t;
-				hit_any = true;
-			}
+                        if ((p - base_center).length_squared() <= radius * radius)
+                        {
+                                rec.t = t;
+                                rec.p = p;
+                                rec.object_id = object_id;
+                                rec.material_id = material_id;
+                                rec.set_face_normal(r, (-1) * axis);
+                                double tex_u = 0.5;
+                                double tex_v = 0.5;
+                                if (radius > 1e-8)
+                                {
+                                        tex_u = 0.5 + Vec3::dot(p - base_center, basis.u) / (2.0 * radius);
+                                        tex_v = 0.5 + Vec3::dot(p - base_center, basis.v) / (2.0 * radius);
+                                }
+                                tex_u = std::clamp(tex_u, 0.0, 1.0);
+                                tex_v = std::clamp(1.0 - tex_v, 0.0, 1.0);
+                                rec.u = tex_u;
+                                rec.v = tex_v;
+                                rec.has_uv = true;
+                                closest = t;
+                                hit_any = true;
+                        }
 		}
 	}
 

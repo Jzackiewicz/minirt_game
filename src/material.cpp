@@ -2,9 +2,45 @@
 #include <algorithm>
 #include <cmath>
 
+bool Material::has_texture() const
+{
+        return texture_width > 0 && texture_height > 0 &&
+               texture_data.size() == static_cast<size_t>(texture_width * texture_height);
+}
+
+Vec3 Material::sample_texture(double u, double v) const
+{
+        if (!has_texture())
+                return base_color;
+
+        double u_wrapped = std::fmod(u, 1.0);
+        if (u_wrapped < 0.0)
+                u_wrapped += 1.0;
+        double v_wrapped = std::fmod(v, 1.0);
+        if (v_wrapped < 0.0)
+                v_wrapped += 1.0;
+
+        int ix = static_cast<int>(std::floor(u_wrapped * texture_width));
+        int iy = static_cast<int>(std::floor((1.0 - v_wrapped) * texture_height));
+        if (ix < 0)
+                ix = 0;
+        if (iy < 0)
+                iy = 0;
+        if (ix >= texture_width)
+                ix = texture_width - 1;
+        if (iy >= texture_height)
+                iy = texture_height - 1;
+
+        size_t index = static_cast<size_t>(iy) * static_cast<size_t>(texture_width) +
+                       static_cast<size_t>(ix);
+        if (index >= texture_data.size())
+                return base_color;
+        return texture_data[index];
+}
+
 Vec3 phong(const Material &m, const Ambient &ambient,
-		   const std::vector<PointLight> &lights, const Vec3 &p, const Vec3 &n,
-		   const Vec3 &eye)
+                   const std::vector<PointLight> &lights, const Vec3 &p, const Vec3 &n,
+                   const Vec3 &eye)
 {
 	Vec3 base = m.base_color;
 	Vec3 col = m.color;

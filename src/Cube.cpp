@@ -56,10 +56,54 @@ bool Cube::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 	rec.material_id = material_id;
 	rec.object_id = object_id;
 
-	Vec3 normal_world = normal_local.x * axis[0] + normal_local.y * axis[1] +
-						normal_local.z * axis[2];
-	rec.set_face_normal(r, normal_world);
-	return true;
+        Vec3 normal_world = normal_local.x * axis[0] + normal_local.y * axis[1] +
+                                                normal_local.z * axis[2];
+        rec.set_face_normal(r, normal_world);
+        Vec3 local = rec.p - center;
+        double lx = Vec3::dot(local, axis[0]);
+        double ly = Vec3::dot(local, axis[1]);
+        double lz = Vec3::dot(local, axis[2]);
+        double u = 0.5;
+        double v = 0.5;
+        if (std::fabs(normal_local.x) > 0.5)
+        {
+                double denom_u = half.y * 2.0;
+                double denom_v = half.z * 2.0;
+                if (denom_u > 1e-8)
+                        u = (ly + half.y) / denom_u;
+                if (denom_v > 1e-8)
+                        v = (lz + half.z) / denom_v;
+                if (normal_local.x < 0.0)
+                        u = 1.0 - u;
+        }
+        else if (std::fabs(normal_local.y) > 0.5)
+        {
+                double denom_u = half.x * 2.0;
+                double denom_v = half.z * 2.0;
+                if (denom_u > 1e-8)
+                        u = (lx + half.x) / denom_u;
+                if (denom_v > 1e-8)
+                        v = (lz + half.z) / denom_v;
+                if (normal_local.y > 0.0)
+                        u = 1.0 - u;
+        }
+        else
+        {
+                double denom_u = half.x * 2.0;
+                double denom_v = half.y * 2.0;
+                if (denom_u > 1e-8)
+                        u = (lx + half.x) / denom_u;
+                if (denom_v > 1e-8)
+                        v = (ly + half.y) / denom_v;
+                if (normal_local.z > 0.0)
+                        u = 1.0 - u;
+        }
+        u = std::clamp(u, 0.0, 1.0);
+        v = std::clamp(v, 0.0, 1.0);
+        rec.u = u;
+        rec.v = v;
+        rec.has_uv = true;
+        return true;
 }
 
 bool Cube::bounding_box(AABB &out) const
