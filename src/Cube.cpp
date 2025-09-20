@@ -52,14 +52,51 @@ bool Cube::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 		}
 	}
 	rec.t = tmin_local;
-	rec.p = r.at(rec.t);
-	rec.material_id = material_id;
-	rec.object_id = object_id;
+        rec.p = r.at(rec.t);
+        rec.material_id = material_id;
+        rec.object_id = object_id;
 
-	Vec3 normal_world = normal_local.x * axis[0] + normal_local.y * axis[1] +
-						normal_local.z * axis[2];
-	rec.set_face_normal(r, normal_world);
-	return true;
+        Vec3 normal_world = normal_local.x * axis[0] + normal_local.y * axis[1] +
+                                                normal_local.z * axis[2];
+        rec.set_face_normal(r, normal_world);
+
+        Vec3 local_point(Vec3::dot(rec.p - center, axis[0]),
+                                         Vec3::dot(rec.p - center, axis[1]),
+                                         Vec3::dot(rec.p - center, axis[2]));
+        auto map_range = [](double value, double half_extent) {
+                if (half_extent <= 1e-8)
+                        return 0.5;
+                double normalized = (value + half_extent) / (2.0 * half_extent);
+                return std::clamp(normalized, 0.0, 1.0);
+        };
+        if (std::fabs(normal_local.x) > 0.5)
+        {
+                double u = map_range(local_point.z, half.z);
+                double v = map_range(local_point.y, half.y);
+                if (normal_local.x < 0)
+                        u = 1.0 - u;
+                rec.u = u;
+                rec.v = v;
+        }
+        else if (std::fabs(normal_local.y) > 0.5)
+        {
+                double u = map_range(local_point.x, half.x);
+                double v = map_range(local_point.z, half.z);
+                if (normal_local.y > 0)
+                        v = 1.0 - v;
+                rec.u = u;
+                rec.v = v;
+        }
+        else
+        {
+                double u = map_range(local_point.x, half.x);
+                double v = map_range(local_point.y, half.y);
+                if (normal_local.z < 0)
+                        u = 1.0 - u;
+                rec.u = u;
+                rec.v = v;
+        }
+        return true;
 }
 
 bool Cube::bounding_box(AABB &out) const

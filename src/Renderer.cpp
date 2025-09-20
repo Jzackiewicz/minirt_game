@@ -223,8 +223,20 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                         auto beam = std::static_pointer_cast<Laser>(obj);
                         base = col = beam->color;
                 }
+                else if (!mat.texture.empty())
+                {
+                        Vec3 tex = mat.texture.sample(rec.u, rec.v);
+                        base = tex;
+                        col = tex;
+                }
         }
-        if (mat.checkered)
+        else if (!mat.texture.empty())
+        {
+                Vec3 tex = mat.texture.sample(rec.u, rec.v);
+                base = tex;
+                col = tex;
+        }
+        if (mat.checkered && mat.texture.empty())
         {
                 Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
                 int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
@@ -641,9 +653,12 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 st.selected_obj = st.hover_obj;
                                 st.selected_mat = st.hover_mat;
                                 st.hover_obj = st.hover_mat = -1;
-                                mats[st.selected_mat].checkered = true;
-                                mats[st.selected_mat].color =
-                                        mats[st.selected_mat].base_color;
+                                if (mats[st.selected_mat].texture_path.empty())
+                                {
+                                        mats[st.selected_mat].checkered = true;
+                                        mats[st.selected_mat].color =
+                                                mats[st.selected_mat].base_color;
+                                }
                                 AABB box;
                                 if (scene.objects[st.selected_obj]->bounding_box(box))
                                 {
@@ -675,9 +690,12 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         }
                         else if (st.edit_mode)
                         {
-                                mats[st.selected_mat].checkered = false;
-                                mats[st.selected_mat].color =
-                                        mats[st.selected_mat].base_color;
+                                if (mats[st.selected_mat].texture_path.empty())
+                                {
+                                        mats[st.selected_mat].checkered = false;
+                                        mats[st.selected_mat].color =
+                                                mats[st.selected_mat].base_color;
+                                }
                                 st.selected_obj = st.selected_mat = -1;
                                 st.edit_mode = false;
                                 st.rotating = false;
@@ -700,8 +718,11 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                  e.button.button == SDL_BUTTON_MIDDLE)
                 {
                         int mid = st.selected_mat;
-                        mats[mid].checkered = false;
-                        mats[mid].color = mats[mid].base_color;
+                        if (mats[mid].texture_path.empty())
+                        {
+                                mats[mid].checkered = false;
+                                mats[mid].color = mats[mid].base_color;
+                        }
                         scene.objects.erase(scene.objects.begin() + st.selected_obj);
                         scene.update_beams(mats);
                         scene.build_bvh();
@@ -877,8 +898,11 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 if (st.spawn_key == e.key.keysym.scancode)
                                 {
                                         int mid = st.selected_mat;
-                                        mats[mid].checkered = false;
-                                        mats[mid].color = mats[mid].base_color;
+                                        if (mats[mid].texture_path.empty())
+                                        {
+                                                mats[mid].checkered = false;
+                                                mats[mid].color = mats[mid].base_color;
+                                        }
                                         scene.objects.erase(scene.objects.begin() + st.selected_obj);
                                         scene.update_beams(mats);
                                         scene.build_bvh();
@@ -1032,7 +1056,8 @@ void Renderer::update_selection(RenderState &st,
 {
         if (st.edit_mode)
         {
-                if (st.hover_mat >= 0 && st.hover_mat != st.selected_mat)
+                if (st.hover_mat >= 0 && st.hover_mat != st.selected_mat &&
+                    mats[st.hover_mat].texture_path.empty())
                         mats[st.hover_mat].color =
                                 mats[st.hover_mat].base_color;
                 st.hover_obj = st.hover_mat = -1;
@@ -1068,21 +1093,25 @@ void Renderer::update_selection(RenderState &st,
                 {
                         if (st.hover_mat != hrec.material_id)
                         {
-                                if (st.hover_mat >= 0)
+                                if (st.hover_mat >= 0 &&
+                                    mats[st.hover_mat].texture_path.empty())
                                         mats[st.hover_mat].color =
                                                 mats[st.hover_mat].base_color;
                                 st.hover_obj = hrec.object_id;
                                 st.hover_mat = hrec.material_id;
                         }
                         bool blink = ((SDL_GetTicks() / 250) % 2) == 0;
-                        mats[st.hover_mat].color =
-                                blink ? (Vec3(1.0, 1.0, 1.0) -
-                                                 mats[st.hover_mat].base_color)
-                                          : mats[st.hover_mat].base_color;
+                        if (mats[st.hover_mat].texture_path.empty())
+                        {
+                                mats[st.hover_mat].color =
+                                        blink ? (Vec3(1.0, 1.0, 1.0) -
+                                                         mats[st.hover_mat].base_color)
+                                              : mats[st.hover_mat].base_color;
+                        }
                 }
                 else
                 {
-                        if (st.hover_mat >= 0)
+                        if (st.hover_mat >= 0 && mats[st.hover_mat].texture_path.empty())
                                 mats[st.hover_mat].color =
                                         mats[st.hover_mat].base_color;
                         st.hover_obj = st.hover_mat = -1;

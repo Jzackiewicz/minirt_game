@@ -1,6 +1,42 @@
 #include "Plane.hpp"
 #include <cmath>
 
+namespace
+{
+
+void compute_basis(const Vec3 &normal, Vec3 &u_axis, Vec3 &v_axis)
+{
+        Vec3 n = normal.normalized();
+        Vec3 helper = (std::fabs(n.x) > 0.9) ? Vec3(0, 1, 0) : Vec3(1, 0, 0);
+        u_axis = Vec3::cross(n, helper);
+        double len = u_axis.length();
+        if (len <= 1e-8)
+        {
+                helper = Vec3(0, 0, 1);
+                u_axis = Vec3::cross(n, helper);
+                len = u_axis.length();
+        }
+        if (len <= 1e-8)
+        {
+                u_axis = Vec3(1, 0, 0);
+        }
+        else
+        {
+                u_axis = u_axis / len;
+        }
+        v_axis = Vec3::cross(n, u_axis);
+}
+
+double wrap_unit(double value)
+{
+        double wrapped = value - std::floor(value);
+        if (wrapped < 0.0)
+                wrapped += 1.0;
+        return wrapped;
+}
+
+} // namespace
+
 Plane::Plane(const Vec3 &p, const Vec3 &n, int oid, int mid)
 	: point(p), normal(n.normalized())
 {
@@ -21,11 +57,19 @@ bool Plane::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 		return false;
 	}
 	rec.t = t;
-	rec.p = r.at(t);
-	rec.set_face_normal(r, normal);
-	rec.material_id = material_id;
-	rec.object_id = object_id;
-	return true;
+        rec.p = r.at(t);
+        rec.set_face_normal(r, normal);
+        rec.material_id = material_id;
+        rec.object_id = object_id;
+        Vec3 u_axis;
+        Vec3 v_axis;
+        compute_basis(normal, u_axis, v_axis);
+        Vec3 diff = rec.p - point;
+        double u = Vec3::dot(diff, u_axis);
+        double v = Vec3::dot(diff, v_axis);
+        rec.u = wrap_unit(u);
+        rec.v = wrap_unit(v);
+        return true;
 }
 
 bool Plane::bounding_box(AABB &out) const
