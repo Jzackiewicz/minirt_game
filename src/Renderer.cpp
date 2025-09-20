@@ -1099,6 +1099,241 @@ void Renderer::update_selection(RenderState &st,
                 }
                 else
                 {
+                        set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
+                        set_control(slot_primary, "PLACE\nLBM", accent);
+                }
+        }
+        else
+        {
+                set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
+
+                bool show_grab = false;
+                if (focus_obj)top with mesh neckline. Her breasts grow slowly in cleavage. She takes the sweater off and poses just in the top. She is innocent and flirty.
+                {
+                        bool grabbable = !focus_obj->is_beam() &&
+                                         (g_developer_mode || focus_obj->movable ||
+                                          focus_obj->rotatable);
+                        show_grab = grabbable;
+                }
+
+                if (show_grab)
+                {
+                        set_control(slot_secondary, "GRAB\nLBM", accent);
+                }
+        }
+
+        auto split_lines = [](const std::string &text) {
+                std::vector<std::string> lines;
+                size_t start = 0;
+                while (start <= text.size())
+                {
+                        size_t pos = text.find('\n', start);
+                        if (pos == std::string::npos)
+                        {
+                                lines.emplace_back(text.substr(start));
+                                break;
+                        }
+                        lines.emplace_back(text.substr(start, pos - start));
+                        start = pos + 1;
+                }
+                if (lines.empty())
+                        lines.emplace_back(std::string());
+                while (lines.size() > 1 && lines.back().empty())
+                        lines.pop_back();
+                if (lines.size() == 1 && lines.front().empty())
+                        lines.clear();
+                return lines;
+        };
+
+        std::array<std::vector<std::string>, kControlSections> section_lines{};
+        size_t max_control_lines = 1;
+        for (size_t i = 0; i < control_sections.size(); ++i)
+        {
+                if (!control_sections[i])
+                        continue;
+                section_lines[i] = split_lines(control_sections[i]->text);
+                if (!section_lines[i].empty())
+                        max_control_lines =
+                                std::max(max_control_lines, section_lines[i].size());
+        }
+        std::vector<size_t> active_sections;
+        active_sections.reserve(control_sections.size());
+        for (size_t i = 0; i < control_sections.size(); ++i)
+        {
+                if (!section_lines[i].empty())
+                        active_sections.push_back(i);
+        }
+        if (active_sections.empty())
+        {
+                for (size_t i = 0; i < control_sections.size(); ++i)
+                {
+                        if (control_sections[i])
+                        {
+							active_sections.push_back(i);
+							break;
+                        }
+                }
+                if (active_sections.empty())
+                        active_sections.push_back(0);
+        }
+
+        const int hud_line_height = 7 * hud_scale + 4;
+
+        size_t top_count = std::max(left_lines.size(), right_lines.size());
+        if (top_count == 0)
+                top_count = 1;
+        int top_bar_height = static_cast<int>(top_count) * hud_line_height + 2 * hud_padding;
+        top_bar_height = std::max(top_bar_height, hud_line_height + 2 * hud_padding);
+
+        int bottom_bar_height = static_cast<int>(max_control_lines) * hud_line_height +
+                                2 * hud_padding;
+
+        SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(ren, 0, 0, 0, 180);
+        SDL_Rect top_bar{0, 0, W, top_bar_height};
+        SDL_RenderFillRect(ren, &top_bar);
+        SDL_SetRenderDrawColor(ren, 0, 0, 0, 150);
+        SDL_Rect bottom_bar{0, H - bottom_bar_height, W, bottom_bar_height};
+        SDL_RenderFillRect(ren, &bottom_bar);
+
+        if (top_bar_height > 2 * hud_padding)
+        {
+                SDL_SetRenderDrawColor(ren, 255, 255, 255, 96);
+                SDL_RenderDrawLine(ren, W / 2, hud_padding, W / 2,
+                                   top_bar_height - hud_padding);
+        }
+
+        int left_y = hud_padding;
+        for (const auto &line : left_lines)
+        {
+                CustomCharacter::draw_text(ren, line.text, hud_padding, left_y, line.color,
+                                            hud_scale);
+                left_y += hud_line_height;
+        }
+
+        int right_y = hud_padding;
+        for (const auto &line : right_lines)
+        {
+                int width = CustomCharacter::text_width(line.text, hud_scale);
+                int text_x = std::max(hud_padding, W - hud_padding - width);
+                CustomCharacter::draw_text(ren, line.text, text_x, right_y, line.color,
+                                            hud_scale);
+                right_y += hud_line_height;
+        }
+
+        int controls_top = H - bottom_bar_height + hud_padding;
+        size_t section_count = active_sections.size();
+        double section_span = static_cast<double>(W) /
+                              static_cast<double>(std::max<size_t>(section_count, 1));
+        int bar_vertical_margin = std::max(2, hud_padding / 2);
+        int bar_horizontal_margin = std::max(2, hud_padding / 2);
+        int bar_top = H - bottom_bar_height + bar_vertical_margin;
+        int bar_height = std::max(0, bottom_bar_height - 2 * bar_vertical_margin);
+        SDL_Color separator_color{255, 255, 255, 96};
+        for (size_t pos = 0; pos < active_sections.size(); ++pos)
+        {
+                size_t i = active_sections[pos];
+                int start_x = static_cast<int>(std::round(pos * section_span));
+                int end_x = static_cast<int>(std::round((pos + 1) * section_span));
+                int available = std::max(1, end_x - start_x);
+                int bar_left = start_x + bar_horizontal_margin;
+                int bar_width = std::max(0, available - 2 * bar_horizontal_margin);
+                SDL_Rect bar_rect{bar_left, bar_top, bar_width, bar_height};
+                auto compute_text_x = [&](int width) {
+                        int min_x = start_x + hud_padding;
+                        int max_x = end_x - hud_padding - width;
+                        if (max_x < min_x)
+                                max_x = min_x;
+                        int centered = start_x + (available - width) / 2;
+                        return std::clamp(centered, min_x, max_x);
+                };
+                if (control_sections[i] && !section_lines[i].empty())
+                {
+                        const auto &entry = *control_sections[i];
+                        if (bar_rect.w > 0 && bar_rect.h > 0)
+                        {
+                                SDL_SetRenderDrawColor(ren, entry.bar_color.r,
+                                                       entry.bar_color.g, entry.bar_color.b,
+                                                       entry.bar_color.a);
+                                SDL_RenderFillRect(ren, &bar_rect);
+                        }
+
+                        const auto &lines = section_lines[i];
+                        int header_y = controls_top;
+                        if (!lines.front().empty())
+                        {
+                                int header_width =
+                                        CustomCharacter::text_width(lines.front(), hud_scale);
+                                int header_x = compute_text_x(header_width);
+                                CustomCharacter::draw_text(ren, lines.front(), header_x, header_y,
+                                                            entry.text_color, hud_scale);
+                        }
+
+                        if (lines.size() > 1)
+                        {
+                                int full_left = start_x + hud_padding;
+                                int full_right = end_x - hud_padding;
+                                if (full_right > full_left)
+                                {
+                                        int divider_gap = 2;
+                                        int divider_height = 1;
+                                        int total_span = full_right - full_left;
+                                        int divider_width = std::max(1, total_span / 2);
+                                        int divider_left = full_left + (total_span - divider_width) / 2;
+                                        int divider_top = header_y + hud_line_height -
+                                                          divider_height - divider_gap;
+                                        divider_top = std::clamp(divider_top, bar_top,
+                                                                 bar_top + bar_height -
+                                                                         divider_height);
+                                        SDL_Rect divider_rect{divider_left, divider_top,
+                                                              divider_width, divider_height};
+                                        SDL_SetRenderDrawColor(ren, command_divider.r,
+                                                               command_divider.g,
+                                                               command_divider.b,
+                                                               command_divider.a);
+                                        SDL_RenderFillRect(ren, &divider_rect);
+
+                                        int divider_bottom = divider_top + divider_height;
+                                        int controls_area_top = divider_bottom + divider_gap;
+                                        int controls_area_bottom =
+                                                std::min(H - hud_padding, bar_top + bar_height);
+                                        if (controls_area_bottom < controls_area_top)
+                                                controls_area_bottom = controls_area_top;
+                                        size_t control_line_count = lines.size() - 1;
+                                        int control_block_height =
+                                                static_cast<int>(control_line_count) *
+                                                hud_line_height;
+                                        int available_height = controls_area_bottom -
+                                                              controls_area_top;
+                                        int control_text_y = controls_area_top;
+                                        if (available_height > control_block_height)
+                                                control_text_y +=
+                                                        (available_height - control_block_height) / 2;
+
+                                        for (size_t line_idx = 1; line_idx < lines.size();
+                                             ++line_idx)
+                                        {
+                                                const auto &line = lines[line_idx];
+                                                if (!line.empty())
+                                                {
+                                                        int line_width = CustomCharacter::text_width(
+                                                                line, hud_scale);
+                                                        int text_x = compute_text_x(line_width);
+                                                        CustomCharacter::draw_text(ren, line, text_x,
+                                                                                  control_text_y,
+                                                                                  entry.text_color,
+                                                                                  hud_scale);
+                                                }
+                                                control_text_y += hud_line_height;
+                                        }
+                                }
+                        }
+                }
+                if (pos + 1 < active_sections.size())
+                {
+                        SDL_SetRenderDrawColor(ren, separator_color.r, separator_color.g,
+                                               separator_color.b, separator_color.a);
+                        SDL_RenderDrawLine(ren, end_x, H - bottom_bar_height, end_x, H);
                         if (st.hover_mat >= 0)
                                 mats[st.hover_mat].color =
                                         mats[st.hover_mat].base_color;
