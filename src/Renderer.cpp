@@ -101,7 +101,7 @@ static bool beam_light_through(const Scene &scene, const std::vector<Material> &
                 const Material &m = mats[hit_mat];
                 if (m.alpha >= 1.0)
                         return false;
-                color = mix_colors(color, m.base_color, m.alpha);
+                color = mix_colors(color, material_base_color_at(m, tmp), m.alpha);
                 intensity *= (1.0 - m.alpha);
                 shadow_ray.orig = shadow_ray.orig + shadow_ray.dir * (closest + 1e-4);
                 max_dist -= closest + 1e-4;
@@ -151,7 +151,7 @@ static bool light_through(const Scene &scene, const std::vector<Material> &mats,
                 const Material &m = mats[hit_mat];
                 if (m.alpha >= 1.0)
                         return false;
-                color = mix_colors(color, m.base_color, m.alpha);
+                color = mix_colors(color, material_base_color_at(m, tmp), m.alpha);
                 intensity *= (1.0 - m.alpha);
                 shadow_ray.orig = shadow_ray.orig + shadow_ray.dir * (closest + 1e-4);
                 max_dist -= closest + 1e-4;
@@ -212,8 +212,8 @@ Vec3 clamp_color(const Vec3 &c, double lo = 0.0, double hi = 1.0)
 Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                                          const Material &mat)
 {
-        Vec3 base = mat.base_color;
-        Vec3 col = mat.color;
+        Vec3 base = material_base_color_at(mat, rec);
+        Vec3 col = material_color_at(mat, rec);
         if (rec.object_id >= 0 &&
                 rec.object_id < static_cast<int>(scene.objects.size()))
         {
@@ -488,8 +488,8 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	}
         const Material &m = mats[rec.material_id];
         Vec3 eye = (r.dir * -1.0).normalized();
-        Vec3 base = m.base_color;
-        Vec3 col = m.color;
+        Vec3 base = material_base_color_at(m, rec);
+        Vec3 col = material_color_at(m, rec);
         if (rec.object_id >= 0 &&
                 rec.object_id < static_cast<int>(scene.objects.size()))
         {
@@ -500,9 +500,9 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
                         base = col = beam->color;
                 }
         }
-	if (m.checkered)
-	{
-		Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
+        if (m.checkered)
+        {
+                Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
 		int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
 				   static_cast<int>(std::floor(rec.p.y * 5)) +
 				   static_cast<int>(std::floor(rec.p.z * 5))) &

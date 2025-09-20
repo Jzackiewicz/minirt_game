@@ -1,4 +1,5 @@
 #include "Sphere.hpp"
+#include <algorithm>
 #include <cmath>
 
 Sphere::Sphere(const Vec3 &c, double r, int oid, int mid) : center(c), radius(r)
@@ -29,13 +30,19 @@ bool Sphere::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 			return false;
 		}
 	}
-	rec.t = root;
-	rec.p = r.at(rec.t);
-	rec.material_id = material_id;
-	rec.object_id = object_id;
-	Vec3 outward = (rec.p - center) / radius;
-	rec.set_face_normal(r, outward);
-	return true;
+        rec.t = root;
+        rec.p = r.at(rec.t);
+        rec.material_id = material_id;
+        rec.object_id = object_id;
+        Vec3 outward = (rec.p - center) / radius;
+        constexpr double kPi = 3.14159265358979323846;
+        Vec3 unit = outward;
+        double theta = std::acos(std::clamp(-unit.y, -1.0, 1.0));
+        double phi = std::atan2(-unit.z, unit.x) + kPi;
+        rec.u = phi / (2.0 * kPi);
+        rec.v = theta / kPi;
+        rec.set_face_normal(r, outward);
+        return true;
 }
 
 bool Sphere::bounding_box(AABB &out) const

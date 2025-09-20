@@ -149,8 +149,9 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                 if (new_len > 1e-4)
                                 {
                                         Vec3 pass_orig = forward.at(closest) + forward.dir * 1e-4;
-                                        Vec3 new_color = bm->color * (1.0 - hit_mat.alpha) +
-                                                         hit_mat.base_color * hit_mat.alpha;
+                                        Vec3 new_color =
+                                                bm->color * (1.0 - hit_mat.alpha) +
+                                                material_base_color_at(hit_mat, hit_rec) * hit_mat.alpha;
                                         double new_intens =
                                                 bm->light_intensity * (1.0 - hit_mat.alpha);
                                        auto new_bm = std::make_shared<Laser>(

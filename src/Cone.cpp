@@ -1,21 +1,67 @@
 #include "Cone.hpp"
+#include <algorithm>
 #include <cmath>
 
-Cone::Cone(const Vec3 &c, const Vec3 &ax, double r, double h, int oid, int mid)
-	: center(c), axis(ax.normalized()), radius(r), height(h)
+namespace
 {
-	object_id = oid;
-	material_id = mid;
+
+void build_basis(const Vec3 &axis, Vec3 &tangent, Vec3 &bitangent)
+{
+        Vec3 helper = (std::fabs(axis.z) < 0.999) ? Vec3(0, 0, 1) : Vec3(0, 1, 0);
+        tangent = Vec3::cross(helper, axis);
+        double len = tangent.length();
+        if (len <= 1e-12)
+        {
+                helper = Vec3(1, 0, 0);
+                tangent = Vec3::cross(helper, axis);
+                len = tangent.length();
+        }
+        tangent = (len > 1e-12) ? tangent / len : Vec3(1, 0, 0);
+        bitangent = Vec3::cross(axis, tangent).normalized();
+}
+
+double wrap_angle(double angle)
+{
+        constexpr double kTwoPi = 6.28318530717958647692;
+        while (angle < 0.0)
+                angle += kTwoPi;
+        while (angle >= kTwoPi)
+                angle -= kTwoPi;
+        return angle;
+}
+
+} // namespace
+
+Cone::Cone(const Vec3 &c, const Vec3 &ax, double r, double h, int oid, int mid)
+        : center(c), axis(ax.normalized()), radius(r), height(h)
+{
+        object_id = oid;
+        material_id = mid;
+        build_basis(axis, tangent, bitangent);
 }
 
 bool Cone::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 {
-	bool hit_any = false;
-	double closest = tmax;
+        bool hit_any = false;
+        double closest = tmax;
 
-	Vec3 apex = center + axis * (height * 0.5);
-	Vec3 down = (-1) * axis;
-	double k = radius / height;
+        auto assign_hit = [&](double t, const Vec3 &point, const Vec3 &normal,
+                              double u, double v)
+        {
+                rec.t = t;
+                rec.p = point;
+                rec.object_id = object_id;
+                rec.material_id = material_id;
+                rec.u = std::clamp(u, 0.0, 1.0);
+                rec.v = std::clamp(v, 0.0, 1.0);
+                rec.set_face_normal(r, normal);
+                closest = t;
+                hit_any = true;
+        };
+
+        Vec3 apex = center + axis * (height * 0.5);
+        Vec3 down = (-1) * axis;
+        double k = radius / height;
 
 	Vec3 oc = r.orig - apex;
 	double oc_dot_d = Vec3::dot(oc, down);
@@ -43,44 +89,46 @@ bool Cone::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 			if (y < 0 || y > height)
 			{
 				continue;
-			}
-			Vec3 p = r.at(root);
-			double ax_dist = y;
-			Vec3 x_parallel = down * ax_dist;
-			Vec3 x_perp = (oc + root * r.dir) - x_parallel;
-			Vec3 normal = (x_perp - (k * k * ax_dist) * down).normalized();
-			rec.t = root;
-			rec.p = p;
-			rec.object_id = object_id;
-			rec.material_id = material_id;
-			rec.set_face_normal(r, normal);
-			closest = root;
-			hit_any = true;
-		}
-	}
+                        }
+                        Vec3 p = r.at(root);
+                        double ax_dist = y;
+                        Vec3 x_parallel = down * ax_dist;
+                        Vec3 x_perp = (oc + root * r.dir) - x_parallel;
+                        Vec3 normal = (x_perp - (k * k * ax_dist) * down).normalized();
+                        Vec3 local = p - center;
+                        double axial = Vec3::dot(local, axis);
+                        Vec3 radial = local - axis * axial;
+                        double x = Vec3::dot(radial, tangent);
+                        double z = Vec3::dot(radial, bitangent);
+                        double angle = std::atan2(z, x);
+                        angle = wrap_angle(angle);
+                        constexpr double kTwoPi = 6.28318530717958647692;
+                        double u = angle / kTwoPi;
+                        double v = (axial + height * 0.5) / height;
+                        assign_hit(root, p, normal, u, v);
+                }
+        }
 
-	Vec3 base_center = center - axis * (height * 0.5);
-	double denom = Vec3::dot(r.dir, (-1) * axis);
-	if (std::fabs(denom) > 1e-9)
-	{
-		double t = Vec3::dot(base_center - r.orig, (-1) * axis) / denom;
-		if (t >= tmin && t <= closest)
-		{
-			Vec3 p = r.at(t);
-			if ((p - base_center).length_squared() <= radius * radius)
-			{
-				rec.t = t;
-				rec.p = p;
-				rec.object_id = object_id;
-				rec.material_id = material_id;
-				rec.set_face_normal(r, (-1) * axis);
-				closest = t;
-				hit_any = true;
-			}
-		}
-	}
+        Vec3 base_center = center - axis * (height * 0.5);
+        double denom = Vec3::dot(r.dir, (-1) * axis);
+        if (std::fabs(denom) > 1e-9)
+        {
+                double t = Vec3::dot(base_center - r.orig, (-1) * axis) / denom;
+                if (t >= tmin && t <= closest)
+                {
+                        Vec3 p = r.at(t);
+                        if ((p - base_center).length_squared() <= radius * radius)
+                        {
+                                Vec3 diff = p - base_center;
+                                double u = Vec3::dot(diff, tangent) / (2.0 * radius) + 0.5;
+                                double v = Vec3::dot(diff, bitangent) / (2.0 * radius) + 0.5;
+                                v = 1.0 - v;
+                                assign_hit(t, p, (-1) * axis, u, v);
+                        }
+                }
+        }
 
-	return hit_any;
+        return hit_any;
 }
 
 bool Cone::bounding_box(AABB &out) const
@@ -96,12 +144,14 @@ bool Cone::bounding_box(AABB &out) const
 
 void Cone::rotate(const Vec3 &ax, double angle)
 {
-	auto rotate_vec = [](const Vec3 &v, const Vec3 &axis, double ang)
-	{
-		double c = std::cos(ang);
-		double s = std::sin(ang);
-		return v * c + Vec3::cross(axis, v) * s +
-			   axis * Vec3::dot(axis, v) * (1 - c);
-	};
-	axis = rotate_vec(axis, ax, angle).normalized();
+        auto rotate_vec = [](const Vec3 &v, const Vec3 &axis, double ang)
+        {
+                double c = std::cos(ang);
+                double s = std::sin(ang);
+                return v * c + Vec3::cross(axis, v) * s +
+                           axis * Vec3::dot(axis, v) * (1 - c);
+        };
+        axis = rotate_vec(axis, ax, angle).normalized();
+        tangent = rotate_vec(tangent, ax, angle).normalized();
+        bitangent = Vec3::cross(axis, tangent).normalized();
 }

@@ -1,10 +1,24 @@
 #include "material.hpp"
+#include "Texture.hpp"
+#include "Hittable.hpp"
 #include <algorithm>
 #include <cmath>
 
+namespace
+{
+
+Vec3 sample_texture(const Material &m, const HitRecord &rec)
+{
+        if (!m.texture)
+                return Vec3(1.0, 1.0, 1.0);
+        return m.texture->sample(rec.u, rec.v);
+}
+
+} // namespace
+
 Vec3 phong(const Material &m, const Ambient &ambient,
-		   const std::vector<PointLight> &lights, const Vec3 &p, const Vec3 &n,
-		   const Vec3 &eye)
+                   const std::vector<PointLight> &lights, const Vec3 &p, const Vec3 &n,
+                   const Vec3 &eye)
 {
 	Vec3 base = m.base_color;
 	Vec3 col = m.color;
@@ -84,4 +98,17 @@ Vec3 phong(const Material &m, const Ambient &ambient,
                                           L.color.z * spec * atten);
         }
 	return c;
+}
+
+Vec3 material_color_at(const Material &m, const HitRecord &rec)
+{
+        Vec3 tex = sample_texture(m, rec);
+        return Vec3(m.color.x * tex.x, m.color.y * tex.y, m.color.z * tex.z);
+}
+
+Vec3 material_base_color_at(const Material &m, const HitRecord &rec)
+{
+        Vec3 tex = sample_texture(m, rec);
+        return Vec3(m.base_color.x * tex.x, m.base_color.y * tex.y,
+                                m.base_color.z * tex.z);
 }

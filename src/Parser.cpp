@@ -6,6 +6,7 @@
 #include "Cylinder.hpp"
 #include "Plane.hpp"
 #include "Sphere.hpp"
+#include "Texture.hpp"
 
 #include <algorithm>
 #include <array>
@@ -14,7 +15,9 @@
 #include <cctype>
 #include <cstring>
 #include <fstream>
+#include <filesystem>
 #include <iostream>
+#include <system_error>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -26,6 +29,36 @@ namespace
 {
 
 constexpr double kTransparentAlpha = 125.0 / 255.0;
+
+std::vector<std::filesystem::path> g_texture_search_paths;
+std::unordered_map<std::string, std::shared_ptr<Texture>> g_texture_cache;
+
+void add_texture_search_path(const std::filesystem::path &path)
+{
+        if (path.empty())
+                return;
+        auto normalized = path.lexically_normal();
+        if (std::find(g_texture_search_paths.begin(), g_texture_search_paths.end(), normalized) ==
+            g_texture_search_paths.end())
+                g_texture_search_paths.push_back(normalized);
+}
+
+std::filesystem::path resolve_texture_path(const std::string &name)
+{
+        std::filesystem::path requested(name);
+        if (requested.is_absolute())
+                return requested;
+        for (const auto &base : g_texture_search_paths)
+        {
+                std::filesystem::path combined = (base / requested).lexically_normal();
+                std::error_code ec;
+                if (std::filesystem::exists(combined, ec))
+                        return combined;
+        }
+        if (!g_texture_search_paths.empty())
+                return (g_texture_search_paths.front() / requested).lexically_normal();
+        return requested.lexically_normal();
+}
 
 std::string trim(const std::string &s)
 {
@@ -369,6 +402,39 @@ bool parse_string_field(const TableData &table, const std::string &key, std::str
         return true;
 }
 
+bool parse_texture_field(const TableData &table, std::shared_ptr<Texture> &out)
+{
+        auto it = table.values.find("texture");
+        if (it == table.values.end())
+        {
+                out.reset();
+                return true;
+        }
+        std::string raw = trim(it->second.first);
+        size_t line = it->second.second;
+        if (raw.size() < 2 || raw.front() != '"' || raw.back() != '"')
+                return report_error(line, "Expected string for 'texture'");
+        std::string name = raw.substr(1, raw.size() - 2);
+        if (name.empty())
+                return report_error(line, "Texture path cannot be empty");
+        std::filesystem::path resolved = resolve_texture_path(name);
+        std::string key = resolved.lexically_normal().string();
+        auto cache_it = g_texture_cache.find(key);
+        if (cache_it != g_texture_cache.end())
+        {
+                out = cache_it->second;
+                return true;
+        }
+        Texture texture;
+        std::string error;
+        if (!load_xpm_texture(key, texture, error))
+                return report_error(line, "Failed to load texture '" + name + "': " + error);
+        auto tex_ptr = std::make_shared<Texture>(std::move(texture));
+        g_texture_cache.emplace(key, tex_ptr);
+        out = tex_ptr;
+        return true;
+}
+
 Material make_material(const std::array<int, 3> &rgb, bool reflective, bool transparent)
 {
         Material mat;
@@ -454,7 +520,7 @@ bool process_plane(const TableData &table, Scene &scene, int &oid, int &mid,
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "reflective", "rotatable",
-                                 "movable", "scorable", "transparent"}))
+                                 "movable", "scorable", "transparent", "texture"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -491,10 +557,14 @@ bool process_plane(const TableData &table, Scene &scene, int &oid, int &mid,
         bool transparent;
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
+        std::shared_ptr<Texture> texture;
+        if (!parse_texture_field(table, texture))
+                return false;
         auto plane = std::make_shared<Plane>(position, normal.normalized(), oid++, mid);
         plane->movable = movable;
         plane->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        materials.back().texture = texture;
         scene.objects.push_back(plane);
         ++mid;
         return true;
@@ -505,7 +575,7 @@ bool process_sphere(const TableData &table, Scene &scene, int &oid, int &mid,
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "radius", "reflective",
-                                 "rotatable", "movable", "scorable", "transparent"}))
+                                 "rotatable", "movable", "scorable", "transparent", "texture"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -540,10 +610,14 @@ bool process_sphere(const TableData &table, Scene &scene, int &oid, int &mid,
         bool transparent;
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
+        std::shared_ptr<Texture> texture;
+        if (!parse_texture_field(table, texture))
+                return false;
         auto sphere = std::make_shared<Sphere>(position, radius, oid++, mid);
         sphere->movable = movable;
         sphere->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        materials.back().texture = texture;
         scene.objects.push_back(sphere);
         ++mid;
         return true;
@@ -554,7 +628,8 @@ bool process_cube(const TableData &table, Scene &scene, int &oid, int &mid,
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "width", "height", "length",
-                                 "reflective", "rotatable", "movable", "scorable", "transparent"}))
+                                 "reflective", "rotatable", "movable", "scorable", "transparent",
+                                 "texture"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -598,10 +673,14 @@ bool process_cube(const TableData &table, Scene &scene, int &oid, int &mid,
         bool transparent;
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
+        std::shared_ptr<Texture> texture;
+        if (!parse_texture_field(table, texture))
+                return false;
         auto cube = std::make_shared<Cube>(position, dir.normalized(), length, width, height, oid++, mid);
         cube->movable = movable;
         cube->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        materials.back().texture = texture;
         scene.objects.push_back(cube);
         ++mid;
         return true;
@@ -612,7 +691,8 @@ bool process_cylinder(const TableData &table, Scene &scene, int &oid, int &mid,
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "radius", "height",
-                                 "reflective", "rotatable", "movable", "scorable", "transparent"}))
+                                 "reflective", "rotatable", "movable", "scorable", "transparent",
+                                 "texture"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -653,10 +733,14 @@ bool process_cylinder(const TableData &table, Scene &scene, int &oid, int &mid,
         bool transparent;
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
+        std::shared_ptr<Texture> texture;
+        if (!parse_texture_field(table, texture))
+                return false;
         auto cylinder = std::make_shared<Cylinder>(position, dir.normalized(), radius, height, oid++, mid);
         cylinder->movable = movable;
         cylinder->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        materials.back().texture = texture;
         scene.objects.push_back(cylinder);
         ++mid;
         return true;
@@ -667,7 +751,8 @@ bool process_cone(const TableData &table, Scene &scene, int &oid, int &mid,
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "radius", "height",
-                                 "reflective", "rotatable", "movable", "scorable", "transparent"}))
+                                 "reflective", "rotatable", "movable", "scorable", "transparent",
+                                 "texture"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -708,10 +793,14 @@ bool process_cone(const TableData &table, Scene &scene, int &oid, int &mid,
         bool transparent;
         if (!parse_bool_field(table, "transparent", transparent))
                 return false;
+        std::shared_ptr<Texture> texture;
+        if (!parse_texture_field(table, texture))
+                return false;
         auto cone = std::make_shared<Cone>(position, dir.normalized(), radius, height, oid++, mid);
         cone->movable = movable;
         cone->scorable = scorable;
         materials.push_back(make_material(rgb, reflective, transparent));
+        materials.back().texture = texture;
         scene.objects.push_back(cone);
         ++mid;
         return true;
@@ -911,6 +1000,22 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         }
 
         materials.clear();
+        g_texture_cache.clear();
+        g_texture_search_paths.clear();
+        std::error_code fs_err;
+        std::filesystem::path scene_path = std::filesystem::absolute(path, fs_err);
+        if (fs_err)
+                scene_path = std::filesystem::path(path);
+        std::filesystem::path scene_dir = scene_path.parent_path();
+        add_texture_search_path(scene_dir);
+        add_texture_search_path(scene_dir / "textures");
+        add_texture_search_path(scene_dir.parent_path() / "textures");
+        std::filesystem::path current_dir = std::filesystem::current_path(fs_err);
+        if (!fs_err)
+        {
+                add_texture_search_path(current_dir / "textures");
+                add_texture_search_path(current_dir);
+        }
         outScene.objects.clear();
         outScene.lights.clear();
         outScene.accel.reset();

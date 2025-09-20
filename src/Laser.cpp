@@ -61,13 +61,15 @@ bool Laser::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 		outward = outward.normalized();
 	}
 
-	rec.t = sc;
-	rec.p = pr;
-	rec.object_id = object_id;
-	rec.material_id = material_id;
-	rec.beam_ratio = (start + tc) / total_length;
-	rec.set_face_normal(r, outward);
-	return true;
+        rec.t = sc;
+        rec.p = pr;
+        rec.object_id = object_id;
+        rec.material_id = material_id;
+        rec.beam_ratio = (start + tc) / total_length;
+        rec.u = 0.0;
+        rec.v = 0.0;
+        rec.set_face_normal(r, outward);
+        return true;
 }
 
 bool Laser::bounding_box(AABB &out) const

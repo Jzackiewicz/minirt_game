@@ -5,12 +5,14 @@
 class Cylinder : public Hittable
 {
 	public:
-	Vec3 center;
-	Vec3 axis;
-	double radius;
-	double height;
-	Cylinder(const Vec3 &c, const Vec3 &axis_, double r, double h, int oid,
-			 int mid);
+        Vec3 center;
+        Vec3 axis;
+        double radius;
+        double height;
+        Vec3 tangent;
+        Vec3 bitangent;
+        Cylinder(const Vec3 &c, const Vec3 &axis_, double r, double h, int oid,
+                         int mid);
 
 	bool hit(const Ray &r, double tmin, double tmax,
 			 HitRecord &rec) const override;
