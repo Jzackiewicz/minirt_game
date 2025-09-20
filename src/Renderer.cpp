@@ -16,6 +16,7 @@
 #include "CustomCharacter.hpp"
 #include <SDL.h>
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstdio>
@@ -25,6 +26,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <thread>
@@ -1371,19 +1373,30 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 }
         }
 
-        std::vector<HudTextLine> control_sections;
-        auto push_control = [&](const std::string &label, SDL_Color color) {
-                control_sections.push_back({label, color});
+        constexpr size_t kControlSections = 5;
+        std::array<std::optional<HudTextLine>, kControlSections> control_sections;
+        control_sections.fill(std::nullopt);
+        auto set_control = [&](size_t index, const std::string &label, SDL_Color color) {
+                if (index < control_sections.size())
+                        control_sections[index] = HudTextLine{label, color};
         };
         SDL_Color neutral{255, 255, 255, 255};
         SDL_Color accent{96, 255, 128, 255};
         SDL_Color warning{255, 220, 96, 255};
         SDL_Color danger{255, 96, 96, 255};
 
+        const size_t slot_move = 0;
+        const size_t slot_rotate = 1;
+        const size_t slot_primary = 2;
+        const size_t slot_secondary = 3;
+        const size_t slot_pause = 4;
+
+        set_control(slot_pause, "Pause: ESC", neutral);
+
         if (!st.focused)
         {
-                push_control("FOCUS LOST", warning);
-                push_control("CLICK TO FOCUS", neutral);
+                set_control(slot_move, "Focus lost", warning);
+                set_control(slot_rotate, "Click to focus", neutral);
         }
         else if (st.edit_mode)
         {
@@ -1392,43 +1405,52 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                     st.selected_obj < static_cast<int>(scene.objects.size()))
                         selected_obj = scene.objects[st.selected_obj];
 
-                bool can_move = false;
+                set_control(slot_move, "Move camera", neutral);
+
                 if (selected_obj)
-                        can_move = g_developer_mode ||
-                                    (!selected_obj->is_beam() && selected_obj->movable);
-                bool can_rotate = selected_obj &&
-                                  (g_developer_mode || selected_obj->rotatable);
-
-                if (can_move)
                 {
-                        push_control("MOVE: WSAD", neutral);
-                        push_control("ASCEND: SPACE", neutral);
-                        push_control("DESCEND: CTRL", neutral);
-                        if (!g_developer_mode)
-                                push_control("ADJUST DIST: SCROLL", neutral);
-                }
+                        bool can_move = !selected_obj->is_beam() &&
+                                        (g_developer_mode || selected_obj->movable);
+                        bool can_rotate = g_developer_mode || selected_obj->rotatable;
 
-                if (can_rotate)
+                        if (can_move)
+                        {
+                                set_control(slot_rotate,
+                                            "Rotate Yaw/Pitch: hold RPM + mouse; Rotate Roll: Q/E",
+                                            neutral);
+                                set_control(slot_primary, "Place: LPM", accent);
+                                std::string move_text = "Move object: mouse + scroll";
+                                if (g_developer_mode)
+                                        move_text += "; Resize: scroll; Delete: MMB";
+                                set_control(slot_secondary, move_text, neutral);
+                        }
+                        else if (can_rotate)
+                        {
+                                set_control(slot_rotate,
+                                            "Rotate object: hold RPM + mouse; Roll: Q/E", neutral);
+                                set_control(slot_primary, "Place: LPM", accent);
+                                if (g_developer_mode)
+                                        set_control(slot_secondary,
+                                                    "Dev: Resize: scroll; Delete: MMB", danger);
+                        }
+                        else
+                        {
+                                set_control(slot_primary, "Place: LPM", accent);
+                                if (g_developer_mode)
+                                        set_control(slot_secondary,
+                                                    "Dev: Resize: scroll; Delete: MMB", danger);
+                        }
+                }
+                else
                 {
-                        push_control("ROTATE: HOLD RPM", neutral);
-                        push_control("ROLL: Q/E", neutral);
+                        set_control(slot_primary, "Place: LPM", accent);
                 }
-
-                if (g_developer_mode && selected_obj)
-                {
-                        push_control("RESIZE: SCROLL", neutral);
-                        push_control("DELETE: MMB", danger);
-                }
-
-                push_control("PLACE: LPM", accent);
-                push_control("PAUSE: ESC", neutral);
         }
         else
         {
-                push_control("MOVE: WSAD", neutral);
-                push_control("ASCEND: SPACE", neutral);
-                push_control("DESCEND: CTRL", neutral);
-                push_control("PAUSE: ESC", neutral);
+                set_control(slot_move, "Move: WSAD", neutral);
+                set_control(slot_rotate, "Ascend: SPACE", neutral);
+                set_control(slot_primary, "Descend: CTRL", neutral);
 
                 bool show_grab = false;
                 if (focus_obj)
@@ -1440,7 +1462,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 }
 
                 if (show_grab)
-                        push_control("GRAB: LPM", accent);
+                        set_control(slot_secondary, "Grab: LPM", accent);
         }
 
         size_t top_count = std::max(left_lines.size(), right_lines.size());
@@ -1484,24 +1506,25 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
 
         int controls_y = H - bottom_bar_height + hud_padding;
-        size_t section_count = control_sections.empty() ? 1 : control_sections.size();
+        size_t section_count = control_sections.size();
         double section_span = static_cast<double>(W) / section_count;
-        if (!control_sections.empty())
-        {
-                SDL_SetRenderDrawColor(ren, 255, 255, 255, 96);
-        }
+        SDL_SetRenderDrawColor(ren, 255, 255, 255, 96);
         for (size_t i = 0; i < control_sections.size(); ++i)
         {
                 int start_x = static_cast<int>(std::round(i * section_span));
                 int end_x = static_cast<int>(std::round((i + 1) * section_span));
-                int width = CustomCharacter::text_width(control_sections[i].text, hud_scale);
+                int width = 0;
+                if (control_sections[i])
+                        width = CustomCharacter::text_width(control_sections[i]->text, hud_scale);
                 int available = std::max(1, end_x - start_x);
                 int centered = start_x + (available - width) / 2;
                 int min_x = start_x + hud_padding;
                 int max_x = end_x - hud_padding - width;
                 int text_x = std::clamp(centered, min_x, std::max(min_x, max_x));
-                CustomCharacter::draw_text(ren, control_sections[i].text, text_x, controls_y,
-                                            control_sections[i].color, hud_scale);
+                if (control_sections[i] && !control_sections[i]->text.empty())
+                        CustomCharacter::draw_text(ren, control_sections[i]->text, text_x,
+                                                    controls_y, control_sections[i]->color,
+                                                    hud_scale);
                 if (i + 1 < control_sections.size())
                         SDL_RenderDrawLine(ren, end_x, H - bottom_bar_height, end_x, H);
         }
