@@ -789,10 +789,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                            OBJECT_MAX_DIST);
                                 }
                         }
-                        else if (st.focused)
-                        {
-                                scene.move_camera(cam, cam.up * step, mats);
-                        }
+                        // In free camera mode scrolling should not move the camera.
                 }
                 else if (g_developer_mode && st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_C)
