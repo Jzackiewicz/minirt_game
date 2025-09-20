@@ -1346,10 +1346,6 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                 std::snprintf(power_buf, sizeof(power_buf), "POWER: --");
                         right_lines.push_back({power_buf, SDL_Color{255, 255, 255, 255}});
 
-                        char score_line[64];
-                        std::snprintf(score_line, sizeof(score_line), "OBJECT SCORE: %.2f",
-                                      st.hud_focus_score);
-                        right_lines.push_back({score_line, SDL_Color{255, 255, 255, 255}});
                         focus_hint_label = std::string("BEAM SOURCE");
                 }
                 else
@@ -1389,7 +1385,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         std::array<std::optional<HudControlEntry>, kControlSections> control_sections;
         control_sections.fill(std::nullopt);
         const SDL_Color bar_neutral{72, 72, 72, 220};
-        const SDL_Color command_divider{150, 150, 150, 200};
+        const SDL_Color command_divider{80, 80, 80, 220};
         auto set_control = [&](size_t index, const std::string &label, SDL_Color text_color) {
                 if (index < control_sections.size())
                         control_sections[index] = HudControlEntry{label, text_color, bar_neutral};
@@ -1590,55 +1586,84 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 };
                 if (control_sections[i] && !section_lines[i].empty())
                 {
+                        const auto &entry = *control_sections[i];
                         if (bar_rect.w > 0 && bar_rect.h > 0)
                         {
-                                const auto &entry = *control_sections[i];
                                 SDL_SetRenderDrawColor(ren, entry.bar_color.r,
                                                        entry.bar_color.g, entry.bar_color.b,
                                                        entry.bar_color.a);
                                 SDL_RenderFillRect(ren, &bar_rect);
                         }
-                        const auto &entry = *control_sections[i];
-                        int text_y = controls_top;
-                        for (size_t line_idx = 0; line_idx < section_lines[i].size();
-                             ++line_idx)
+
+                        const auto &lines = section_lines[i];
+                        int header_y = controls_top;
+                        if (!lines.front().empty())
                         {
-                                const auto &line = section_lines[i][line_idx];
-                                if (!line.empty())
+                                int header_width =
+                                        CustomCharacter::text_width(lines.front(), hud_scale);
+                                int header_x = compute_text_x(header_width);
+                                CustomCharacter::draw_text(ren, lines.front(), header_x, header_y,
+                                                            entry.text_color, hud_scale);
+                        }
+
+                        if (lines.size() > 1)
+                        {
+                                int full_left = start_x + hud_padding;
+                                int full_right = end_x - hud_padding;
+                                if (full_right > full_left)
                                 {
-                                        int line_width =
-                                                CustomCharacter::text_width(line, hud_scale);
-                                        int text_x = compute_text_x(line_width);
-                                        CustomCharacter::draw_text(ren, line, text_x, text_y,
-                                                                    entry.text_color,
-                                                                    hud_scale);
-                                }
-                                if (line_idx == 0 && section_lines[i].size() > 1)
-                                {
-                                        int divider_left = start_x + hud_padding;
-                                        int divider_right = end_x - hud_padding;
-                                        if (divider_right > divider_left)
+                                        int divider_gap = 2;
+                                        int divider_height = 1;
+                                        int total_span = full_right - full_left;
+                                        int divider_width = std::max(1, total_span / 2);
+                                        int divider_left = full_left + (total_span - divider_width) / 2;
+                                        int divider_top = header_y + hud_line_height -
+                                                          divider_height - divider_gap;
+                                        divider_top = std::clamp(divider_top, bar_top,
+                                                                 bar_top + bar_height -
+                                                                         divider_height);
+                                        SDL_Rect divider_rect{divider_left, divider_top,
+                                                              divider_width, divider_height};
+                                        SDL_SetRenderDrawColor(ren, command_divider.r,
+                                                               command_divider.g,
+                                                               command_divider.b,
+                                                               command_divider.a);
+                                        SDL_RenderFillRect(ren, &divider_rect);
+
+                                        int divider_bottom = divider_top + divider_height;
+                                        int controls_area_top = divider_bottom + divider_gap;
+                                        int controls_area_bottom =
+                                                std::min(H - hud_padding, bar_top + bar_height);
+                                        if (controls_area_bottom < controls_area_top)
+                                                controls_area_bottom = controls_area_top;
+                                        size_t control_line_count = lines.size() - 1;
+                                        int control_block_height =
+                                                static_cast<int>(control_line_count) *
+                                                hud_line_height;
+                                        int available_height = controls_area_bottom -
+                                                              controls_area_top;
+                                        int control_text_y = controls_area_top;
+                                        if (available_height > control_block_height)
+                                                control_text_y +=
+                                                        (available_height - control_block_height) / 2;
+
+                                        for (size_t line_idx = 1; line_idx < lines.size();
+                                             ++line_idx)
                                         {
-                                                int divider_height = 2;
-                                                int divider_gap = 2;
-                                                int divider_top = text_y + hud_line_height -
-                                                                  divider_height -
-                                                                  divider_gap;
-                                                divider_top = std::clamp(divider_top, bar_top,
-                                                                         bar_top + bar_height -
-                                                                                 divider_height);
-                                                SDL_Rect divider_rect{divider_left, divider_top,
-                                                                      divider_right - divider_left,
-                                                                      divider_height};
-                                                SDL_SetRenderDrawColor(
-                                                        ren, command_divider.r,
-                                                        command_divider.g,
-                                                        command_divider.b,
-                                                        command_divider.a);
-                                                SDL_RenderFillRect(ren, &divider_rect);
+                                                const auto &line = lines[line_idx];
+                                                if (!line.empty())
+                                                {
+                                                        int line_width = CustomCharacter::text_width(
+                                                                line, hud_scale);
+                                                        int text_x = compute_text_x(line_width);
+                                                        CustomCharacter::draw_text(ren, line, text_x,
+                                                                                  control_text_y,
+                                                                                  entry.text_color,
+                                                                                  hud_scale);
+                                                }
+                                                control_text_y += hud_line_height;
                                         }
                                 }
-                                text_y += hud_line_height;
                         }
                 }
                 if (pos + 1 < active_sections.size())
