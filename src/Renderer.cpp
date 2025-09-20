@@ -1448,9 +1448,8 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
         else
         {
-                set_control(slot_move, "Move: WSAD", neutral);
-                set_control(slot_rotate, "Ascend: SPACE", neutral);
-                set_control(slot_primary, "Descend: CTRL", neutral);
+                set_control(slot_move,
+                            "Move: WSAD\nAscend: SPACE / Descend: CTRL", neutral);
 
                 bool show_grab = false;
                 if (focus_obj)
@@ -1465,13 +1464,72 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         set_control(slot_secondary, "Grab: LPM", accent);
         }
 
+        auto split_lines = [](const std::string &text) {
+                std::vector<std::string> lines;
+                size_t start = 0;
+                while (start < text.size())
+                {
+                        size_t end = text.find('\n', start);
+                        if (end == std::string::npos)
+                        {
+                                lines.emplace_back(text.substr(start));
+                                break;
+                        }
+                        lines.emplace_back(text.substr(start, end - start));
+                        start = end + 1;
+                }
+                lines.erase(std::remove_if(lines.begin(), lines.end(),
+                                           [](const std::string &line) {
+                                                   return line.empty();
+                                           }),
+                             lines.end());
+                if (lines.empty() && !text.empty())
+                {
+                        std::string sanitized;
+                        sanitized.reserve(text.size());
+                        for (char c : text)
+                        {
+                                if (c != '\n')
+                                        sanitized.push_back(c);
+                        }
+                        if (!sanitized.empty())
+                                lines.emplace_back(std::move(sanitized));
+                }
+                return lines;
+        };
+
+        std::array<std::vector<std::string>, kControlSections> control_lines;
+        std::array<int, kControlSections> control_block_width{};
+        size_t max_control_lines = 1;
+        for (size_t i = 0; i < control_sections.size(); ++i)
+        {
+                if (control_sections[i] && !control_sections[i]->text.empty())
+                {
+                        control_lines[i] = split_lines(control_sections[i]->text);
+                        int block_width = 0;
+                        for (const auto &line : control_lines[i])
+                                block_width = std::max(
+                                        block_width,
+                                        CustomCharacter::text_width(line, hud_scale));
+                        control_block_width[i] = block_width;
+                        max_control_lines = std::max(max_control_lines, control_lines[i].size());
+                }
+                else
+                {
+                        control_lines[i].clear();
+                        control_block_width[i] = 0;
+                }
+        }
+
         size_t top_count = std::max(left_lines.size(), right_lines.size());
         if (top_count == 0)
                 top_count = 1;
         int top_bar_height = static_cast<int>(top_count) * hud_line_height + 2 * hud_padding;
         top_bar_height = std::max(top_bar_height, hud_line_height + 2 * hud_padding);
 
-        int bottom_bar_height = hud_line_height + 2 * hud_padding;
+        int bottom_bar_height =
+                static_cast<int>(std::max<size_t>(1, max_control_lines)) * hud_line_height +
+                2 * hud_padding;
 
         SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(ren, 0, 0, 0, 180);
@@ -1513,18 +1571,36 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         {
                 int start_x = static_cast<int>(std::round(i * section_span));
                 int end_x = static_cast<int>(std::round((i + 1) * section_span));
-                int width = 0;
-                if (control_sections[i])
-                        width = CustomCharacter::text_width(control_sections[i]->text, hud_scale);
                 int available = std::max(1, end_x - start_x);
-                int centered = start_x + (available - width) / 2;
                 int min_x = start_x + hud_padding;
-                int max_x = end_x - hud_padding - width;
-                int text_x = std::clamp(centered, min_x, std::max(min_x, max_x));
-                if (control_sections[i] && !control_sections[i]->text.empty())
-                        CustomCharacter::draw_text(ren, control_sections[i]->text, text_x,
-                                                    controls_y, control_sections[i]->color,
-                                                    hud_scale);
+                if (control_sections[i] && !control_lines[i].empty())
+                {
+                        int block_width = control_block_width[i];
+                        int center_x = start_x + available / 2;
+                        int block_x = center_x - block_width / 2;
+                        int block_max = end_x - hud_padding - block_width;
+                        if (block_max < min_x)
+                                block_max = min_x;
+                        block_x = std::clamp(block_x, min_x, block_max);
+                        int text_y = controls_y;
+                        int vertical_pad = static_cast<int>((max_control_lines -
+                                                             control_lines[i].size()) *
+                                                            hud_line_height / 2);
+                        text_y += vertical_pad;
+                        for (const auto &line : control_lines[i])
+                        {
+                                int line_width = CustomCharacter::text_width(line, hud_scale);
+                                int line_center = block_x + (block_width - line_width) / 2;
+                                int line_max = end_x - hud_padding - line_width;
+                                if (line_max < min_x)
+                                        line_max = min_x;
+                                int line_x = std::clamp(line_center, min_x, line_max);
+                                CustomCharacter::draw_text(ren, line, line_x, text_y,
+                                                           control_sections[i]->color,
+                                                           hud_scale);
+                                text_y += hud_line_height;
+                        }
+                }
                 if (i + 1 < control_sections.size())
                         SDL_RenderDrawLine(ren, end_x, H - bottom_bar_height, end_x, H);
         }
