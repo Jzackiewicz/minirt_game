@@ -8,16 +8,23 @@ Puzzle game based on miniRT 42School project.
 ## Installation
 
 ### Windows (MSYS2)
+**Note:** Do not use WSL2 for this setup, as it hinders mouse usage and makes movement control very difficult.
+
 1. Install [MSYS2](https://www.msys2.org/) and open the **MSYS2 UCRT64** shell.
-2. Update the system and install dependencies:
+2. Update the system and install dependencies (the MSYS2 terminal might need to restart during installation, so you may need to paste and run these commands twice—before and after restarting):
    ```bash
    pacman -Syu
    pacman -S --needed base-devel mingw-w64-ucrt-x86_64-toolchain \
        mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja \
-       mingw-w64-ucrt-x86_64-SDL2
+       mingw-w64-ucrt-x86_64-SDL2 git
    ```
-3. Configure and build the project with CMake:
+3. Clone this repository:
    ```bash
+   git clone https://github.com/<your-username>/minirt_game.git
+   ```
+4. Configure and build the project with CMake:
+   ```bash
+   cd minirt_game
    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
    cmake --build build -j
    ```
