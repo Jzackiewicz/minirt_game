@@ -997,7 +997,8 @@ void Renderer::update_selection(RenderState &st,
                 Ray center_ray = cam.ray_through(0.5, 0.5);
                 HitRecord hrec;
                 if (scene.hit(center_ray, 1e-4, 1e9, hrec) &&
-                        scene.objects[hrec.object_id]->movable)
+                        (g_developer_mode ||
+                         scene.objects[hrec.object_id]->movable))
                 {
                         if (st.hover_mat != hrec.material_id)
                         {

@@ -350,17 +350,25 @@ Vec3 Scene::move_with_collision(int index, const Vec3 &delta)
 // Determine whether object is movable.
 bool Scene::is_movable(int index) const
 {
-	if (index < 0 || index >= static_cast<int>(objects.size()))
-	{
-		return false;
-	}
-	HittablePtr object;
-	object = objects[index];
-	if (!object || object->is_beam())
-	{
-		return false;
-	}
-	return true;
+        if (index < 0 || index >= static_cast<int>(objects.size()))
+        {
+                return false;
+        }
+        HittablePtr object;
+        object = objects[index];
+        if (!object)
+        {
+                return false;
+        }
+        if (g_developer_mode)
+        {
+                return true;
+        }
+        if (object->is_beam())
+        {
+                return false;
+        }
+        return object->movable;
 }
 
 // Apply translation vector to given object.
