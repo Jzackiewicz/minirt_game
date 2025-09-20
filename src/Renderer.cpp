@@ -12,6 +12,7 @@
 #include "Cone.hpp"
 #include "Cylinder.hpp"
 #include "CustomCharacter.hpp"
+#include "TextureUtils.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <atomic>
@@ -77,6 +78,7 @@ static bool beam_light_through(const Scene &scene, const std::vector<Material> &
         while (max_dist > 1e-4)
         {
                 HitRecord tmp;
+                HitRecord hit_rec;
                 bool hit_any = false;
                 double closest = max_dist;
                 int hit_mat = -1;
@@ -93,16 +95,19 @@ static bool beam_light_through(const Scene &scene, const std::vector<Material> &
                         {
                                 closest = tmp.t;
                                 hit_mat = tmp.material_id;
+                                hit_rec = tmp;
                                 hit_any = true;
                         }
                 }
                 if (!hit_any)
                         break;
                 const Material &m = mats[hit_mat];
-                if (m.alpha >= 1.0)
+                double effective_alpha = compute_effective_alpha(m, hit_rec);
+                if (effective_alpha >= 1.0)
                         return false;
-                color = mix_colors(color, m.base_color, m.alpha);
-                intensity *= (1.0 - m.alpha);
+                Vec3 surface_color = sample_surface_color(scene, hit_rec, m);
+                color = mix_colors(color, surface_color, effective_alpha);
+                intensity *= (1.0 - effective_alpha);
                 shadow_ray.orig = shadow_ray.orig + shadow_ray.dir * (closest + 1e-4);
                 max_dist -= closest + 1e-4;
                 if (intensity <= 1e-4)
@@ -127,6 +132,7 @@ static bool light_through(const Scene &scene, const std::vector<Material> &mats,
         while (max_dist > 1e-4)
         {
                 HitRecord tmp;
+                HitRecord hit_rec;
                 bool hit_any = false;
                 double closest = max_dist;
                 int hit_mat = -1;
@@ -143,16 +149,19 @@ static bool light_through(const Scene &scene, const std::vector<Material> &mats,
                         {
                                 closest = tmp.t;
                                 hit_mat = tmp.material_id;
+                                hit_rec = tmp;
                                 hit_any = true;
                         }
                 }
                 if (!hit_any)
                         break;
                 const Material &m = mats[hit_mat];
-                if (m.alpha >= 1.0)
+                double effective_alpha = compute_effective_alpha(m, hit_rec);
+                if (effective_alpha >= 1.0)
                         return false;
-                color = mix_colors(color, m.base_color, m.alpha);
-                intensity *= (1.0 - m.alpha);
+                Vec3 surface_color = sample_surface_color(scene, hit_rec, m);
+                color = mix_colors(color, surface_color, effective_alpha);
+                intensity *= (1.0 - effective_alpha);
                 shadow_ray.orig = shadow_ray.orig + shadow_ray.dir * (closest + 1e-4);
                 max_dist -= closest + 1e-4;
                 if (intensity <= 1e-4)
@@ -207,44 +216,6 @@ Vec3 clamp_color(const Vec3 &c, double lo = 0.0, double hi = 1.0)
 {
         return Vec3(std::clamp(c.x, lo, hi), std::clamp(c.y, lo, hi),
                                 std::clamp(c.z, lo, hi));
-}
-
-Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
-                                         const Material &mat)
-{
-        Vec3 base = mat.base_color;
-        Vec3 col = mat.color;
-        if (rec.object_id >= 0 &&
-                rec.object_id < static_cast<int>(scene.objects.size()))
-        {
-                auto obj = scene.objects[rec.object_id];
-                if (obj->is_beam())
-                {
-                        auto beam = std::static_pointer_cast<Laser>(obj);
-                        base = col = beam->color;
-                }
-        }
-        if (mat.checkered)
-        {
-                Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
-                int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
-                                   static_cast<int>(std::floor(rec.p.y * 5)) +
-                                   static_cast<int>(std::floor(rec.p.z * 5))) &
-                                  1;
-                col = chk ? base : inv;
-        }
-        return col;
-}
-
-double compute_effective_alpha(const Material &mat, const HitRecord &rec)
-{
-        double alpha = mat.alpha;
-        if (mat.random_alpha)
-        {
-                double tpos = std::clamp(rec.beam_ratio, 0.0, 1.0);
-                alpha *= (1.0 - tpos);
-        }
-        return std::clamp(alpha, 0.0, 1.0);
 }
 
 Vec3 ambient_contribution(const Scene &scene, const Vec3 &surface_color)
@@ -376,7 +347,7 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                         if (cos_incident > 1e-6)
                         {
                                 const Material &mat = mats[rec.material_id];
-                                Vec3 surface_color = surface_color_at(scene, rec, mat);
+                                Vec3 surface_color = sample_surface_color(scene, rec, mat);
                                 Vec3 view_dir = rec.normal.normalized();
                                 Vec3 base = ambient_contribution(scene, surface_color);
                                 for (const auto &other : scene.lights)
@@ -488,31 +459,10 @@ static Vec3 trace_ray(const Scene &scene, const std::vector<Material> &mats,
 	}
         const Material &m = mats[rec.material_id];
         Vec3 eye = (r.dir * -1.0).normalized();
-        Vec3 base = m.base_color;
-        Vec3 col = m.color;
-        if (rec.object_id >= 0 &&
-                rec.object_id < static_cast<int>(scene.objects.size()))
-        {
-                auto obj = scene.objects[rec.object_id];
-                if (obj->is_beam())
-                {
-                        auto beam = std::static_pointer_cast<Laser>(obj);
-                        base = col = beam->color;
-                }
-        }
-	if (m.checkered)
-	{
-		Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
-		int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
-				   static_cast<int>(std::floor(rec.p.y * 5)) +
-				   static_cast<int>(std::floor(rec.p.z * 5))) &
-				  1;
-		col = chk ? base : inv;
-	}
-        Vec3 sum(col.x * scene.ambient.color.x * scene.ambient.intensity,
-                         col.y * scene.ambient.color.y * scene.ambient.intensity,
-                         col.z * scene.ambient.color.z * scene.ambient.intensity);
-        Vec3 surface_color = col;
+        Vec3 surface_color = sample_surface_color(scene, rec, m);
+        Vec3 sum(surface_color.x * scene.ambient.color.x * scene.ambient.intensity,
+                         surface_color.y * scene.ambient.color.y * scene.ambient.intensity,
+                         surface_color.z * scene.ambient.color.z * scene.ambient.intensity);
         for (const auto &L : scene.lights)
         {
                 sum += light_contribution(scene, mats, L, rec, surface_color, m, rec.p, eye);

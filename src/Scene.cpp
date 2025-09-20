@@ -5,6 +5,7 @@
 #include "Plane.hpp"
 #include "BeamTarget.hpp"
 #include "Settings.hpp"
+#include "TextureUtils.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -151,20 +152,24 @@ void Scene::process_beams(const std::vector<Material> &mats,
                                                 {new_bm, hit_rec.object_id, ignore_hit_for_light});
                                 }
                         }
-                        else if (hit_mat.alpha < 1.0 && !block_transparent)
+                        else if (!block_transparent)
                         {
                                 double new_start = bm->start + closest;
                                 double new_len = bm->total_length - new_start;
                                 if (new_len > 1e-4)
                                 {
                                         Vec3 pass_orig = forward.at(closest) + forward.dir * 1e-4;
-                                        Vec3 new_color = bm->color * (1.0 - hit_mat.alpha) +
-                                                         hit_mat.base_color * hit_mat.alpha;
+                                        double effective_alpha = compute_effective_alpha(hit_mat, hit_rec);
+                                        if (effective_alpha >= 1.0)
+                                                continue;
+                                        Vec3 surface_color = sample_surface_color(*this, hit_rec, hit_mat);
+                                        Vec3 new_color = bm->color * (1.0 - effective_alpha) +
+                                                         surface_color * effective_alpha;
                                         double new_intens =
-                                                bm->light_intensity * (1.0 - hit_mat.alpha);
-                                       auto new_bm = std::make_shared<Laser>(
-                                               pass_orig, forward.dir, new_len, new_intens, 0,
-                                               bm->material_id, new_start, bm->total_length);
+                                                bm->light_intensity * (1.0 - effective_alpha);
+                                        auto new_bm = std::make_shared<Laser>(
+                                                pass_orig, forward.dir, new_len, new_intens, 0,
+                                                bm->material_id, new_start, bm->total_length);
                                         new_bm->color = new_color;
                                         new_bm->scorable = bm->scorable;
                                         new_bm->source = bm->source;

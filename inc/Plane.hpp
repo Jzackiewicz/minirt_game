@@ -4,10 +4,12 @@
 
 class Plane : public Hittable
 {
-	public:
-	Vec3 point;
-	Vec3 normal;
-	Plane(const Vec3 &p, const Vec3 &n, int oid, int mid);
+        public:
+        Vec3 point;
+        Vec3 normal;
+        Vec3 tangent;
+        Vec3 bitangent;
+        Plane(const Vec3 &p, const Vec3 &n, int oid, int mid);
 
 	bool hit(const Ray &r, double tmin, double tmax,
 			 HitRecord &rec) const override;

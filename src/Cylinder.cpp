@@ -1,5 +1,21 @@
 #include "Cylinder.hpp"
+#include <algorithm>
 #include <cmath>
+
+namespace
+{
+void cylinder_basis(const Vec3 &axis, Vec3 &u, Vec3 &v)
+{
+        Vec3 helper = std::fabs(axis.x) > 0.9 ? Vec3(0.0, 1.0, 0.0) : Vec3(1.0, 0.0, 0.0);
+        u = Vec3::cross(helper, axis).normalized();
+        if (u.length_squared() <= 1e-12)
+        {
+                helper = Vec3(0.0, 0.0, 1.0);
+                u = Vec3::cross(helper, axis).normalized();
+        }
+        v = Vec3::cross(axis, u);
+}
+}
 
 Cylinder::Cylinder(const Vec3 &c, const Vec3 &axis_, double r, double h,
 				   int oid, int mid)
@@ -14,7 +30,10 @@ bool Cylinder::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 	bool hit_any = false;
 	double closest = tmax;
 
-	Vec3 oc = r.orig - center;
+        Vec3 oc = r.orig - center;
+        Vec3 tex_u_axis;
+        Vec3 tex_v_axis;
+        cylinder_basis(axis, tex_u_axis, tex_v_axis);
 	double d_dot_a = Vec3::dot(r.dir, axis);
 	double oc_dot_a = Vec3::dot(oc, axis);
 
@@ -41,19 +60,29 @@ bool Cylinder::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 			{
 				continue;
 			}
-			Vec3 p = r.at(root);
-			Vec3 proj = center + axis * s;
-			Vec3 outward = (p - proj).normalized();
-			rec.t = root;
-			rec.p = p;
-			rec.object_id = object_id;
-			rec.material_id = material_id;
-			rec.beam_ratio = (s + height / 2) / height;
-			rec.set_face_normal(r, outward);
-			closest = root;
-			hit_any = true;
-		}
-	}
+                        Vec3 p = r.at(root);
+                        Vec3 proj = center + axis * s;
+                        Vec3 outward = (p - proj).normalized();
+                        rec.t = root;
+                        rec.p = p;
+                        rec.object_id = object_id;
+                        rec.material_id = material_id;
+                        rec.beam_ratio = (s + height / 2) / height;
+                        rec.set_face_normal(r, outward);
+                        double angle = std::atan2(Vec3::dot(outward, tex_v_axis),
+                                                  Vec3::dot(outward, tex_u_axis));
+                        double tex_u = angle / (2.0 * M_PI);
+                        if (tex_u < 0.0)
+                                tex_u += 1.0;
+                        double tex_v = (s + height / 2.0) / height;
+                        tex_v = std::clamp(tex_v, 0.0, 1.0);
+                        rec.u = tex_u;
+                        rec.v = tex_v;
+                        rec.has_uv = true;
+                        closest = root;
+                        hit_any = true;
+                }
+        }
 
 	Vec3 top_center = center + axis * (height / 2);
 	Vec3 bottom_center = center - axis * (height / 2);
@@ -64,20 +93,26 @@ bool Cylinder::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 		double t = Vec3::dot(top_center - r.orig, axis) / denom_top;
 		if (t >= tmin && t <= closest)
 		{
-			Vec3 p = r.at(t);
-			if ((p - top_center).length_squared() <= radius * radius)
-			{
-				rec.t = t;
-				rec.p = p;
-				rec.object_id = object_id;
-				rec.material_id = material_id;
-				rec.beam_ratio = 1.0;
-				rec.set_face_normal(r, axis);
-				closest = t;
-				hit_any = true;
-			}
-		}
-	}
+                        Vec3 p = r.at(t);
+                        Vec3 diff = p - top_center;
+                        if (diff.length_squared() <= radius * radius)
+                        {
+                                rec.t = t;
+                                rec.p = p;
+                                rec.object_id = object_id;
+                                rec.material_id = material_id;
+                                rec.beam_ratio = 1.0;
+                                rec.set_face_normal(r, axis);
+                                double tex_u = Vec3::dot(diff, tex_u_axis) / (radius * 2.0) + 0.5;
+                                double tex_v = Vec3::dot(diff, tex_v_axis) / (radius * 2.0) + 0.5;
+                                rec.u = tex_u;
+                                rec.v = tex_v;
+                                rec.has_uv = true;
+                                closest = t;
+                                hit_any = true;
+                        }
+                }
+        }
 
 	double denom_bot = Vec3::dot(r.dir, (-1) * axis);
 	if (std::fabs(denom_bot) > 1e-9)
@@ -85,20 +120,26 @@ bool Cylinder::hit(const Ray &r, double tmin, double tmax, HitRecord &rec) const
 		double t = Vec3::dot(bottom_center - r.orig, (-1) * axis) / denom_bot;
 		if (t >= tmin && t <= closest)
 		{
-			Vec3 p = r.at(t);
-			if ((p - bottom_center).length_squared() <= radius * radius)
-			{
-				rec.t = t;
-				rec.p = p;
-				rec.object_id = object_id;
-				rec.material_id = material_id;
-				rec.beam_ratio = 0.0;
-				rec.set_face_normal(r, (-1) * axis);
-				closest = t;
-				hit_any = true;
-			}
-		}
-	}
+                        Vec3 p = r.at(t);
+                        Vec3 diff = p - bottom_center;
+                        if (diff.length_squared() <= radius * radius)
+                        {
+                                rec.t = t;
+                                rec.p = p;
+                                rec.object_id = object_id;
+                                rec.material_id = material_id;
+                                rec.beam_ratio = 0.0;
+                                rec.set_face_normal(r, (-1) * axis);
+                                double tex_u = Vec3::dot(diff, tex_u_axis) / (radius * 2.0) + 0.5;
+                                double tex_v = Vec3::dot(diff, tex_v_axis) / (radius * 2.0) + 0.5;
+                                rec.u = tex_u;
+                                rec.v = tex_v;
+                                rec.has_uv = true;
+                                closest = t;
+                                hit_any = true;
+                        }
+                }
+        }
 
 	return hit_any;
 }
