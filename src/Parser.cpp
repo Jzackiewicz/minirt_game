@@ -163,21 +163,22 @@ int table_stage(TableType type)
 {
         switch (type)
         {
-        case TableType::Camera:
+        case TableType::Quota:
                 return 1;
+        case TableType::Camera:
+                return 2;
         case TableType::LightingAmbient:
         case TableType::LightingLightSource:
-                return 2;
+                return 3;
         case TableType::ObjectsPlane:
         case TableType::ObjectsSphere:
         case TableType::ObjectsCube:
         case TableType::ObjectsCone:
         case TableType::ObjectsCylinder:
-                return 3;
+                return 4;
         case TableType::BeamSource:
         case TableType::BeamTarget:
-        case TableType::Quota:
-                return 4;
+                return 5;
         default:
                 return 0;
         }
@@ -1172,16 +1173,19 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                 switch (stage)
                                 {
                                 case 2:
-                                        message = "Lighting section must come after camera section";
+                                        message = "Camera section must come after quota section";
                                         break;
                                 case 3:
-                                        message = "Objects section must come after lighting section";
+                                        message = "Lighting section must come after camera section";
                                         break;
                                 case 4:
-                                        message = "Beam/quota section must come after objects section";
+                                        message = "Objects section must come after lighting section";
+                                        break;
+                                case 5:
+                                        message = "Beam section must come after objects section";
                                         break;
                                 default:
-                                        message = "Sections must follow camera -> lighting -> objects -> beam order";
+                                        message = "Sections must follow quota -> camera -> lighting -> objects -> beam order";
                                         break;
                                 }
                                 return report_error(line_no, message);

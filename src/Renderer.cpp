@@ -1273,14 +1273,27 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 level_line = "LEVEL ?";
         left_lines.push_back({level_line, SDL_Color{255, 255, 255, 255}});
 
-        bool target_hit = target_blinking(scene);
-        SDL_Color target_color = target_hit ? SDL_Color{96, 255, 128, 255}
-                                            : SDL_Color{255, 96, 96, 255};
-        left_lines.push_back(
-                {std::string("TARGET: ") + (target_hit ? "HIT" : "NOT HIT"), target_color});
+        if (scene.target_required)
+        {
+                bool target_hit = target_blinking(scene);
+                SDL_Color target_color =
+                        target_hit ? SDL_Color{96, 255, 128, 255}
+                                   : SDL_Color{255, 96, 96, 255};
+                left_lines.push_back({std::string("TARGET: ") +
+                                              (target_hit ? "HIT" : "NOT HIT"),
+                                      target_color});
+        }
 
         char score_buf[64];
-        std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f/0", st.last_score);
+        if (scene.minimal_score > 0.0)
+        {
+                std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f/%.2f",
+                              st.last_score, scene.minimal_score);
+        }
+        else
+        {
+                std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f", st.last_score);
+        }
         left_lines.push_back({score_buf, SDL_Color{255, 255, 255, 255}});
 
         std::vector<HudTextLine> right_lines;
