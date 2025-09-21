@@ -7,6 +7,7 @@
 #include "MapSaver.hpp"
 #include "Parser.hpp"
 #include "PauseMenu.hpp"
+#include "LevelFinishedMenu.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
 #include "Sphere.hpp"
@@ -689,6 +690,8 @@ struct Renderer::RenderState
         std::string level_label;
         int hud_focus_object = -1;
         double hud_focus_score = 0.0;
+        bool target_hit = false;
+        bool quota_met = false;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1062,6 +1065,33 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 st.spawn_key = e.key.keysym.scancode;
                         }
                 }
+                else if (st.focused && st.quota_met && e.type == SDL_KEYDOWN &&
+                                 (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
+                {
+                        st.focused = false;
+                        SDL_SetRelativeMouseMode(SDL_FALSE);
+                        SDL_ShowCursor(SDL_ENABLE);
+                        SDL_SetWindowGrab(win, SDL_FALSE);
+                        SDL_WarpMouseInWindow(win, W / 2, H / 2);
+                        int current_w = W;
+                        int current_h = H;
+                        SDL_GetWindowSize(win, &current_w, &current_h);
+                        ButtonAction action = LevelFinishedMenu::show(win, ren, current_w,
+                                                                     current_h, true);
+                        if (action == ButtonAction::Quit)
+                        {
+                                st.running = false;
+                        }
+                        else
+                        {
+                                st.focused = true;
+                                SDL_SetRelativeMouseMode(SDL_TRUE);
+                                SDL_ShowCursor(SDL_DISABLE);
+                                SDL_SetWindowGrab(win, SDL_TRUE);
+                                SDL_WarpMouseInWindow(win, W / 2, H / 2);
+                        }
+                }
                 else if (st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                 {
@@ -1275,13 +1305,22 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 
         if (scene.target_required)
         {
-                bool target_hit = target_blinking(scene);
+                bool target_hit = st.target_hit;
                 SDL_Color target_color =
                         target_hit ? SDL_Color{96, 255, 128, 255}
                                    : SDL_Color{255, 96, 96, 255};
                 left_lines.push_back({std::string("TARGET: ") +
                                               (target_hit ? "HIT" : "NOT HIT"),
                                       target_color});
+        }
+
+        std::vector<HudTextLine> center_lines;
+        if (st.quota_met)
+        {
+                center_lines.push_back(
+                        {"LEVEL FINISHED", SDL_Color{255, 255, 255, 255}});
+                center_lines.push_back(
+                        {"ENTER TO CONTINUE", SDL_Color{255, 220, 96, 255}});
         }
 
         char score_buf[64];
@@ -1556,6 +1595,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         const int hud_line_height = 7 * hud_scale + 4;
 
         size_t top_count = std::max(left_lines.size(), right_lines.size());
+        top_count = std::max(top_count, center_lines.size());
         if (top_count == 0)
                 top_count = 1;
         int top_bar_height = static_cast<int>(top_count) * hud_line_height + 2 * hud_padding;
@@ -1579,6 +1619,28 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                    top_bar_height - hud_padding);
         }
 
+        bool show_center_section = !center_lines.empty();
+        int center_rect_x = 0;
+        int center_rect_w = 0;
+        if (show_center_section)
+        {
+                int max_text_width = 0;
+                for (const auto &line : center_lines)
+                        max_text_width = std::max(
+                                max_text_width,
+                                CustomCharacter::text_width(line.text, hud_scale));
+                center_rect_w = std::min(W, max_text_width + 2 * hud_padding);
+                center_rect_x = std::max(0, W / 2 - center_rect_w / 2);
+                Uint32 ticks = SDL_GetTicks();
+                bool blink = ((ticks / 300) % 2) == 0;
+                SDL_Color base{0, 0, 0, 180};
+                SDL_Color alt{255, 255, 128, 180};
+                SDL_Color fill = blink ? alt : base;
+                SDL_Rect rect{center_rect_x, 0, center_rect_w, top_bar_height};
+                SDL_SetRenderDrawColor(ren, fill.r, fill.g, fill.b, fill.a);
+                SDL_RenderFillRect(ren, &rect);
+        }
+
         int left_y = hud_padding;
         for (const auto &line : left_lines)
         {
@@ -1595,6 +1657,26 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 CustomCharacter::draw_text(ren, line.text, text_x, right_y, line.color,
                                             hud_scale);
                 right_y += hud_line_height;
+        }
+
+        if (show_center_section)
+        {
+                int center_y = hud_padding;
+                int rect_right = center_rect_x + center_rect_w;
+                int min_text_x = center_rect_x + hud_padding;
+                int max_text_x = rect_right - hud_padding;
+                for (const auto &line : center_lines)
+                {
+                        int width = CustomCharacter::text_width(line.text, hud_scale);
+                        int text_x = W / 2 - width / 2;
+                        if (text_x < min_text_x)
+                                text_x = min_text_x;
+                        if (text_x + width > max_text_x)
+                                text_x = std::max(min_text_x, max_text_x - width);
+                        CustomCharacter::draw_text(ren, line.text, text_x, center_y,
+                                                    line.color, hud_scale);
+                        center_y += hud_line_height;
+                }
         }
 
         int controls_top = H - bottom_bar_height + hud_padding;
@@ -1753,6 +1835,11 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                 th.join();
 
         st.last_score = compute_beam_score(scene, mats);
+        bool target_hit_now = target_blinking(scene);
+        bool score_met = (scene.minimal_score <= 0.0) ||
+                         (st.last_score + 1e-4 >= scene.minimal_score);
+        st.target_hit = target_hit_now;
+        st.quota_met = score_met && (!scene.target_required || target_hit_now);
 
         for (int y = 0; y < RH; ++y)
         {
