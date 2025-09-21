@@ -792,6 +792,47 @@ bool Renderer::init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
         return true;
 }
 
+bool Renderer::load_scene_from_path(RenderState &st, std::vector<Material> &mats,
+                                                                 int W, int H,
+                                                                 const std::filesystem::path &path)
+{
+        Scene backup_scene = scene;
+        Camera backup_cam = cam;
+        auto backup_mats = mats;
+        if (Parser::parse_rt_file(path.string(), scene, cam, W, H))
+        {
+                mats = Parser::get_materials();
+                scene.update_beams(mats);
+                scene.build_bvh();
+                st.edit_mode = false;
+                st.rotating = false;
+                st.hover_obj = -1;
+                st.hover_mat = -1;
+                st.selected_obj = -1;
+                st.selected_mat = -1;
+                st.spawn_key = -1;
+                st.edit_dist = 0.0;
+                st.edit_pos = Vec3();
+                st.scene_dirty = false;
+                st.last_auto_save = SDL_GetTicks();
+                st.level_number = parse_level_number_from_path(path.string());
+                st.level_label = level_label_from_path(path.string());
+                st.hud_focus_object = -1;
+                st.hud_focus_score = 0.0;
+                st.quota_met = false;
+                st.last_score = 0.0;
+                st.scene_path = std::filesystem::absolute(path);
+                return true;
+        }
+        scene = std::move(backup_scene);
+        cam = backup_cam;
+        mats = std::move(backup_mats);
+        scene.update_beams(mats);
+        scene.build_bvh();
+        std::cerr << "Failed to load scene from: " << path << "\n";
+        return false;
+}
+
 /// Handle SDL events, updating render state and selection.
 void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *ren,
                                                         int W, int H,
@@ -1153,7 +1194,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         ++st.current_level_index;
                                         std::filesystem::path next_path =
                                                 st.level_paths[st.current_level_index];
-                                        if (load_scene_from_path(next_path))
+                                        if (load_scene_from_path(st, mats, W, H, next_path))
                                         {
                                                 loaded_next = true;
                                         }
@@ -2185,44 +2226,6 @@ void Renderer::render_window(std::vector<Material> &mats,
         std::vector<unsigned char> pixels(RW * RH * 3);
         Uint32 last = SDL_GetTicks();
         char current_quality = g_settings.quality;
-
-        auto load_scene_from_path = [&](const std::filesystem::path &path) -> bool {
-                Scene backup_scene = scene;
-                Camera backup_cam = cam;
-                auto backup_mats = mats;
-                if (Parser::parse_rt_file(path.string(), scene, cam, W, H))
-                {
-                        mats = Parser::get_materials();
-                        scene.update_beams(mats);
-                        scene.build_bvh();
-                        st.edit_mode = false;
-                        st.rotating = false;
-                        st.hover_obj = -1;
-                        st.hover_mat = -1;
-                        st.selected_obj = -1;
-                        st.selected_mat = -1;
-                        st.spawn_key = -1;
-                        st.edit_dist = 0.0;
-                        st.edit_pos = Vec3();
-                        st.scene_dirty = false;
-                        st.last_auto_save = SDL_GetTicks();
-                        st.level_number = parse_level_number_from_path(path.string());
-                        st.level_label = level_label_from_path(path.string());
-                        st.hud_focus_object = -1;
-                        st.hud_focus_score = 0.0;
-                        st.quota_met = false;
-                        st.last_score = 0.0;
-                        st.scene_path = std::filesystem::absolute(path);
-                        return true;
-                }
-                scene = std::move(backup_scene);
-                cam = backup_cam;
-                mats = std::move(backup_mats);
-                scene.update_beams(mats);
-                scene.build_bvh();
-                std::cerr << "Failed to load scene from: " << path << "\n";
-                return false;
-        };
 
         while (st.running)
         {

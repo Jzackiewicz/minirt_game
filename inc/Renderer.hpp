@@ -4,6 +4,7 @@
 #include "material.hpp"
 #include <string>
 #include <vector>
+#include <filesystem>
 
 struct SDL_Window;
 struct SDL_Renderer;
@@ -31,6 +32,9 @@ class Renderer
         void mark_scene_dirty(RenderState &st);
         bool init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
                                        int W, int H, int RW, int RH);
+        bool load_scene_from_path(RenderState &st, std::vector<Material> &mats,
+                                                          int W, int H,
+                                                          const std::filesystem::path &path);
         void process_events(RenderState &st, SDL_Window *win, SDL_Renderer *ren,
                                                int W, int H, std::vector<Material> &mats);
         void handle_keyboard(RenderState &st, double dt,
