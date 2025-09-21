@@ -26,9 +26,11 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <random>
+#include <system_error>
 #include <string>
 #include <thread>
 #include <utility>
@@ -585,26 +587,62 @@ struct HudControlEntry
         SDL_Color bar_color;
 };
 
+bool stem_is_numbered_level(const std::string &stem)
+{
+        if (stem.size() <= 6)
+                return false;
+        std::string lowered;
+        lowered.reserve(stem.size());
+        std::transform(stem.begin(), stem.end(), std::back_inserter(lowered),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        if (lowered.rfind("level_", 0) != 0)
+                return false;
+        for (std::size_t i = 6; i < lowered.size(); ++i)
+        {
+                if (!std::isdigit(static_cast<unsigned char>(lowered[i])))
+                        return false;
+        }
+        return true;
+}
+
+std::optional<int> level_suffix_from_stem(const std::string &stem)
+{
+        if (!stem_is_numbered_level(stem))
+                return std::nullopt;
+        int value = 0;
+        for (std::size_t i = 6; i < stem.size(); ++i)
+        {
+                value = value * 10 + (stem[i] - '0');
+        }
+        return value;
+}
+
+bool path_is_toml(const std::filesystem::path &path)
+{
+        std::string ext = path.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+        });
+        return ext == ".toml";
+}
+
+bool path_is_numbered_level(const std::filesystem::path &path)
+{
+        if (!path_is_toml(path))
+                return false;
+        return stem_is_numbered_level(path.stem().string());
+}
+
 int parse_level_number_from_path(const std::string &scene_path)
 {
         namespace fs = std::filesystem;
         fs::path path(scene_path);
-        std::string stem = path.stem().string();
-        int value = 0;
-        bool found_digit = false;
-        for (char ch : stem)
-        {
-                if (std::isdigit(static_cast<unsigned char>(ch)))
-                {
-                        value = value * 10 + (ch - '0');
-                        found_digit = true;
-                }
-                else if (found_digit)
-                {
-                        break;
-                }
-        }
-        return found_digit ? value : 0;
+        if (!path_is_numbered_level(path))
+                return 0;
+        auto suffix = level_suffix_from_stem(path.stem().string());
+        if (!suffix)
+                return 0;
+        return *suffix;
 }
 
 std::string level_label_from_path(const std::string &scene_path)
@@ -612,6 +650,57 @@ std::string level_label_from_path(const std::string &scene_path)
         namespace fs = std::filesystem;
         fs::path path(scene_path);
         return path.stem().string();
+}
+
+std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::path &scene_path)
+{
+        namespace fs = std::filesystem;
+        fs::path directory = scene_path;
+        if (fs::is_regular_file(directory))
+                directory = directory.parent_path();
+        if (directory.empty())
+                directory = fs::current_path();
+        std::vector<fs::path> result;
+        std::error_code ec;
+        for (auto &entry : fs::directory_iterator(directory, ec))
+        {
+                if (ec)
+                        break;
+                if (!entry.is_regular_file(ec))
+                        continue;
+                if (!path_is_numbered_level(entry.path()))
+                        continue;
+                result.push_back(fs::absolute(entry.path()));
+        }
+        fs::path absolute_scene = fs::absolute(scene_path);
+        if (path_is_numbered_level(absolute_scene) &&
+            std::find(result.begin(), result.end(), absolute_scene) == result.end())
+                result.push_back(absolute_scene);
+        std::sort(result.begin(), result.end(), [](const fs::path &a, const fs::path &b) {
+                auto num_a = level_suffix_from_stem(a.stem().string());
+                auto num_b = level_suffix_from_stem(b.stem().string());
+                if (static_cast<bool>(num_a) != static_cast<bool>(num_b))
+                        return static_cast<bool>(num_a);
+                if (num_a && num_b && *num_a != *num_b)
+                        return *num_a < *num_b;
+                std::string stem_a = a.stem().string();
+                std::string stem_b = b.stem().string();
+                if (!stem_a.empty() && !stem_b.empty() && stem_a != stem_b)
+                        return stem_a < stem_b;
+                return a.string() < b.string();
+        });
+        result.erase(std::unique(result.begin(), result.end()), result.end());
+        return result;
+}
+
+int level_index_for(const std::vector<std::filesystem::path> &levels,
+                    const std::filesystem::path &scene_path)
+{
+        auto absolute_scene = std::filesystem::absolute(scene_path);
+        auto it = std::find(levels.begin(), levels.end(), absolute_scene);
+        if (it == levels.end())
+                return -1;
+        return static_cast<int>(std::distance(levels.begin(), it));
 }
 
 bool target_blinking(const Scene &scene)
@@ -689,6 +778,11 @@ struct Renderer::RenderState
         double last_score = 0.0;
         int level_number = 0;
         std::string level_label;
+        std::string scene_path;
+        std::vector<std::filesystem::path> level_paths;
+        int current_level_index = 0;
+        double cumulative_score = 0.0;
+        std::string player_name;
         int hud_focus_object = -1;
         double hud_focus_score = 0.0;
         bool quota_met = false;
@@ -744,8 +838,7 @@ bool Renderer::init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
 /// Handle SDL events, updating render state and selection.
 void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *ren,
                                                         int W, int H,
-                                                        std::vector<Material> &mats,
-                                                        const std::string &scene_path)
+                                                        std::vector<Material> &mats)
 {
         SDL_Event e;
         while (SDL_PollEvent(&e))
@@ -955,15 +1048,15 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 {
                         scene.update_beams(mats);
                         scene.build_bvh();
-                        if (MapSaver::save(scene_path, scene, cam, mats))
+                        if (MapSaver::save(st.scene_path, scene, cam, mats))
                         {
-                                std::cout << "Saved scene to: " << scene_path << "\n";
+                                std::cout << "Saved scene to: " << st.scene_path << "\n";
                                 st.scene_dirty = false;
                                 st.last_auto_save = SDL_GetTicks();
                         }
                         else
                         {
-                                std::cerr << "Failed to save scene to: " << scene_path
+                                std::cerr << "Failed to save scene to: " << st.scene_path
                                           << "\n";
                                 st.last_auto_save = SDL_GetTicks();
                         }
@@ -974,7 +1067,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         Scene backup_scene = scene;
                         Camera backup_cam = cam;
                         auto backup_mats = mats;
-                        if (Parser::parse_rt_file(scene_path, scene, cam, W, H))
+                        if (Parser::parse_rt_file(st.scene_path, scene, cam, W, H))
                         {
                                 mats = Parser::get_materials();
                                 scene.update_beams(mats);
@@ -990,7 +1083,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 st.edit_pos = Vec3();
                                 st.scene_dirty = false;
                                 st.last_auto_save = SDL_GetTicks();
-                                std::cout << "Reloaded scene from: " << scene_path << "\n";
+                                std::cout << "Reloaded scene from: " << st.scene_path << "\n";
                         }
                         else
                         {
@@ -999,7 +1092,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 mats = std::move(backup_mats);
                                 scene.update_beams(mats);
                                 scene.build_bvh();
-                                std::cerr << "Failed to reload scene from: " << scene_path
+                                std::cerr << "Failed to reload scene from: " << st.scene_path
                                           << "\n";
                         }
                 }
@@ -1078,11 +1171,109 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         int current_w = W;
                         int current_h = H;
                         SDL_GetWindowSize(win, &current_w, &current_h);
-                        ButtonAction action =
-                                LevelFinishedMenu::show(win, ren, current_w, current_h, true);
+                        LevelFinishedStats stats;
+                        int total_numbered_levels = static_cast<int>(std::count_if(
+                                st.level_paths.begin(), st.level_paths.end(),
+                                [](const std::filesystem::path &p) {
+                                        return path_is_numbered_level(p);
+                                }));
+                        stats.total_levels = total_numbered_levels;
+                        int completed_levels = 0;
+                        if (st.current_level_index >= 0 &&
+                            st.current_level_index < static_cast<int>(st.level_paths.size()))
+                        {
+                                for (int i = 0; i <= st.current_level_index; ++i)
+                                {
+                                        if (path_is_numbered_level(st.level_paths[i]))
+                                                ++completed_levels;
+                                }
+                        }
+                        stats.completed_levels =
+                                std::min(stats.total_levels, completed_levels);
+                        stats.current_score = st.last_score;
+                        stats.required_score = scene.minimal_score;
+                        stats.total_score = st.cumulative_score + st.last_score;
+                        bool has_next_level = false;
+                        if (st.current_level_index >= 0 &&
+                            st.current_level_index < static_cast<int>(st.level_paths.size()))
+                        {
+                                for (int i = st.current_level_index + 1;
+                                     i < static_cast<int>(st.level_paths.size()); ++i)
+                                {
+                                        if (path_is_numbered_level(st.level_paths[i]))
+                                        {
+                                                has_next_level = true;
+                                                break;
+                                        }
+                                }
+                        }
+                        stats.has_next_level = has_next_level;
+                        ButtonAction action = LevelFinishedMenu::show(
+                                win, ren, current_w, current_h, stats, st.player_name, true);
                         if (action == ButtonAction::Quit)
                         {
                                 st.running = false;
+                        }
+                        else if (action == ButtonAction::NextLevel)
+                        {
+                                if (stats.has_next_level)
+                                {
+                                        auto next_it = std::find_if(
+                                                st.level_paths.begin() + st.current_level_index + 1,
+                                                st.level_paths.end(),
+                                                [](const std::filesystem::path &p) {
+                                                        return path_is_numbered_level(p);
+                                                });
+                                        if (next_it != st.level_paths.end())
+                                        {
+                                                const auto &next_path = *next_it;
+                                                Scene backup_scene = scene;
+                                                Camera backup_cam = cam;
+                                                auto backup_mats = mats;
+                                                if (Parser::parse_rt_file(next_path.string(), scene, cam, W, H))
+                                                {
+                                                        mats = Parser::get_materials();
+                                                        scene.update_beams(mats);
+                                                        scene.build_bvh();
+                                                        st.cumulative_score += st.last_score;
+                                                        st.current_level_index = static_cast<int>(
+                                                                std::distance(st.level_paths.begin(), next_it));
+                                                        st.scene_path = next_path.string();
+                                                        st.level_number =
+                                                                parse_level_number_from_path(st.scene_path);
+                                                        st.level_label =
+                                                                level_label_from_path(st.scene_path);
+                                                        st.scene_dirty = false;
+                                                        st.last_auto_save = SDL_GetTicks();
+                                                        st.edit_mode = false;
+                                                        st.rotating = false;
+                                                        st.hover_obj = -1;
+                                                        st.hover_mat = -1;
+                                                        st.selected_obj = -1;
+                                                        st.selected_mat = -1;
+                                                        st.spawn_key = -1;
+                                                        st.edit_dist = 0.0;
+                                                        st.edit_pos = Vec3();
+                                                        st.quota_met = false;
+                                                        st.last_score = 0.0;
+                                                }
+                                                else
+                                                {
+                                                        scene = std::move(backup_scene);
+                                                        cam = backup_cam;
+                                                        mats = std::move(backup_mats);
+                                                        scene.update_beams(mats);
+                                                        scene.build_bvh();
+                                                        std::cerr << "Failed to load next level: "
+                                                                  << next_path << "\n";
+                                                }
+                                        }
+                                }
+                                st.focused = true;
+                                SDL_SetRelativeMouseMode(SDL_TRUE);
+                                SDL_ShowCursor(SDL_DISABLE);
+                                SDL_SetWindowGrab(win, SDL_TRUE);
+                                SDL_WarpMouseInWindow(win, W / 2, H / 2);
                         }
                         else
                         {
@@ -2067,8 +2258,14 @@ void Renderer::render_window(std::vector<Material> &mats,
                 return;
 
         RenderState st;
-        st.level_number = parse_level_number_from_path(scene_path);
-        st.level_label = level_label_from_path(scene_path);
+        std::filesystem::path absolute_scene_path = std::filesystem::absolute(scene_path);
+        st.scene_path = absolute_scene_path.string();
+        st.level_paths = collect_level_paths(absolute_scene_path);
+        st.current_level_index = level_index_for(st.level_paths, absolute_scene_path);
+        st.cumulative_score = 0.0;
+        st.player_name.clear();
+        st.level_number = parse_level_number_from_path(st.scene_path);
+        st.level_label = level_label_from_path(st.scene_path);
         st.focused = true;
         SDL_SetRelativeMouseMode(SDL_TRUE);
         SDL_ShowCursor(SDL_DISABLE);
@@ -2135,7 +2332,7 @@ void Renderer::render_window(std::vector<Material> &mats,
                                 SDL_WarpMouseInWindow(win, W / 2, H / 2);
                 }
 
-                process_events(st, win, ren, W, H, mats, scene_path);
+                process_events(st, win, ren, W, H, mats);
                 handle_keyboard(st, dt, mats);
                 scene.update_goal_targets(dt, mats);
                 update_selection(st, mats);
@@ -2144,13 +2341,13 @@ void Renderer::render_window(std::vector<Material> &mats,
                         Uint32 now = SDL_GetTicks();
                         if (now - st.last_auto_save >= 100)
                         {
-                                if (MapSaver::save(scene_path, scene, cam, mats))
+                                if (MapSaver::save(st.scene_path, scene, cam, mats))
                                 {
                                         st.scene_dirty = false;
                                 }
                                 else
                                 {
-                                        std::cerr << "Failed to save scene to: " << scene_path
+                                        std::cerr << "Failed to save scene to: " << st.scene_path
                                                   << "\n";
                                 }
                                 st.last_auto_save = now;
