@@ -586,26 +586,48 @@ struct HudControlEntry
         SDL_Color bar_color;
 };
 
+std::optional<int> level_suffix_from_stem(const std::string &stem)
+{
+        std::size_t underscore = stem.find_last_of('_');
+        if (underscore == std::string::npos)
+                return std::nullopt;
+        std::size_t pos = underscore + 1;
+        if (pos >= stem.size())
+                return std::nullopt;
+        int value = 0;
+        bool found_digit = false;
+        while (pos < stem.size())
+        {
+                char ch = stem[pos];
+                if (!std::isdigit(static_cast<unsigned char>(ch)))
+                        break;
+                value = value * 10 + (ch - '0');
+                found_digit = true;
+                ++pos;
+        }
+        if (!found_digit)
+                return std::nullopt;
+        return value;
+}
+
+bool path_is_toml(const std::filesystem::path &path)
+{
+        std::string ext = path.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+        });
+        return ext == ".toml";
+}
+
 int parse_level_number_from_path(const std::string &scene_path)
 {
         namespace fs = std::filesystem;
         fs::path path(scene_path);
         std::string stem = path.stem().string();
-        int value = 0;
-        bool found_digit = false;
-        for (char ch : stem)
-        {
-                if (std::isdigit(static_cast<unsigned char>(ch)))
-                {
-                        value = value * 10 + (ch - '0');
-                        found_digit = true;
-                }
-                else if (found_digit)
-                {
-                        break;
-                }
-        }
-        return found_digit ? value : 0;
+        auto suffix = level_suffix_from_stem(stem);
+        if (!suffix)
+                return 0;
+        return *suffix;
 }
 
 std::string level_label_from_path(const std::string &scene_path)
@@ -634,13 +656,30 @@ std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::pa
                 std::string ext = entry.path().extension().string();
                 std::transform(ext.begin(), ext.end(), ext.begin(),
                                [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-                if (ext == ".rt")
+                if (ext == ".toml")
                         result.push_back(fs::absolute(entry.path()));
         }
         fs::path absolute_scene = fs::absolute(scene_path);
         if (std::find(result.begin(), result.end(), absolute_scene) == result.end())
                 result.push_back(absolute_scene);
-        std::sort(result.begin(), result.end());
+        std::sort(result.begin(), result.end(), [](const fs::path &a, const fs::path &b) {
+                bool a_is_toml = path_is_toml(a);
+                bool b_is_toml = path_is_toml(b);
+                if (a_is_toml != b_is_toml)
+                        return a_is_toml;
+                auto num_a = level_suffix_from_stem(a.stem().string());
+                auto num_b = level_suffix_from_stem(b.stem().string());
+                if (static_cast<bool>(num_a) != static_cast<bool>(num_b))
+                        return static_cast<bool>(num_a);
+                if (num_a && num_b && *num_a != *num_b)
+                        return *num_a < *num_b;
+                std::string stem_a = a.stem().string();
+                std::string stem_b = b.stem().string();
+                if (!stem_a.empty() && !stem_b.empty() && stem_a != stem_b)
+                        return stem_a < stem_b;
+                return a.string() < b.string();
+        });
+        result.erase(std::unique(result.begin(), result.end()), result.end());
         return result;
 }
 
@@ -1123,14 +1162,40 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         int current_h = H;
                         SDL_GetWindowSize(win, &current_w, &current_h);
                         LevelFinishedStats stats;
-                        stats.total_levels = static_cast<int>(st.level_paths.size());
+                        int total_toml_levels = static_cast<int>(std::count_if(
+                                st.level_paths.begin(), st.level_paths.end(),
+                                [](const std::filesystem::path &p) { return path_is_toml(p); }));
+                        stats.total_levels = total_toml_levels;
+                        int completed_levels = 0;
+                        if (st.current_level_index >= 0 &&
+                            st.current_level_index < static_cast<int>(st.level_paths.size()))
+                        {
+                                for (int i = 0; i <= st.current_level_index; ++i)
+                                {
+                                        if (path_is_toml(st.level_paths[i]))
+                                                ++completed_levels;
+                                }
+                        }
                         stats.completed_levels =
-                                std::min(stats.total_levels, st.current_level_index + 1);
+                                std::min(stats.total_levels, completed_levels);
                         stats.current_score = st.last_score;
                         stats.required_score = scene.minimal_score;
                         stats.total_score = st.cumulative_score + st.last_score;
-                        stats.has_next_level =
-                                (st.current_level_index + 1 < stats.total_levels);
+                        bool has_next_level = false;
+                        if (st.current_level_index >= 0 &&
+                            st.current_level_index < static_cast<int>(st.level_paths.size()))
+                        {
+                                for (int i = st.current_level_index + 1;
+                                     i < static_cast<int>(st.level_paths.size()); ++i)
+                                {
+                                        if (path_is_toml(st.level_paths[i]))
+                                        {
+                                                has_next_level = true;
+                                                break;
+                                        }
+                                }
+                        }
+                        stats.has_next_level = has_next_level;
                         ButtonAction action = LevelFinishedMenu::show(
                                 win, ren, current_w, current_h, stats, st.player_name, true);
                         if (action == ButtonAction::Quit)
@@ -1141,46 +1206,55 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         {
                                 if (stats.has_next_level)
                                 {
-                                        const auto &next_path =
-                                                st.level_paths[st.current_level_index + 1];
-                                        Scene backup_scene = scene;
-                                        Camera backup_cam = cam;
-                                        auto backup_mats = mats;
-                                        if (Parser::parse_rt_file(next_path.string(), scene, cam, W, H))
+                                        auto next_it = std::find_if(
+                                                st.level_paths.begin() + st.current_level_index + 1,
+                                                st.level_paths.end(),
+                                                [](const std::filesystem::path &p) {
+                                                        return path_is_toml(p);
+                                                });
+                                        if (next_it != st.level_paths.end())
                                         {
-                                                mats = Parser::get_materials();
-                                                scene.update_beams(mats);
-                                                scene.build_bvh();
-                                                st.cumulative_score += st.last_score;
-                                                st.current_level_index += 1;
-                                                st.scene_path = next_path.string();
-                                                st.level_number =
-                                                        parse_level_number_from_path(st.scene_path);
-                                                st.level_label =
-                                                        level_label_from_path(st.scene_path);
-                                                st.scene_dirty = false;
-                                                st.last_auto_save = SDL_GetTicks();
-                                                st.edit_mode = false;
-                                                st.rotating = false;
-                                                st.hover_obj = -1;
-                                                st.hover_mat = -1;
-                                                st.selected_obj = -1;
-                                                st.selected_mat = -1;
-                                                st.spawn_key = -1;
-                                                st.edit_dist = 0.0;
-                                                st.edit_pos = Vec3();
-                                                st.quota_met = false;
-                                                st.last_score = 0.0;
-                                        }
-                                        else
-                                        {
-                                                scene = std::move(backup_scene);
-                                                cam = backup_cam;
-                                                mats = std::move(backup_mats);
-                                                scene.update_beams(mats);
-                                                scene.build_bvh();
-                                                std::cerr << "Failed to load next level: "
-                                                          << next_path << "\n";
+                                                const auto &next_path = *next_it;
+                                                Scene backup_scene = scene;
+                                                Camera backup_cam = cam;
+                                                auto backup_mats = mats;
+                                                if (Parser::parse_rt_file(next_path.string(), scene, cam, W, H))
+                                                {
+                                                        mats = Parser::get_materials();
+                                                        scene.update_beams(mats);
+                                                        scene.build_bvh();
+                                                        st.cumulative_score += st.last_score;
+                                                        st.current_level_index = static_cast<int>(
+                                                                std::distance(st.level_paths.begin(), next_it));
+                                                        st.scene_path = next_path.string();
+                                                        st.level_number =
+                                                                parse_level_number_from_path(st.scene_path);
+                                                        st.level_label =
+                                                                level_label_from_path(st.scene_path);
+                                                        st.scene_dirty = false;
+                                                        st.last_auto_save = SDL_GetTicks();
+                                                        st.edit_mode = false;
+                                                        st.rotating = false;
+                                                        st.hover_obj = -1;
+                                                        st.hover_mat = -1;
+                                                        st.selected_obj = -1;
+                                                        st.selected_mat = -1;
+                                                        st.spawn_key = -1;
+                                                        st.edit_dist = 0.0;
+                                                        st.edit_pos = Vec3();
+                                                        st.quota_met = false;
+                                                        st.last_score = 0.0;
+                                                }
+                                                else
+                                                {
+                                                        scene = std::move(backup_scene);
+                                                        cam = backup_cam;
+                                                        mats = std::move(backup_mats);
+                                                        scene.update_beams(mats);
+                                                        scene.build_bvh();
+                                                        std::cerr << "Failed to load next level: "
+                                                                  << next_path << "\n";
+                                                }
                                         }
                                 }
                                 st.focused = true;

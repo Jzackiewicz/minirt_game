@@ -102,17 +102,9 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
 
         std::string score_text = "YOUR SCORE: " + format_score(stats_.current_score) + "/" +
                                  format_score(stats_.required_score);
-        int score_x = width / 2 - CustomCharacter::text_width(score_text, text_scale) / 2;
-        int score_y = title_y + title_height + line_gap;
-
         std::string general_text;
-        int general_x = 0;
-        int general_y = 0;
-        if (show_name_input) {
+        if (show_name_input)
             general_text = "GENERAL SCORE: " + format_score(stats_.total_score);
-            general_x = width / 2 - CustomCharacter::text_width(general_text, text_scale) / 2;
-            general_y = score_y + 7 * text_scale + line_gap;
-        }
 
         int bottom_y = height - button_height - margin;
         int bottom_total_width = button_width * 2 + button_gap;
@@ -124,6 +116,7 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
         SDL_Rect name_rect{0, 0, 0, 0};
         SDL_Rect submit_rect{0, 0, 0, 0};
         bool submit_enabled = show_name_input && !player_name_.empty();
+        int content_bottom = bottom_y;
         if (show_name_input) {
             int input_width = std::max(button_width, std::min(width - 2 * margin, button_width * 2));
             int submit_width = std::max(140, static_cast<int>(220 * scale_factor));
@@ -134,9 +127,30 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
             submit_rect = {input_start_x + input_width + button_gap, name_y, submit_width,
                            button_height};
             submit_button.rect = submit_rect;
+            content_bottom = name_rect.y;
         } else if (stats_.has_next_level) {
             int next_y = bottom_y - button_height - button_gap;
             next_button.rect = {width / 2 - button_width / 2, next_y, button_width, button_height};
+            content_bottom = next_button.rect.y;
+        }
+
+        int text_height = 7 * text_scale;
+        int score_lines = show_name_input ? 2 : 1;
+        int total_score_height = score_lines * text_height + (score_lines - 1) * line_gap;
+        int top_limit = title_y + title_height + line_gap;
+        int bottom_limit = content_bottom - line_gap;
+        if (bottom_limit < top_limit)
+            bottom_limit = top_limit;
+        int available_height = bottom_limit - top_limit - total_score_height;
+        if (available_height < 0)
+            available_height = 0;
+        int score_y = top_limit + available_height / 2;
+        int score_x = width / 2 - CustomCharacter::text_width(score_text, text_scale) / 2;
+        int general_y = 0;
+        int general_x = 0;
+        if (show_name_input) {
+            general_y = score_y + text_height + line_gap;
+            general_x = width / 2 - CustomCharacter::text_width(general_text, text_scale) / 2;
         }
 
         SDL_Event event;
@@ -147,7 +161,7 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
             } else if (event.type == SDL_KEYDOWN) {
                 if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
                     running = false;
-                    result = ButtonAction::Resume;
+                    result = stats_.has_next_level ? ButtonAction::Resume : ButtonAction::Quit;
                 } else if (!stats_.has_next_level &&
                            event.key.keysym.scancode == SDL_SCANCODE_RETURN) {
                     // Ignore enter on final screen.
