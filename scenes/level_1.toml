@@ -1,3 +1,7 @@
+[quota]
+target = true
+minimal_score = 2.0
+
 [camera]
 id = "camera"
 position = [-0.00796, 2.92287, -4.26590]
@@ -149,8 +153,4 @@ color = [255, 255, 0]
 radius = 0.60000
 movable = true
 scorable = false
-
-[quota]
-target = true
-minimal_score = 2.0
 

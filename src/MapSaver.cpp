@@ -121,6 +121,10 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
         if (!out)
                 return false;
 
+        out << "[quota]\n";
+        out << "target = " << bool_str(scene.target_required) << "\n";
+        out << "minimal_score = " << format_double(scene.minimal_score) << "\n\n";
+
         out << "[camera]\n";
         out << "id = \"camera\"\n";
         out << "position = " << format_vec3_array(camera.origin) << "\n";
@@ -323,10 +327,6 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
                 out << "movable = " << bool_str(target->movable) << "\n";
                 out << "scorable = " << bool_str(target->scorable) << "\n\n";
         }
-
-        out << "[quota]\n";
-        out << "target = " << bool_str(scene.target_required) << "\n";
-        out << "minimal_score = " << format_double(scene.minimal_score) << "\n";
 
         return true;
 }
