@@ -12,6 +12,8 @@ protected:
     std::vector<Button> buttons;
     std::vector<Button> corner_buttons;
     std::vector<SDL_Color> title_colors;
+    bool buttons_align_bottom;
+    int buttons_bottom_margin;
 
 public:
     explicit AMenu(const std::string &t);

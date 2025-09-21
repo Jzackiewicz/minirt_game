@@ -1,10 +1,12 @@
 #include "AMenu.hpp"
-#include "SettingsMenu.hpp"
+#include "HowToPlayMenu.hpp"
 #include "LeaderboardMenu.hpp"
+#include "SettingsMenu.hpp"
 #include <algorithm>
 #include "Settings.hpp"
 
-AMenu::AMenu(const std::string &t) : title(t) {}
+AMenu::AMenu(const std::string &t)
+    : title(t), buttons_align_bottom(false), buttons_bottom_margin(-1) {}
 
 ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
                        bool transparent) {
@@ -51,8 +53,11 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         if (corner_margin < 10)
             corner_margin = 10;
 
-        int total_buttons_height = static_cast<int>(buttons.size()) * button_height +
+        int total_buttons_height = 0;
+        if (!buttons.empty()) {
+            total_buttons_height = static_cast<int>(buttons.size()) * button_height +
                                    (static_cast<int>(buttons.size()) - 1) * button_gap;
+        }
         int title_height = 7 * title_scale;
         int top_margin = (height - title_height - title_gap - total_buttons_height) / 2;
         if (top_margin < 0)
@@ -62,7 +67,17 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         int title_y = top_margin;
 
         int center_x = width / 2 - button_width / 2;
+        int bottom_margin = top_margin;
+        if (buttons_bottom_margin >= 0) {
+            bottom_margin = static_cast<int>(buttons_bottom_margin * scale_factor);
+        }
         int start_y = title_y + title_height + title_gap;
+        if (buttons_align_bottom) {
+            start_y = height - bottom_margin - total_buttons_height;
+            int min_start = title_y + title_height + title_gap;
+            if (start_y < min_start)
+                start_y = min_start;
+        }
         for (std::size_t i = 0; i < buttons.size(); ++i) {
             buttons[i].rect = {center_x,
                                start_y + static_cast<int>(i) * (button_height + button_gap),
@@ -96,31 +111,27 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                        event.button.button == SDL_BUTTON_LEFT) {
                 int mx = event.button.x;
                 int my = event.button.y;
+                auto present_background = [&]() {
+                    if (transparent && background) {
+                        SDL_RenderCopy(renderer, background, nullptr, nullptr);
+                        SDL_RenderPresent(renderer);
+                    } else {
+                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                        SDL_RenderClear(renderer);
+                        SDL_RenderPresent(renderer);
+                    }
+                };
+
                 auto handle_button_click = [&](Button &btn) {
                     if (btn.action == ButtonAction::Settings) {
-                        if (transparent && background) {
-                            SDL_RenderCopy(renderer, background, nullptr, nullptr);
-                            SDL_RenderPresent(renderer);
-                        } else {
-                            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-                            SDL_RenderClear(renderer);
-                            SDL_RenderPresent(renderer);
-                        }
+                        present_background();
                         SettingsMenu::show(window, renderer, width, height, transparent);
                     } else if (btn.action == ButtonAction::Leaderboard) {
-                        if (transparent && background) {
-                            SDL_RenderCopy(renderer, background, nullptr, nullptr);
-                            SDL_RenderPresent(renderer);
-                        } else {
-                            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-                            SDL_RenderClear(renderer);
-                            SDL_RenderPresent(renderer);
-                        }
+                        present_background();
                         LeaderboardMenu::show(window, renderer, width, height, transparent);
                     } else if (btn.action == ButtonAction::HowToPlay) {
-                        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "How to Play",
-                                                 "How to play instructions will be available soon.",
-                                                 window);
+                        present_background();
+                        HowToPlayMenu::show(window, renderer, width, height, transparent);
                     } else {
                         result = btn.action;
                         running = false;
