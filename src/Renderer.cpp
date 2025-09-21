@@ -26,6 +26,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <random>
@@ -586,27 +587,33 @@ struct HudControlEntry
         SDL_Color bar_color;
 };
 
+bool stem_is_numbered_level(const std::string &stem)
+{
+        if (stem.size() <= 6)
+                return false;
+        std::string lowered;
+        lowered.reserve(stem.size());
+        std::transform(stem.begin(), stem.end(), std::back_inserter(lowered),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        if (lowered.rfind("level_", 0) != 0)
+                return false;
+        for (std::size_t i = 6; i < lowered.size(); ++i)
+        {
+                if (!std::isdigit(static_cast<unsigned char>(lowered[i])))
+                        return false;
+        }
+        return true;
+}
+
 std::optional<int> level_suffix_from_stem(const std::string &stem)
 {
-        std::size_t underscore = stem.find_last_of('_');
-        if (underscore == std::string::npos)
-                return std::nullopt;
-        std::size_t pos = underscore + 1;
-        if (pos >= stem.size())
+        if (!stem_is_numbered_level(stem))
                 return std::nullopt;
         int value = 0;
-        bool found_digit = false;
-        while (pos < stem.size())
+        for (std::size_t i = 6; i < stem.size(); ++i)
         {
-                char ch = stem[pos];
-                if (!std::isdigit(static_cast<unsigned char>(ch)))
-                        break;
-                value = value * 10 + (ch - '0');
-                found_digit = true;
-                ++pos;
+                value = value * 10 + (stem[i] - '0');
         }
-        if (!found_digit)
-                return std::nullopt;
         return value;
 }
 
@@ -619,12 +626,20 @@ bool path_is_toml(const std::filesystem::path &path)
         return ext == ".toml";
 }
 
+bool path_is_numbered_level(const std::filesystem::path &path)
+{
+        if (!path_is_toml(path))
+                return false;
+        return stem_is_numbered_level(path.stem().string());
+}
+
 int parse_level_number_from_path(const std::string &scene_path)
 {
         namespace fs = std::filesystem;
         fs::path path(scene_path);
-        std::string stem = path.stem().string();
-        auto suffix = level_suffix_from_stem(stem);
+        if (!path_is_numbered_level(path))
+                return 0;
+        auto suffix = level_suffix_from_stem(path.stem().string());
         if (!suffix)
                 return 0;
         return *suffix;
@@ -653,20 +668,15 @@ std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::pa
                         break;
                 if (!entry.is_regular_file(ec))
                         continue;
-                std::string ext = entry.path().extension().string();
-                std::transform(ext.begin(), ext.end(), ext.begin(),
-                               [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-                if (ext == ".toml")
-                        result.push_back(fs::absolute(entry.path()));
+                if (!path_is_numbered_level(entry.path()))
+                        continue;
+                result.push_back(fs::absolute(entry.path()));
         }
         fs::path absolute_scene = fs::absolute(scene_path);
-        if (std::find(result.begin(), result.end(), absolute_scene) == result.end())
+        if (path_is_numbered_level(absolute_scene) &&
+            std::find(result.begin(), result.end(), absolute_scene) == result.end())
                 result.push_back(absolute_scene);
         std::sort(result.begin(), result.end(), [](const fs::path &a, const fs::path &b) {
-                bool a_is_toml = path_is_toml(a);
-                bool b_is_toml = path_is_toml(b);
-                if (a_is_toml != b_is_toml)
-                        return a_is_toml;
                 auto num_a = level_suffix_from_stem(a.stem().string());
                 auto num_b = level_suffix_from_stem(b.stem().string());
                 if (static_cast<bool>(num_a) != static_cast<bool>(num_b))
@@ -689,7 +699,7 @@ int level_index_for(const std::vector<std::filesystem::path> &levels,
         auto absolute_scene = std::filesystem::absolute(scene_path);
         auto it = std::find(levels.begin(), levels.end(), absolute_scene);
         if (it == levels.end())
-                return 0;
+                return -1;
         return static_cast<int>(std::distance(levels.begin(), it));
 }
 
@@ -1162,17 +1172,19 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         int current_h = H;
                         SDL_GetWindowSize(win, &current_w, &current_h);
                         LevelFinishedStats stats;
-                        int total_toml_levels = static_cast<int>(std::count_if(
+                        int total_numbered_levels = static_cast<int>(std::count_if(
                                 st.level_paths.begin(), st.level_paths.end(),
-                                [](const std::filesystem::path &p) { return path_is_toml(p); }));
-                        stats.total_levels = total_toml_levels;
+                                [](const std::filesystem::path &p) {
+                                        return path_is_numbered_level(p);
+                                }));
+                        stats.total_levels = total_numbered_levels;
                         int completed_levels = 0;
                         if (st.current_level_index >= 0 &&
                             st.current_level_index < static_cast<int>(st.level_paths.size()))
                         {
                                 for (int i = 0; i <= st.current_level_index; ++i)
                                 {
-                                        if (path_is_toml(st.level_paths[i]))
+                                        if (path_is_numbered_level(st.level_paths[i]))
                                                 ++completed_levels;
                                 }
                         }
@@ -1188,7 +1200,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 for (int i = st.current_level_index + 1;
                                      i < static_cast<int>(st.level_paths.size()); ++i)
                                 {
-                                        if (path_is_toml(st.level_paths[i]))
+                                        if (path_is_numbered_level(st.level_paths[i]))
                                         {
                                                 has_next_level = true;
                                                 break;
@@ -1210,7 +1222,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                 st.level_paths.begin() + st.current_level_index + 1,
                                                 st.level_paths.end(),
                                                 [](const std::filesystem::path &p) {
-                                                        return path_is_toml(p);
+                                                        return path_is_numbered_level(p);
                                                 });
                                         if (next_it != st.level_paths.end())
                                         {
