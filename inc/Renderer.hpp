@@ -32,8 +32,7 @@ class Renderer
         bool init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
                                        int W, int H, int RW, int RH);
         void process_events(RenderState &st, SDL_Window *win, SDL_Renderer *ren,
-                                               int W, int H, std::vector<Material> &mats,
-                                               const std::string &scene_path);
+                                               int W, int H, std::vector<Material> &mats);
         void handle_keyboard(RenderState &st, double dt,
                                                std::vector<Material> &mats);
         void update_selection(RenderState &st, std::vector<Material> &mats);
