@@ -160,8 +160,10 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
                 result = ButtonAction::Quit;
             } else if (event.type == SDL_KEYDOWN) {
                 if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-                    running = false;
-                    result = stats_.has_next_level ? ButtonAction::Resume : ButtonAction::Quit;
+                    if (stats_.has_next_level) {
+                        running = false;
+                        result = ButtonAction::Resume;
+                    }
                 } else if (!stats_.has_next_level &&
                            event.key.keysym.scancode == SDL_SCANCODE_RETURN) {
                     // Ignore enter on final screen.
