@@ -342,9 +342,8 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
                                 int placement = insert_entry(entries, {player_name_, stats_.total_score});
                                 saved = save_leaderboard(leaderboard_path, entries);
                                 if (saved)
-                                    feedback_text =
-                                        "You placed " + ordinal(placement) +
-                                        " on the leaderboard.";
+                                    feedback_text = ordinal(placement) +
+                                                    " place on the leaderboard!";
                             }
                             if (!qualifies || !saved) {
                                 feedback_text = "Thank you for playing!";
@@ -418,8 +417,8 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
             CustomCharacter::draw_text(renderer, btn.text, text_x, text_y, text_color, text_scale);
             if (render_checkmark) {
                 int check_padding = std::max(2, text_scale);
-                int check_width = std::max(4, text_scale * 3);
-                int check_height = std::max(4, text_scale * 2);
+                int check_width = std::max(6, text_scale * 5);
+                int check_height = std::max(6, text_scale * 6);
                 int check_left = btn.rect.x + btn.rect.w - check_width - check_padding;
                 int check_center_y = btn.rect.y + btn.rect.h / 2;
                 SDL_SetRenderDrawColor(renderer, 96, 255, 128, 255);
