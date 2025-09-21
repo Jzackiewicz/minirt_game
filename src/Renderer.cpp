@@ -916,7 +916,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         }
                         else if (st.focused)
                         {
-                                scene.move_camera(cam, cam.up * step, mats);
+                                // scene.move_camera(cam, cam.up * step, mats);
+                                (void)step;
                         }
                 }
                 else if (g_developer_mode && st.focused && e.type == SDL_KEYDOWN &&
