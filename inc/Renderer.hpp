@@ -1,6 +1,7 @@
 #pragma once
 #include "Camera.hpp"
 #include "Scene.hpp"
+#include "Button.hpp"
 #include "material.hpp"
 #include <string>
 #include <vector>
@@ -20,12 +21,20 @@ class RenderSettings
 
 class Renderer
 {
-	public:
-	Renderer(Scene &s, Camera &c);
+        public:
+        Renderer(Scene &s, Camera &c);
         void render_ppm(const std::string &path, const std::vector<Material> &mats,
                                         const RenderSettings &rset);
-        void render_window(std::vector<Material> &mats, const RenderSettings &rset,
-                                           const std::string &scene_path);
+        struct RenderResult
+        {
+                ButtonAction action = ButtonAction::Quit;
+                double score = 0.0;
+        };
+        RenderResult render_window(std::vector<Material> &mats,
+                                                            const RenderSettings &rset,
+                                                            const std::string &scene_path,
+                                                            int level_index, int total_levels,
+                                                            double previous_total_score);
         private:
         struct RenderState;
         void mark_scene_dirty(RenderState &st);

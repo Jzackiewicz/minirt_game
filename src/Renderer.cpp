@@ -689,6 +689,10 @@ struct Renderer::RenderState
         double last_score = 0.0;
         int level_number = 0;
         std::string level_label;
+        int level_progress_index = 1;
+        int total_levels = 1;
+        double previous_total_score = 0.0;
+        ButtonAction exit_action = ButtonAction::Quit;
         int hud_focus_object = -1;
         double hud_focus_score = 0.0;
         bool quota_met = false;
@@ -751,7 +755,10 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
         while (SDL_PollEvent(&e))
         {
                 if (e.type == SDL_QUIT)
+                {
                         st.running = false;
+                        st.exit_action = ButtonAction::Quit;
+                }
                 else if (e.type == SDL_WINDOWEVENT &&
                                  e.window.event == SDL_WINDOWEVENT_LEAVE)
                 {
@@ -1078,11 +1085,23 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         int current_w = W;
                         int current_h = H;
                         SDL_GetWindowSize(win, &current_w, &current_h);
-                        ButtonAction action =
-                                LevelFinishedMenu::show(win, ren, current_w, current_h, true);
+                        LevelFinishedMenuConfig cfg;
+                        cfg.current_level = st.level_progress_index;
+                        cfg.total_levels = st.total_levels;
+                        cfg.score = st.last_score;
+                        cfg.required_score = scene.minimal_score;
+                        cfg.previous_total_score = st.previous_total_score;
+                        ButtonAction action = LevelFinishedMenu::show(win, ren, current_w,
+                                                                      current_h, cfg, true);
                         if (action == ButtonAction::Quit)
                         {
                                 st.running = false;
+                                st.exit_action = ButtonAction::Quit;
+                        }
+                        else if (action == ButtonAction::NextLevel)
+                        {
+                                st.running = false;
+                                st.exit_action = ButtonAction::NextLevel;
                         }
                         else
                         {
@@ -1116,6 +1135,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         else
                         {
                                 st.running = false;
+                                st.exit_action = ButtonAction::Quit;
                         }
                 }
         }
@@ -2038,9 +2058,12 @@ void Renderer::render_ppm(const std::string &path,
 	}
 }
 
-void Renderer::render_window(std::vector<Material> &mats,
-                                                         const RenderSettings &rset,
-                                                         const std::string &scene_path)
+Renderer::RenderResult Renderer::render_window(std::vector<Material> &mats,
+                                                                        const RenderSettings &rset,
+                                                                        const std::string &scene_path,
+                                                                        int level_index,
+                                                                        int total_levels,
+                                                                        double previous_total_score)
 {
         int W = rset.width;
         int H = rset.height;
@@ -2064,11 +2087,15 @@ void Renderer::render_window(std::vector<Material> &mats,
         SDL_Renderer *ren = nullptr;
         SDL_Texture *tex = nullptr;
         if (!init_sdl(win, ren, tex, W, H, RW, RH))
-                return;
+                return RenderResult{};
 
         RenderState st;
         st.level_number = parse_level_number_from_path(scene_path);
         st.level_label = level_label_from_path(scene_path);
+        st.level_progress_index = std::max(1, level_index + 1);
+        st.total_levels = std::max(1, total_levels);
+        st.previous_total_score = previous_total_score;
+        st.exit_action = ButtonAction::Quit;
         st.focused = true;
         SDL_SetRelativeMouseMode(SDL_TRUE);
         SDL_ShowCursor(SDL_DISABLE);
@@ -2164,4 +2191,9 @@ void Renderer::render_window(std::vector<Material> &mats,
         SDL_DestroyRenderer(ren);
         SDL_DestroyWindow(win);
         SDL_Quit();
+
+        RenderResult result;
+        result.action = st.exit_action;
+        result.score = st.last_score;
+        return result;
 }
