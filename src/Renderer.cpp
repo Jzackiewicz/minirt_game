@@ -32,6 +32,7 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include <numeric>
 
 static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
 {
@@ -614,6 +615,52 @@ std::string level_label_from_path(const std::string &scene_path)
         return path.stem().string();
 }
 
+std::string lowercase_copy(std::string value)
+{
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+        });
+        return value;
+}
+
+std::vector<std::filesystem::path>
+collect_level_paths(const std::filesystem::path &scene_path)
+{
+        namespace fs = std::filesystem;
+        fs::path abs_scene = fs::absolute(scene_path);
+        std::vector<fs::path> result;
+        std::string target_ext = lowercase_copy(abs_scene.extension().string());
+
+        std::error_code dir_err;
+        fs::directory_iterator dir(abs_scene.parent_path(), dir_err);
+        if (!dir_err)
+        {
+                for (auto it = dir; it != fs::directory_iterator(); ++it)
+                {
+                        std::error_code entry_err;
+                        if (!it->is_regular_file(entry_err))
+                                continue;
+                        std::string ext = lowercase_copy(it->path().extension().string());
+                        if (ext != target_ext)
+                                continue;
+                        result.push_back(fs::absolute(it->path()));
+                }
+        }
+
+        if (std::find(result.begin(), result.end(), abs_scene) == result.end())
+                result.push_back(abs_scene);
+
+        auto case_insensitive_cmp = [](const fs::path &a, const fs::path &b) {
+                std::string an = lowercase_copy(a.filename().string());
+                std::string bn = lowercase_copy(b.filename().string());
+                if (an == bn)
+                        return a.filename().string() < b.filename().string();
+                return an < bn;
+        };
+        std::sort(result.begin(), result.end(), case_insensitive_cmp);
+        return result;
+}
+
 bool target_blinking(const Scene &scene)
 {
         for (const auto &obj : scene.objects)
@@ -692,6 +739,10 @@ struct Renderer::RenderState
         int hud_focus_object = -1;
         double hud_focus_score = 0.0;
         bool quota_met = false;
+        std::filesystem::path scene_path;
+        std::vector<std::filesystem::path> level_paths;
+        int current_level_index = 0;
+        std::vector<double> completed_scores;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -744,8 +795,7 @@ bool Renderer::init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
 /// Handle SDL events, updating render state and selection.
 void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *ren,
                                                         int W, int H,
-                                                        std::vector<Material> &mats,
-                                                        const std::string &scene_path)
+                                                        std::vector<Material> &mats)
 {
         SDL_Event e;
         while (SDL_PollEvent(&e))
@@ -955,16 +1005,16 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 {
                         scene.update_beams(mats);
                         scene.build_bvh();
-                        if (MapSaver::save(scene_path, scene, cam, mats))
+                        std::string path = st.scene_path.string();
+                        if (MapSaver::save(path, scene, cam, mats))
                         {
-                                std::cout << "Saved scene to: " << scene_path << "\n";
+                                std::cout << "Saved scene to: " << path << "\n";
                                 st.scene_dirty = false;
                                 st.last_auto_save = SDL_GetTicks();
                         }
                         else
                         {
-                                std::cerr << "Failed to save scene to: " << scene_path
-                                          << "\n";
+                                std::cerr << "Failed to save scene to: " << path << "\n";
                                 st.last_auto_save = SDL_GetTicks();
                         }
                 }
@@ -974,7 +1024,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         Scene backup_scene = scene;
                         Camera backup_cam = cam;
                         auto backup_mats = mats;
-                        if (Parser::parse_rt_file(scene_path, scene, cam, W, H))
+                        std::string path = st.scene_path.string();
+                        if (Parser::parse_rt_file(path, scene, cam, W, H))
                         {
                                 mats = Parser::get_materials();
                                 scene.update_beams(mats);
@@ -990,7 +1041,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 st.edit_pos = Vec3();
                                 st.scene_dirty = false;
                                 st.last_auto_save = SDL_GetTicks();
-                                std::cout << "Reloaded scene from: " << scene_path << "\n";
+                                std::cout << "Reloaded scene from: " << path << "\n";
                         }
                         else
                         {
@@ -999,8 +1050,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 mats = std::move(backup_mats);
                                 scene.update_beams(mats);
                                 scene.build_bvh();
-                                std::cerr << "Failed to reload scene from: " << scene_path
-                                          << "\n";
+                                std::cerr << "Failed to reload scene from: " << path << "\n";
                         }
                 }
                 else if (g_developer_mode && st.focused && e.type == SDL_KEYDOWN &&
@@ -1078,11 +1128,53 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         int current_w = W;
                         int current_h = H;
                         SDL_GetWindowSize(win, &current_w, &current_h);
-                        ButtonAction action =
-                                LevelFinishedMenu::show(win, ren, current_w, current_h, true);
+                        LevelFinishedInfo info;
+                        info.level_number = st.current_level_index + 1;
+                        info.total_levels = static_cast<int>(st.level_paths.size());
+                        info.current_score = st.last_score;
+                        info.required_score = scene.minimal_score;
+                        info.accumulated_score = std::accumulate(
+                                st.completed_scores.begin(), st.completed_scores.end(), 0.0);
+                        info.has_next_level =
+                                st.current_level_index + 1 <
+                                static_cast<int>(st.level_paths.size());
+                        ButtonAction action = LevelFinishedMenu::show(
+                                win, ren, current_w, current_h, info, true);
                         if (action == ButtonAction::Quit)
                         {
                                 st.running = false;
+                        }
+                        else if (action == ButtonAction::NextLevel)
+                        {
+                                bool loaded_next = false;
+                                if (info.has_next_level)
+                                {
+                                        st.completed_scores.push_back(st.last_score);
+                                        ++st.current_level_index;
+                                        std::filesystem::path next_path =
+                                                st.level_paths[st.current_level_index];
+                                        if (load_scene_from_path(next_path))
+                                        {
+                                                loaded_next = true;
+                                        }
+                                        else
+                                        {
+                                                st.running = false;
+                                        }
+                                }
+                                else
+                                {
+                                        st.running = false;
+                                }
+
+                                if (loaded_next)
+                                {
+                                        st.focused = true;
+                                        SDL_SetRelativeMouseMode(SDL_TRUE);
+                                        SDL_ShowCursor(SDL_DISABLE);
+                                        SDL_SetWindowGrab(win, SDL_TRUE);
+                                        SDL_WarpMouseInWindow(win, W / 2, H / 2);
+                                }
                         }
                         else
                         {
@@ -2067,8 +2159,22 @@ void Renderer::render_window(std::vector<Material> &mats,
                 return;
 
         RenderState st;
-        st.level_number = parse_level_number_from_path(scene_path);
-        st.level_label = level_label_from_path(scene_path);
+        st.scene_path = std::filesystem::absolute(scene_path);
+        st.level_paths = collect_level_paths(st.scene_path);
+        auto level_it =
+                std::find(st.level_paths.begin(), st.level_paths.end(), st.scene_path);
+        if (level_it == st.level_paths.end())
+        {
+                st.level_paths.push_back(st.scene_path);
+                st.current_level_index = static_cast<int>(st.level_paths.size()) - 1;
+        }
+        else
+        {
+                st.current_level_index =
+                        static_cast<int>(std::distance(st.level_paths.begin(), level_it));
+        }
+        st.level_number = parse_level_number_from_path(st.scene_path.string());
+        st.level_label = level_label_from_path(st.scene_path.string());
         st.focused = true;
         SDL_SetRelativeMouseMode(SDL_TRUE);
         SDL_ShowCursor(SDL_DISABLE);
@@ -2079,6 +2185,44 @@ void Renderer::render_window(std::vector<Material> &mats,
         std::vector<unsigned char> pixels(RW * RH * 3);
         Uint32 last = SDL_GetTicks();
         char current_quality = g_settings.quality;
+
+        auto load_scene_from_path = [&](const std::filesystem::path &path) -> bool {
+                Scene backup_scene = scene;
+                Camera backup_cam = cam;
+                auto backup_mats = mats;
+                if (Parser::parse_rt_file(path.string(), scene, cam, W, H))
+                {
+                        mats = Parser::get_materials();
+                        scene.update_beams(mats);
+                        scene.build_bvh();
+                        st.edit_mode = false;
+                        st.rotating = false;
+                        st.hover_obj = -1;
+                        st.hover_mat = -1;
+                        st.selected_obj = -1;
+                        st.selected_mat = -1;
+                        st.spawn_key = -1;
+                        st.edit_dist = 0.0;
+                        st.edit_pos = Vec3();
+                        st.scene_dirty = false;
+                        st.last_auto_save = SDL_GetTicks();
+                        st.level_number = parse_level_number_from_path(path.string());
+                        st.level_label = level_label_from_path(path.string());
+                        st.hud_focus_object = -1;
+                        st.hud_focus_score = 0.0;
+                        st.quota_met = false;
+                        st.last_score = 0.0;
+                        st.scene_path = std::filesystem::absolute(path);
+                        return true;
+                }
+                scene = std::move(backup_scene);
+                cam = backup_cam;
+                mats = std::move(backup_mats);
+                scene.update_beams(mats);
+                scene.build_bvh();
+                std::cerr << "Failed to load scene from: " << path << "\n";
+                return false;
+        };
 
         while (st.running)
         {
@@ -2135,7 +2279,7 @@ void Renderer::render_window(std::vector<Material> &mats,
                                 SDL_WarpMouseInWindow(win, W / 2, H / 2);
                 }
 
-                process_events(st, win, ren, W, H, mats, scene_path);
+                process_events(st, win, ren, W, H, mats);
                 handle_keyboard(st, dt, mats);
                 scene.update_goal_targets(dt, mats);
                 update_selection(st, mats);
@@ -2144,13 +2288,14 @@ void Renderer::render_window(std::vector<Material> &mats,
                         Uint32 now = SDL_GetTicks();
                         if (now - st.last_auto_save >= 100)
                         {
-                                if (MapSaver::save(scene_path, scene, cam, mats))
+                                std::string autosave_path = st.scene_path.string();
+                                if (MapSaver::save(autosave_path, scene, cam, mats))
                                 {
                                         st.scene_dirty = false;
                                 }
                                 else
                                 {
-                                        std::cerr << "Failed to save scene to: " << scene_path
+                                        std::cerr << "Failed to save scene to: " << autosave_path
                                                   << "\n";
                                 }
                                 st.last_auto_save = now;

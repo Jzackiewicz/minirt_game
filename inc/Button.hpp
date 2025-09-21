@@ -10,7 +10,8 @@ enum class ButtonAction {
     Settings,
     Leaderboard,
     Back,
-    Quit
+    Quit,
+    NextLevel
 };
 
 // Represents an interactive button in a menu
