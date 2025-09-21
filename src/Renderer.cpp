@@ -37,6 +37,23 @@ static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
         return a * (1.0 - alpha) + b * alpha;
 }
 
+static constexpr double kAltColorAmount = 0.35;
+
+static Vec3 brighten_color(const Vec3 &color)
+{
+        return Vec3(std::clamp(color.x + (1.0 - color.x) * kAltColorAmount, 0.0, 1.0),
+                                std::clamp(color.y + (1.0 - color.y) * kAltColorAmount, 0.0, 1.0),
+                                std::clamp(color.z + (1.0 - color.z) * kAltColorAmount, 0.0, 1.0));
+}
+
+static Vec3 darken_color(const Vec3 &color)
+{
+        double factor = 1.0 - kAltColorAmount;
+        return Vec3(std::clamp(color.x * factor, 0.0, 1.0),
+                                std::clamp(color.y * factor, 0.0, 1.0),
+                                std::clamp(color.z * factor, 0.0, 1.0));
+}
+
 static Vec3 normalize_or(const Vec3 &v, const Vec3 &fallback = Vec3(0, 0, 1))
 {
         double len2 = v.length_squared();
@@ -217,10 +234,11 @@ Vec3 clamp_color(const Vec3 &c, double lo = 0.0, double hi = 1.0)
 }
 
 Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
-                                         const Material &mat)
+                                         const Material &mat,
+                                         bool use_base_state = false)
 {
         Vec3 base = mat.base_color;
-        Vec3 col = mat.color;
+        Vec3 col = use_base_state ? mat.base_color : mat.color;
         if (rec.object_id >= 0 &&
                 rec.object_id < static_cast<int>(scene.objects.size()))
         {
@@ -236,14 +254,15 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                 Vec3 tex = mat.texture->sample(rec.u, rec.v);
                 col = tex;
         }
-        if (mat.checkered)
+        if (!use_base_state && mat.checkered)
         {
-                Vec3 inv = Vec3(1.0, 1.0, 1.0) - base;
+                Vec3 brighter = brighten_color(base);
+                Vec3 darker = darken_color(base);
                 int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
                                    static_cast<int>(std::floor(rec.p.y * 5)) +
                                    static_cast<int>(std::floor(rec.p.z * 5))) &
                                   1;
-                col = chk ? base : inv;
+                col = chk ? brighter : darker;
         }
         return col;
 }
@@ -338,6 +357,13 @@ double luminance(const Vec3 &c)
         return 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z;
 }
 
+static Vec3 highlight_alternate_color(const Vec3 &base)
+{
+        double lum = luminance(base);
+        bool use_brighter = lum < 0.5;
+        return use_brighter ? brighten_color(base) : darken_color(base);
+}
+
 double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &mats,
                                                          const PointLight &L, const Vec3 &axis_dir,
                                                          const Vec3 &sample_origin,
@@ -389,7 +415,8 @@ double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &m
                         if (cos_incident > 1e-6)
                         {
                                 const Material &mat = mats[rec.material_id];
-                                Vec3 surface_color = surface_color_at(scene, rec, mat);
+                                Vec3 surface_color =
+                                        surface_color_at(scene, rec, mat, true);
                                 Vec3 view_dir = rec.normal.normalized();
                                 Vec3 base = ambient_contribution(scene, surface_color);
                                 for (const auto &other : scene.lights)
@@ -1170,7 +1197,6 @@ void Renderer::update_selection(RenderState &st,
 
                 if (!allow_hover)
                         return;
-
                 bool selectable = !hit_obj->is_beam() &&
                                   (g_developer_mode || hit_obj->movable ||
                                    hit_obj->rotatable);
@@ -1185,10 +1211,9 @@ void Renderer::update_selection(RenderState &st,
                                 st.hover_mat = hrec.material_id;
                         }
                         bool blink = ((SDL_GetTicks() / 250) % 2) == 0;
-                        mats[st.hover_mat].color =
-                                blink ? (Vec3(1.0, 1.0, 1.0) -
-                                         mats[st.hover_mat].base_color)
-                                      : mats[st.hover_mat].base_color;
+                        Vec3 base_color = mats[st.hover_mat].base_color;
+                        Vec3 alt_color = highlight_alternate_color(base_color);
+                        mats[st.hover_mat].color = blink ? alt_color : base_color;
                 }
                 else if (st.hover_mat >= 0)
                 {
