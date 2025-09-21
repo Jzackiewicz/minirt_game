@@ -6,6 +6,7 @@
 #include "Settings.hpp"
 #include "MapSaver.hpp"
 #include "Parser.hpp"
+#include "LevelFinishedMenu.hpp"
 #include "PauseMenu.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
@@ -38,6 +39,7 @@ static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
 }
 
 static constexpr double kAltColorAmount = 0.35;
+static constexpr double kQuotaScoreEpsilon = 1e-3;
 
 static Vec3 brighten_color(const Vec3 &color)
 {
@@ -689,6 +691,7 @@ struct Renderer::RenderState
         std::string level_label;
         int hud_focus_object = -1;
         double hud_focus_score = 0.0;
+        bool quota_met = false;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1062,6 +1065,34 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 st.spawn_key = e.key.keysym.scancode;
                         }
                 }
+                else if (st.focused && st.quota_met && e.type == SDL_KEYDOWN &&
+                                 e.key.repeat == 0 &&
+                                 (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
+                {
+                        st.focused = false;
+                        SDL_SetRelativeMouseMode(SDL_FALSE);
+                        SDL_ShowCursor(SDL_ENABLE);
+                        SDL_SetWindowGrab(win, SDL_FALSE);
+                        SDL_WarpMouseInWindow(win, W / 2, H / 2);
+                        int current_w = W;
+                        int current_h = H;
+                        SDL_GetWindowSize(win, &current_w, &current_h);
+                        ButtonAction action =
+                                LevelFinishedMenu::show(win, ren, current_w, current_h, true);
+                        if (action == ButtonAction::Quit)
+                        {
+                                st.running = false;
+                        }
+                        else
+                        {
+                                st.focused = true;
+                                SDL_SetRelativeMouseMode(SDL_TRUE);
+                                SDL_ShowCursor(SDL_DISABLE);
+                                SDL_SetWindowGrab(win, SDL_TRUE);
+                                SDL_WarpMouseInWindow(win, W / 2, H / 2);
+                        }
+                }
                 else if (st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                 {
@@ -1295,6 +1326,15 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f", st.last_score);
         }
         left_lines.push_back({score_buf, SDL_Color{255, 255, 255, 255}});
+
+        std::vector<HudTextLine> center_lines;
+        if (st.quota_met)
+        {
+                center_lines.push_back(
+                        {"LEVEL FINISHED", SDL_Color{255, 255, 255, 255}});
+                center_lines.push_back(
+                        {"ENTER TO CONTINUE", SDL_Color{255, 255, 255, 255}});
+        }
 
         std::vector<HudTextLine> right_lines;
         std::shared_ptr<Hittable> focus_obj;
@@ -1556,10 +1596,27 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         const int hud_line_height = 7 * hud_scale + 4;
 
         size_t top_count = std::max(left_lines.size(), right_lines.size());
+        top_count = std::max(top_count, center_lines.size());
         if (top_count == 0)
                 top_count = 1;
         int top_bar_height = static_cast<int>(top_count) * hud_line_height + 2 * hud_padding;
         top_bar_height = std::max(top_bar_height, hud_line_height + 2 * hud_padding);
+
+        int center_rect_left = 0;
+        int center_rect_width = 0;
+        if (!center_lines.empty())
+        {
+                int max_center_text_width = 0;
+                for (const auto &line : center_lines)
+                {
+                        max_center_text_width = std::max(
+                                max_center_text_width,
+                                CustomCharacter::text_width(line.text, hud_scale));
+                }
+                int padded_width = max_center_text_width + hud_padding * 2;
+                center_rect_width = std::min(W, std::max(padded_width, max_center_text_width));
+                center_rect_left = (W - center_rect_width) / 2;
+        }
 
         int bottom_bar_height = static_cast<int>(max_control_lines) * hud_line_height +
                                 2 * hud_padding;
@@ -1572,11 +1629,36 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         SDL_Rect bottom_bar{0, H - bottom_bar_height, W, bottom_bar_height};
         SDL_RenderFillRect(ren, &bottom_bar);
 
+        if (!center_lines.empty() && center_rect_width > 0)
+        {
+                Uint32 ticks = SDL_GetTicks();
+                bool highlight_on = ((ticks / 350) % 2) == 0;
+                if (highlight_on)
+                {
+                        SDL_SetRenderDrawColor(ren, 255, 240, 128, 180);
+                        SDL_Rect highlight_rect{center_rect_left, 0, center_rect_width,
+                                                top_bar_height};
+                        SDL_RenderFillRect(ren, &highlight_rect);
+                }
+        }
+
         if (top_bar_height > 2 * hud_padding)
         {
                 SDL_SetRenderDrawColor(ren, 255, 255, 255, 96);
-                SDL_RenderDrawLine(ren, W / 2, hud_padding, W / 2,
-                                   top_bar_height - hud_padding);
+                if (!center_lines.empty() && center_rect_width > 0)
+                {
+                        int left_sep = center_rect_left;
+                        int right_sep = center_rect_left + center_rect_width;
+                        SDL_RenderDrawLine(ren, left_sep, hud_padding, left_sep,
+                                           top_bar_height - hud_padding);
+                        SDL_RenderDrawLine(ren, right_sep, hud_padding, right_sep,
+                                           top_bar_height - hud_padding);
+                }
+                else
+                {
+                        SDL_RenderDrawLine(ren, W / 2, hud_padding, W / 2,
+                                           top_bar_height - hud_padding);
+                }
         }
 
         int left_y = hud_padding;
@@ -1585,6 +1667,19 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 CustomCharacter::draw_text(ren, line.text, hud_padding, left_y, line.color,
                                             hud_scale);
                 left_y += hud_line_height;
+        }
+
+        if (!center_lines.empty())
+        {
+                int center_y = hud_padding;
+                for (const auto &line : center_lines)
+                {
+                        int width = CustomCharacter::text_width(line.text, hud_scale);
+                        int text_x = W / 2 - width / 2;
+                        CustomCharacter::draw_text(ren, line.text, text_x, center_y, line.color,
+                                                    hud_scale);
+                        center_y += hud_line_height;
+                }
         }
 
         int right_y = hud_padding;
@@ -1753,6 +1848,12 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
                 th.join();
 
         st.last_score = compute_beam_score(scene, mats);
+
+        bool quota_defined = (scene.minimal_score > 0.0) || scene.target_required;
+        bool score_met = (scene.minimal_score <= 0.0) ||
+                         (st.last_score + kQuotaScoreEpsilon >= scene.minimal_score);
+        bool target_met = !scene.target_required || target_blinking(scene);
+        st.quota_met = quota_defined && score_met && target_met;
 
         for (int y = 0; y < RH; ++y)
         {
