@@ -5,6 +5,9 @@
 #include <sstream>
 #include <unordered_map>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 namespace
 {
 
@@ -159,6 +162,32 @@ bool load_xpm(const std::string &path, Texture &out)
         return true;
 }
 
+bool load_jpg(const std::string &path, Texture &out)
+{
+        int width = 0;
+        int height = 0;
+        stbi_uc *data = stbi_load(path.c_str(), &width, &height, nullptr, 3);
+        if (!data)
+                return false;
+
+        out.width = width;
+        out.height = height;
+        out.pixels.assign(static_cast<size_t>(out.width * out.height), Vec3(0.0, 0.0, 0.0));
+        const double inv255 = 1.0 / 255.0;
+        size_t pixel_count = static_cast<size_t>(out.width) * static_cast<size_t>(out.height);
+        for (size_t i = 0; i < pixel_count; ++i)
+        {
+                size_t idx = i * 3;
+                double r = static_cast<double>(data[idx]) * inv255;
+                double g = static_cast<double>(data[idx + 1]) * inv255;
+                double b = static_cast<double>(data[idx + 2]) * inv255;
+                out.pixels[i] = Vec3(r, g, b);
+        }
+
+        stbi_image_free(data);
+        return true;
+}
+
 } // namespace
 
 Vec3 Texture::sample(double u, double v) const
@@ -204,7 +233,31 @@ Vec3 Texture::sample(double u, double v) const
 std::shared_ptr<Texture> load_texture(const std::string &path)
 {
         auto tex = std::make_shared<Texture>();
-        if (!load_xpm(path, *tex))
+        auto extension_lower = [](const std::string &file_path) {
+                size_t pos = file_path.find_last_of('.');
+                std::string ext = (pos != std::string::npos) ? file_path.substr(pos) : std::string();
+                for (char &c : ext)
+                        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                return ext;
+        }(path);
+
+        bool loaded = false;
+        if (extension_lower == ".xpm")
+        {
+                loaded = load_xpm(path, *tex);
+        }
+        else if (extension_lower == ".jpg" || extension_lower == ".jpeg")
+        {
+                loaded = load_jpg(path, *tex);
+        }
+        else
+        {
+                loaded = load_xpm(path, *tex);
+                if (!loaded)
+                        loaded = load_jpg(path, *tex);
+        }
+
+        if (!loaded)
                 return nullptr;
         return tex;
 }
