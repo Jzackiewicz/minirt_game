@@ -10,6 +10,7 @@ class AMenu {
 protected:
     std::string title;
     std::vector<Button> buttons;
+    std::vector<Button> corner_buttons;
     std::vector<SDL_Color> title_colors;
 
 public:
