@@ -14,10 +14,3 @@ cmake-build-*/
 
 # Logs
 *.log
-
-# Generated images
-*.ppm
-*.png
-*.jpg
-*.jpeg
-*.yaml
