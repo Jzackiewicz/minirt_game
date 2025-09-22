@@ -136,7 +136,7 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
             {"Use the available objects to steer the laser beam from the white source sphere to the black target sphere.",
              white, false},
             {"", white, true},
-            {"Earn points by illuminating object surfaces; the total score must reach each level’s quota.", white,
+            {"Earn points by illuminating object surfaces; the total score must reach each level's quota.", white,
              false}
         };
         paragraphs.push_back(std::move(intro));
@@ -149,7 +149,7 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
         rules_header.gap_before = post_separator_gap;
         rules_header.custom_height = -1;
         rules_header.alignment = ParagraphAlign::Left;
-        rules_header.segments = {{"Object rules: (bullet points)", white, false}};
+        rules_header.segments = {{"Object rules:", white, false}};
         paragraphs.push_back(std::move(rules_header));
 
         Paragraph green_rule{};
@@ -167,7 +167,7 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
         yellow_rule.gap_before = bullet_gap;
         yellow_rule.custom_height = -1;
         yellow_rule.alignment = ParagraphAlign::Left;
-        yellow_rule.segments = {{"Yellow", yellow, false}, {" objects rotate but can’t move.", white, false}};
+        yellow_rule.segments = {{"Yellow", yellow, false}, {" objects rotate but can't move.", white, false}};
         paragraphs.push_back(std::move(yellow_rule));
 
         Paragraph red_rule{};
@@ -177,7 +177,7 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
         red_rule.custom_height = -1;
         red_rule.alignment = ParagraphAlign::Left;
         red_rule.segments = {{"Red", red, false},
-                              {" objects stay put - you can’t move or rotate them.", white, false}};
+                              {" objects stay put - you can't move or rotate them.", white, false}};
         paragraphs.push_back(std::move(red_rule));
 
         Paragraph grey_rule{};
@@ -187,7 +187,7 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
         grey_rule.custom_height = -1;
         grey_rule.alignment = ParagraphAlign::Left;
         grey_rule.segments = {{"Grey", grey, false},
-                              {" objects just block the beam; they don’t score points.", white, false}};
+                              {" objects just block the beam; they don't score points.", white, false}};
         paragraphs.push_back(std::move(grey_rule));
 
         Paragraph aim_tip{};
