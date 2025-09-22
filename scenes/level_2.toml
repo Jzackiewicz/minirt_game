@@ -1,15 +1,15 @@
 [quota]
 target = true
-minimal_score = 3.0
+minimal_score = 4.5
 
 [camera]
 id = "camera"
-position = [8.05309, 5.44287, -29.18574]
-lookdir = [-0.29190, -0.46886, 0.83365]
+position = [-7.72499, 4.01787, -28.58361]
+lookdir = [0.05783, -0.30506, 0.95058]
 fov = 120
 
 [lighting.ambient]
-intensity = 0.50000
+intensity = 0.40000
 color = [255, 255, 255]
 
 [[objects.planes]]
@@ -81,26 +81,65 @@ transparent = false
 
 [[objects.boxes]]
 id = "box1"
-color = [255, 255, 0]
-position = [-4.46192, 3.46111, -4.29934]
-dir = [0.09627, 0.49138, 0.86561]
-width = 1
-height = 3
-length = 2
+color = [250, 250, 0]
+position = [-6.05073, 6.58414, -3.65141]
+dir = [-0.34682, 0.85977, 0.37486]
+width = 1.46410
+height = 1.46410
+length = 1.46410
 reflective = true
 rotatable = true
 movable = false
 scorable = true
 transparent = false
 
+[[objects.boxes]]
+id = "box2"
+color = [250, 0, 0]
+position = [8.26140, 4.19122, 8.47964]
+dir = [-0.18585, 0.96473, -0.18641]
+width = 5
+height = 15
+length = 5
+reflective = true
+rotatable = false
+movable = false
+scorable = true
+transparent = false
+
+[[objects.spheres]]
+id = "sphere1"
+color = [0, 250, 0]
+position = [0.67762, -4.91021, -19.00373]
+dir = [0.0, 1.0, 0.0]
+radius = 0.73599
+reflective = true
+rotatable = true
+movable = true
+scorable = true
+transparent = false
+
+[[objects.cones]]
+id = "cone1"
+color = [0, 250, 0]
+position = [3.95363, -4.16363, -18.94533]
+dir = [-0.03625, 0.99891, -0.02956]
+radius = 0.92765
+height = 1.85531
+reflective = true
+rotatable = true
+movable = true
+scorable = true
+transparent = false
+
 [[beam.sources]]
 id = "beam_source1"
 intensity = 1
-position = [1.06517, 2.62323, -22.16474]
-dir = [-0.28604, 0.04312, 0.95725]
+position = [-4.58162, 0.60101, -25.58508]
+dir = [0.36122, 0.79132, 0.49329]
 color = [255, 255, 255]
 radius = 1.30000
-length = 40
+length = 80
 movable = false
 rotatable = false
 scorable = false
