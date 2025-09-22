@@ -2,27 +2,6 @@
 
 Puzzle game based on miniRT 42School project.
 
-## How to Play
-
-Use the available objects to steer the laser beam from the white source sphere to the black target sphere.
-Earn points by illuminating object surfaces; the total score must reach each level’s quota.
-
--------------------------------------------------------------------
-
-Object rules:
-
-- <span style="color: #008000;">Green</span> objects can both move and rotate.
-- <span style="color: #FFD700;">Yellow</span> objects rotate but can’t move.
-- <span style="color: #FF0000;">Red</span> objects stay put – you can’t move or rotate them.
-- <span style="color: #808080;">Grey</span> objects just block the beam; they don’t score points.
-
-<div align="center">Aim at any object to display information about it.</div>
-
--------------------------------------------------------------------
-
-Remember that the laser fades with distance and stops once it reaches its set length.
-Hit the target and reach the quota to clear the level, or optimize your setup to climb the leaderboard.
-
 ## Installation
 
 ### Windows (MSYS2)
@@ -70,3 +49,22 @@ Hit the target and reach the quota to clear the level, or optimize your setup to
 ```bash
 ./build/minirt
 ```
+
+## How to Play
+
+Use the available objects to steer the laser beam from the white source sphere to the black target sphere.
+Earn points by illuminating object surfaces; the total score must reach each level’s quota.
+
+-------------------------------------------------------------------
+Object rules:
+- <span style="color: #008000;">Green</span> objects can both move and rotate.
+- <span style="color: #FFD700;">Yellow</span> objects rotate but can’t move.
+- <span style="color: #FF0000;">Red</span> objects stay put – you can’t move or rotate them.
+- <span style="color: #808080;">Grey</span> objects just block the beam; they don’t score points.
+
+<div align="center">Aim at any object to display information about it.</div>
+
+-------------------------------------------------------------------
+
+Remember that the laser fades with distance and stops once it reaches its set length.
+Hit the target and reach the quota to clear the level, or optimize your setup to climb the leaderboard.
