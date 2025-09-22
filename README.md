@@ -20,7 +20,7 @@ Puzzle game based on miniRT 42School project.
    ```
 3. Clone this repository:
    ```bash
-   git clone https://github.com/<your-username>/minirt_game.git
+   git clone https://github.com/Jzackiewicz/minirt_game.git
    ```
 4. Configure and build the project with CMake:
    ```bash
@@ -52,5 +52,3 @@ Puzzle game based on miniRT 42School project.
 ```bash
 ./build/minirt
 ```
-
-The game automatically loads the `scenes/level_1.toml` scene at startup. Other sample `.toml` scenes are available in the `scenes` directory.
