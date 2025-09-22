@@ -58,6 +58,7 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
         int total_height{};
         bool valid{false};
         std::vector<Paragraph> paragraphs;
+        std::vector<int> line_counts;
     };
 
     auto build_layout = [&](int content_scale) -> LayoutData {
@@ -71,7 +72,7 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
         int margin = std::max(static_cast<int>(width * 0.08f), content_scale * 6);
         int medium_gap = std::max(data.line_height / 2, static_cast<int>(16 * scale_factor));
         int small_gap = std::max(data.line_height / 3, static_cast<int>(10 * scale_factor));
-        int padding = std::max(medium_gap, static_cast<int>(20 * scale_factor));
+        int padding = std::max(medium_gap, data.line_height);
 
         data.content_top = title_y + title_height + padding;
         data.content_bottom = buttons_start_y - padding;
@@ -95,12 +96,14 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
             {false, medium_gap, {{"Object rules:", white}}},
             {true, small_gap, {{"Green", green}, {" objects can both move and rotate.", white}}},
             {true, 0, {{"Yellow", yellow}, {" objects rotate but can't move.", white}}},
-            {true, 0, {{"Red", red}, {" objects stay put - you can't move or rotate them.", white}}},
+            {true, 0, {{"Red", red}, {" objects stay put—you can't move or rotate them.", white}}},
             {true, 0, {{"Grey", grey}, {" objects just block the beam; they don't score points.", white}}},
-            {false,
-             medium_gap,
-             {{"Remember that the laser fades with distance and stops once it reaches its set length. "
-               "Hit the target and reach the quota to clear the level, or optimize your setup to climb the leaderboard.",
+            {false, 0, {{"Aim at any object to display information about it.", white}}},
+            {false, medium_gap,
+             {{"Remember that the laser fades with distance and stops once it reaches its set length.",
+               white}}},
+            {false, small_gap,
+             {{"Hit the target and reach the quota to clear the level, or optimize your setup to climb the leaderboard.",
                white}}}
         };
 
@@ -135,14 +138,19 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
         };
 
         int total_height = 0;
+        std::vector<int> line_counts;
+        line_counts.reserve(paragraphs.size());
         for (const auto &paragraph : paragraphs) {
             total_height += paragraph.gap_before;
-            total_height += count_lines(paragraph) * data.line_height;
+            int lines = count_lines(paragraph);
+            total_height += lines * data.line_height;
+            line_counts.push_back(lines);
         }
 
         data.available_height = data.content_bottom - data.content_top;
         data.total_height = total_height;
         data.paragraphs = std::move(paragraphs);
+        data.line_counts = std::move(line_counts);
         data.valid = true;
         return data;
     };
@@ -167,14 +175,46 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
         }
     }
 
+    if (layout.valid) {
+        for (int test_scale = layout.content_scale + 1;; ++test_scale) {
+            LayoutData candidate = build_layout(test_scale);
+            if (!candidate.valid || candidate.total_height > candidate.available_height)
+                break;
+            layout = candidate;
+        }
+    }
+
     if (!layout.valid)
         return;
 
+    int extra_space = layout.available_height - layout.total_height;
+    int slots = static_cast<int>(layout.paragraphs.size()) + 1;
+    int slot_base = slots > 0 ? extra_space / slots : 0;
+    int slot_remainder = slots > 0 ? extra_space % slots : 0;
+    auto take_slot_extra = [&]() {
+        int extra = slot_base;
+        if (slot_remainder > 0) {
+            ++extra;
+            --slot_remainder;
+        }
+        return extra;
+    };
+
     int y = layout.content_top;
-    for (const auto &paragraph : layout.paragraphs) {
+    if (slots > 0)
+        y += take_slot_extra();
+
+    for (std::size_t index = 0; index < layout.paragraphs.size(); ++index) {
+        const auto &paragraph = layout.paragraphs[index];
         y += paragraph.gap_before;
-        if (y + layout.line_height > layout.content_bottom)
-            break;
+        int lines = index < layout.line_counts.size() ? layout.line_counts[index] : 0;
+        if (lines <= 0) {
+            if (slots > 0)
+                y += take_slot_extra();
+            continue;
+        }
+        if (y + lines * layout.line_height > layout.content_bottom)
+            return;
 
         int indent = paragraph.bullet ? layout.bullet_indent : 0;
         int usable_width = std::max(layout.available_width - indent, 1);
@@ -219,5 +259,7 @@ void HowToPlayMenu::draw_content(SDL_Renderer *renderer, int width, int height, 
         }
 
         y += layout.line_height;
+        if (slots > 0)
+            y += take_slot_extra();
     }
 }
