@@ -13,7 +13,7 @@ HowToPlayMenu::HowToPlayMenu() : AMenu("HOW TO PLAY") {
     buttons_align_bottom = true;
     title_top_margin = 60;
     buttons_bottom_margin = 40;
-    buttons.push_back(Button{"BACK", ButtonAction::Back, SDL_Color{255, 0, 0, 255}});
+    buttons.push_back(Button{"BACK", ButtonAction::Back, MenuColors::PastelRed});
 }
 
 void HowToPlayMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
