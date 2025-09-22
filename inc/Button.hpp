@@ -10,6 +10,7 @@ enum class ButtonAction {
     NextLevel,
     Settings,
     Leaderboard,
+    HowToPlay,
     Back,
     Quit
 };
