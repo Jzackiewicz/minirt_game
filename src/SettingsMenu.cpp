@@ -339,8 +339,8 @@ std::string ResolutionSection::current() const {
 
 SettingsMenu::SettingsMenu() : AMenu("SETTINGS") {
     // Bottom buttons
-    buttons.push_back(Button{"BACK", ButtonAction::Back, SDL_Color{255, 0, 0, 255}});
-    buttons.push_back(Button{"APPLY", ButtonAction::None, SDL_Color{0, 255, 0, 255}});
+    buttons.push_back(Button{"BACK", ButtonAction::Back, MenuColors::PastelRed});
+    buttons.push_back(Button{"APPLY", ButtonAction::None, MenuColors::PastelGreen});
 }
 
 void SettingsMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height,

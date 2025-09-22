@@ -37,7 +37,7 @@ load_scores(const std::string &filename) {
 
 LeaderboardMenu::LeaderboardMenu() : AMenu("LEADERBOARD"), scores(load_scores("leaderboard.yaml")) {
     title_colors.assign(title.size(), SDL_Color{255, 255, 255, 255});
-    buttons.push_back(Button{"BACK", ButtonAction::Back, SDL_Color{255, 0, 0, 255}});
+    buttons.push_back(Button{"BACK", ButtonAction::Back, MenuColors::PastelRed});
 }
 
 void LeaderboardMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height,

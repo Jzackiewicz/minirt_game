@@ -2,12 +2,13 @@
 
 PauseMenu::PauseMenu() : AMenu("PAUSE") {
     title_colors.assign(title.size(), SDL_Color{255, 255, 255, 255});
-    buttons.push_back(Button{"RESUME", ButtonAction::Resume, SDL_Color{0, 255, 0, 255}});
-    buttons.push_back(Button{"LEADERBOARD", ButtonAction::Leaderboard, SDL_Color{0, 0, 255, 255}});
-    buttons.push_back(Button{"SETTINGS", ButtonAction::Settings, SDL_Color{255, 255, 0, 255}});
-    buttons.push_back(Button{"QUIT", ButtonAction::Quit, SDL_Color{255, 0, 0, 255}});
+    buttons.push_back(Button{"RESUME", ButtonAction::Resume, MenuColors::PastelGreen});
+    buttons.push_back(
+        Button{"LEADERBOARD", ButtonAction::Leaderboard, MenuColors::PastelBlue});
+    buttons.push_back(Button{"SETTINGS", ButtonAction::Settings, MenuColors::PastelYellow});
+    buttons.push_back(Button{"QUIT", ButtonAction::Quit, MenuColors::PastelRed});
     corner_buttons.push_back(
-        Button{"HOW TO PLAY", ButtonAction::HowToPlay, SDL_Color{80, 80, 80, 255}});
+        Button{"HOW TO PLAY", ButtonAction::HowToPlay, MenuColors::PastelGray});
 }
 
 bool PauseMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height) {
