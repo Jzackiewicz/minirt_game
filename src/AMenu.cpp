@@ -8,6 +8,10 @@
 AMenu::AMenu(const std::string &t)
     : title(t), buttons_align_bottom(false), buttons_bottom_margin(-1) {}
 
+void AMenu::draw_content(SDL_Renderer * /*renderer*/, int /*width*/, int /*height*/,
+                         float /*scale_factor*/, int /*content_top*/,
+                         int /*content_bottom*/) const {}
+
 ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
                        bool transparent) {
     bool running = true;
@@ -71,7 +75,8 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         if (buttons_bottom_margin >= 0) {
             bottom_margin = static_cast<int>(buttons_bottom_margin * scale_factor);
         }
-        int start_y = title_y + title_height + title_gap;
+        int content_top = title_y + title_height + title_gap;
+        int start_y = content_top;
         if (buttons_align_bottom) {
             start_y = height - bottom_margin - total_buttons_height;
             int min_start = title_y + title_height + title_gap;
@@ -191,6 +196,11 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
             CustomCharacter::draw_character(renderer, title[i], tx, title_y, c, title_scale);
             tx += (5 + 1) * title_scale;
         }
+
+        int content_bottom = buttons.empty() ? height - bottom_margin : start_y;
+        if (content_bottom < content_top)
+            content_bottom = content_top;
+        draw_content(renderer, width, height, scale_factor, content_top, content_bottom);
 
         for (auto &btn : buttons) {
             bool hover = mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&

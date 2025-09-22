@@ -15,6 +15,10 @@ protected:
     bool buttons_align_bottom;
     int buttons_bottom_margin;
 
+    virtual void draw_content(SDL_Renderer *renderer, int width, int height,
+                              float scale_factor, int content_top,
+                              int content_bottom) const;
+
 public:
     explicit AMenu(const std::string &t);
     virtual ~AMenu() = default;
