@@ -45,12 +45,12 @@ Puzzle game based on miniRT 42School project.
 
 ### Windows
 ```bash
-./build/minirt.exe scenes/[map].toml
+./build/minirt.exe
 ```
 
 ### Linux
 ```bash
-./build/minirt scenes/[map].toml
+./build/minirt
 ```
 
-The `scenes` directory contains sample `.toml` scenes.
+The game automatically loads the `scenes/level_1.toml` scene at startup. Other sample `.toml` scenes are available in the `scenes` directory.
