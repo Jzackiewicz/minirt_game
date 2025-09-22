@@ -1507,16 +1507,21 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
 
         char score_buf[64];
+        SDL_Color score_color{255, 255, 255, 255};
         if (scene.minimal_score > 0.0)
         {
                 std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f/%.2f",
                               st.last_score, scene.minimal_score);
+                bool score_met =
+                        (st.last_score + kQuotaScoreEpsilon) >= scene.minimal_score;
+                score_color = score_met ? SDL_Color{96, 255, 128, 255}
+                                        : SDL_Color{255, 96, 96, 255};
         }
         else
         {
                 std::snprintf(score_buf, sizeof(score_buf), "SCORE: %.2f", st.last_score);
         }
-        left_lines.push_back({score_buf, SDL_Color{255, 255, 255, 255}});
+        left_lines.push_back({score_buf, score_color});
 
         std::vector<HudTextLine> center_lines;
         if (st.quota_met)
