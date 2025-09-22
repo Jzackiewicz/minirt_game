@@ -14,6 +14,7 @@ protected:
     std::vector<SDL_Color> title_colors;
     bool buttons_align_bottom;
     int buttons_bottom_margin;
+    int title_top_margin;
 
     virtual void draw_content(SDL_Renderer *renderer, int width, int height, int scale,
                               int title_scale, int title_x, int title_y, int title_height,

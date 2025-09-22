@@ -6,7 +6,8 @@
 #include "Settings.hpp"
 
 AMenu::AMenu(const std::string &t)
-    : title(t), buttons_align_bottom(false), buttons_bottom_margin(-1) {}
+    : title(t), buttons_align_bottom(false), buttons_bottom_margin(-1),
+      title_top_margin(-1) {}
 
 ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
                        bool transparent) {
@@ -60,6 +61,9 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         }
         int title_height = 7 * title_scale;
         int top_margin = (height - title_height - title_gap - total_buttons_height) / 2;
+        if (title_top_margin >= 0) {
+            top_margin = static_cast<int>(title_top_margin * scale_factor);
+        }
         if (top_margin < 0)
             top_margin = 0;
 
