@@ -1,10 +1,12 @@
 #include "AMenu.hpp"
-#include "SettingsMenu.hpp"
+#include "HowToPlayMenu.hpp"
 #include "LeaderboardMenu.hpp"
+#include "SettingsMenu.hpp"
 #include <algorithm>
 #include "Settings.hpp"
 
-AMenu::AMenu(const std::string &t) : title(t) {}
+AMenu::AMenu(const std::string &t)
+    : title(t), buttons_align_bottom(false), buttons_bottom_margin(-1) {}
 
 ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
                        bool transparent) {
@@ -38,8 +40,24 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         int title_scale = scale * 2;
         int title_gap = static_cast<int>(80 * scale_factor);
 
-        int total_buttons_height = static_cast<int>(buttons.size()) * button_height +
+        int corner_button_width = static_cast<int>(220 * scale_factor);
+        int corner_button_height = static_cast<int>(70 * scale_factor);
+        int corner_text_scale = static_cast<int>(3 * scale_factor);
+        int corner_margin = static_cast<int>(20 * scale_factor);
+        if (corner_button_width < 160)
+            corner_button_width = 160;
+        if (corner_button_height < 50)
+            corner_button_height = 50;
+        if (corner_text_scale < 1)
+            corner_text_scale = 1;
+        if (corner_margin < 10)
+            corner_margin = 10;
+
+        int total_buttons_height = 0;
+        if (!buttons.empty()) {
+            total_buttons_height = static_cast<int>(buttons.size()) * button_height +
                                    (static_cast<int>(buttons.size()) - 1) * button_gap;
+        }
         int title_height = 7 * title_scale;
         int top_margin = (height - title_height - title_gap - total_buttons_height) / 2;
         if (top_margin < 0)
@@ -49,11 +67,28 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         int title_y = top_margin;
 
         int center_x = width / 2 - button_width / 2;
+        int bottom_margin = top_margin;
+        if (buttons_bottom_margin >= 0) {
+            bottom_margin = static_cast<int>(buttons_bottom_margin * scale_factor);
+        }
         int start_y = title_y + title_height + title_gap;
+        if (buttons_align_bottom) {
+            start_y = height - bottom_margin - total_buttons_height;
+            int min_start = title_y + title_height + title_gap;
+            if (start_y < min_start)
+                start_y = min_start;
+        }
         for (std::size_t i = 0; i < buttons.size(); ++i) {
             buttons[i].rect = {center_x,
                                start_y + static_cast<int>(i) * (button_height + button_gap),
                                button_width, button_height};
+        }
+
+        for (std::size_t i = 0; i < corner_buttons.size(); ++i) {
+            int offset = static_cast<int>(i) * (corner_button_height + corner_margin);
+            corner_buttons[i].rect = {width - corner_button_width - corner_margin,
+                                      height - corner_button_height - corner_margin - offset,
+                                      corner_button_width, corner_button_height};
         }
 
         SDL_Event event;
@@ -76,34 +111,49 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                        event.button.button == SDL_BUTTON_LEFT) {
                 int mx = event.button.x;
                 int my = event.button.y;
+                auto present_background = [&]() {
+                    if (transparent && background) {
+                        SDL_RenderCopy(renderer, background, nullptr, nullptr);
+                        SDL_RenderPresent(renderer);
+                    } else {
+                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                        SDL_RenderClear(renderer);
+                        SDL_RenderPresent(renderer);
+                    }
+                };
+
+                auto handle_button_click = [&](Button &btn) {
+                    if (btn.action == ButtonAction::Settings) {
+                        present_background();
+                        SettingsMenu::show(window, renderer, width, height, transparent);
+                    } else if (btn.action == ButtonAction::Leaderboard) {
+                        present_background();
+                        LeaderboardMenu::show(window, renderer, width, height, transparent);
+                    } else if (btn.action == ButtonAction::HowToPlay) {
+                        present_background();
+                        HowToPlayMenu::show(window, renderer, width, height, transparent);
+                    } else {
+                        result = btn.action;
+                        running = false;
+                    }
+                };
+
+                bool handled = false;
                 for (auto &btn : buttons) {
                     if (mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
-                        if (btn.action == ButtonAction::Settings) {
-                            if (transparent && background) {
-                                SDL_RenderCopy(renderer, background, nullptr, nullptr);
-                                SDL_RenderPresent(renderer);
-                            } else {
-                                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-                                SDL_RenderClear(renderer);
-                                SDL_RenderPresent(renderer);
-                            }
-                            SettingsMenu::show(window, renderer, width, height, transparent);
-                        } else if (btn.action == ButtonAction::Leaderboard) {
-                            if (transparent && background) {
-                                SDL_RenderCopy(renderer, background, nullptr, nullptr);
-                                SDL_RenderPresent(renderer);
-                            } else {
-                                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-                                SDL_RenderClear(renderer);
-                                SDL_RenderPresent(renderer);
-                            }
-                            LeaderboardMenu::show(window, renderer, width, height, transparent);
-                        } else {
-                            result = btn.action;
-                            running = false;
-                        }
+                        handle_button_click(btn);
+                        handled = true;
                         break;
+                    }
+                }
+                if (!handled) {
+                    for (auto &btn : corner_buttons) {
+                        if (mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
+                            my >= btn.rect.y && my < btn.rect.y + btn.rect.h) {
+                            handle_button_click(btn);
+                            break;
+                        }
                     }
                 }
             }
@@ -142,6 +192,9 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
             tx += (5 + 1) * title_scale;
         }
 
+        draw_content(renderer, width, height, scale, title_scale, title_x, title_y, title_height,
+                     title_gap, start_y);
+
         for (auto &btn : buttons) {
             bool hover = mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
                          my >= btn.rect.y && my < btn.rect.y + btn.rect.h;
@@ -154,6 +207,23 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                 btn.rect.x + (btn.rect.w - CustomCharacter::text_width(btn.text, scale)) / 2;
             int text_y = btn.rect.y + (btn.rect.h - 7 * scale) / 2;
             CustomCharacter::draw_text(renderer, btn.text, text_x, text_y, white, scale);
+        }
+
+        for (auto &btn : corner_buttons) {
+            bool hover = mx >= btn.rect.x && mx < btn.rect.x + btn.rect.w &&
+                         my >= btn.rect.y && my < btn.rect.y + btn.rect.h;
+            SDL_Color fill = hover ? btn.hover_color : SDL_Color{0, 0, 0, 255};
+            SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+            SDL_RenderFillRect(renderer, &btn.rect);
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            SDL_RenderDrawRect(renderer, &btn.rect);
+            int text_x = btn.rect.x +
+                         (btn.rect.w -
+                          CustomCharacter::text_width(btn.text, corner_text_scale)) /
+                             2;
+            int text_y = btn.rect.y + (btn.rect.h - 7 * corner_text_scale) / 2;
+            CustomCharacter::draw_text(renderer, btn.text, text_x, text_y, white,
+                                       corner_text_scale);
         }
         if (g_developer_mode) {
             SDL_Color red{255, 0, 0, 255};
@@ -169,3 +239,5 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         SDL_DestroyTexture(background);
     return result;
 }
+
+void AMenu::draw_content(SDL_Renderer *, int, int, int, int, int, int, int, int, int) {}
