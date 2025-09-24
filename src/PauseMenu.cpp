@@ -5,8 +5,6 @@ PauseMenu::PauseMenu() : AMenu("PAUSE") {
     title_colors.assign(title.size(), SDL_Color{255, 255, 255, 255});
     buttons.push_back(Button{"RESUME", ButtonAction::Resume, MenuColors::PastelGreen});
     buttons.push_back(
-        Button{"TUTORIAL", ButtonAction::Tutorial, MenuColors::PastelPurple});
-    buttons.push_back(
         Button{"HOW TO PLAY", ButtonAction::HowToPlay, MenuColors::PastelYellow});
     buttons.push_back(
         Button{"LEADERBOARD", ButtonAction::Leaderboard, MenuColors::PastelBlue});
@@ -52,11 +50,7 @@ void PauseMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int
     int column_gap = std::max(button_gap, button_width / 10);
     if (column_gap < 1)
         column_gap = 1;
-    int tutorial_width = static_cast<int>(left_column_width * 0.75f);
-    if (tutorial_width < 1)
-        tutorial_width = 1;
-    int max_right_width = std::max(right_column_width, tutorial_width);
-    int total_width = left_column_width + column_gap + max_right_width;
+    int total_width = left_column_width + column_gap + right_column_width;
     int left_x = width / 2 - total_width / 2;
     int right_x = left_x + left_column_width + column_gap;
     int vertical_gap = button_gap;
@@ -66,16 +60,21 @@ void PauseMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int
         buttons_list[index].rect = {x, y, w, button_height};
     };
 
+    bool has_odd_count = buttons_list.size() % 2 != 0;
     for (int row = 0; row < rows; ++row) {
         int y = start_y + row * (button_height + vertical_gap);
         std::size_t left_index = static_cast<std::size_t>(row * 2);
         std::size_t right_index = left_index + 1;
-        set_button(left_index, left_x, y, left_column_width);
-        if (right_index < buttons_list.size()) {
-            int width_override = right_column_width;
-            if (buttons_list[right_index].action == ButtonAction::Tutorial)
-                width_override = tutorial_width;
-            set_button(right_index, right_x, y, width_override);
+        bool last_row_single = has_odd_count && right_index >= buttons_list.size() &&
+                               row == rows - 1;
+        if (last_row_single) {
+            int centered_x = width / 2 - left_column_width / 2;
+            set_button(left_index, centered_x, y, left_column_width);
+        } else {
+            set_button(left_index, left_x, y, left_column_width);
+            if (right_index < buttons_list.size()) {
+                set_button(right_index, right_x, y, right_column_width);
+            }
         }
     }
 }
