@@ -1938,6 +1938,31 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
 
         int controls_top = H - bottom_bar_height + hud_padding;
+        if (st.tutorial_mode)
+        {
+                std::array<std::string, 2> tutorial_lines{
+                        "Lorem ipsum dolor sit amet.",
+                        "Consectetur adipiscing elit."};
+                int instructions_top = controls_top;
+                int instructions_bottom = H - hud_padding;
+                int available_height = std::max(0, instructions_bottom - instructions_top);
+                int content_height = static_cast<int>(tutorial_lines.size()) * hud_line_height;
+                int text_y = instructions_top;
+                if (available_height > content_height)
+                        text_y += (available_height - content_height) / 2;
+                for (const auto &line : tutorial_lines)
+                {
+                        int line_width = CustomCharacter::text_width(line, hud_scale);
+                        int text_x = W / 2 - line_width / 2;
+                        text_x = std::max(text_x, hud_padding);
+                        CustomCharacter::draw_text(ren, line, text_x, text_y, neutral,
+                                                    hud_scale);
+                        text_y += hud_line_height;
+                }
+                SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_NONE);
+                return top_bar_height;
+        }
+
         size_t section_count = active_sections.size();
         double section_span = static_cast<double>(W) /
                               static_cast<double>(std::max<size_t>(section_count, 1));
