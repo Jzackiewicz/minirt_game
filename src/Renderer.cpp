@@ -1847,6 +1847,12 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         active_sections.push_back(0);
         }
 
+        if (st.tutorial_mode)
+        {
+                constexpr size_t kTutorialMinLines = 3;
+                max_control_lines = std::max(max_control_lines, kTutorialMinLines);
+        }
+
         const int hud_line_height = 7 * hud_scale + 4;
 
         size_t top_count = std::max(left_lines.size(), right_lines.size());
