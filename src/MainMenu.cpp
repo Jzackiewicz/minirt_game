@@ -82,26 +82,26 @@ void MainMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int 
     }
 }
 
-bool MainMenu::show(int width, int height) {
+ButtonAction MainMenu::show(int width, int height) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-        return false;
+        return ButtonAction::Quit;
     }
     SDL_Window *window = SDL_CreateWindow("MiniRT", SDL_WINDOWPOS_CENTERED,
                                           SDL_WINDOWPOS_CENTERED, width, height, 0);
     if (!window) {
         SDL_Quit();
-        return false;
+        return ButtonAction::Quit;
     }
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (!renderer) {
         SDL_DestroyWindow(window);
         SDL_Quit();
-        return false;
+        return ButtonAction::Quit;
     }
     MainMenu menu;
     ButtonAction action = menu.run(window, renderer, width, height);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    return action == ButtonAction::Play;
+    return action;
 }
