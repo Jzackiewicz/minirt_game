@@ -16,6 +16,10 @@ protected:
     int buttons_bottom_margin;
     int title_top_margin;
 
+    virtual int button_rows() const;
+    virtual void layout_buttons(std::vector<Button> &buttons, int width, int height,
+                                float scale_factor, int button_width, int button_height,
+                                int button_gap, int start_y, int center_x);
     virtual void draw_content(SDL_Renderer *renderer, int width, int height, int scale,
                               int title_scale, int title_x, int title_y, int title_height,
                               int title_gap, int buttons_start_y);
