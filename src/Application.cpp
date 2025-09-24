@@ -8,7 +8,7 @@
 
 // Launch the rendering pipeline and display the interactive window.
 void run_application(const std::string &scene_path, int width, int height,
-					 char quality)
+                                         char quality, bool tutorial_mode)
 {
 	unsigned int thread_count;
 	thread_count = std::thread::hardware_concurrency();
@@ -47,5 +47,5 @@ void run_application(const std::string &scene_path, int width, int height,
 	render_settings.threads = thread_count;
 	render_settings.downscale = downscale;
 	Renderer renderer(scene, camera);
-	renderer.render_window(materials, render_settings, scene_path);
+        renderer.render_window(materials, render_settings, scene_path, tutorial_mode);
 }

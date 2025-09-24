@@ -587,17 +587,17 @@ struct HudControlEntry
         SDL_Color bar_color;
 };
 
-bool stem_is_numbered_level(const std::string &stem)
+bool stem_matches_numbered_prefix(const std::string &stem, const std::string &prefix)
 {
-        if (stem.size() <= 6)
+        if (stem.size() <= prefix.size())
                 return false;
         std::string lowered;
         lowered.reserve(stem.size());
         std::transform(stem.begin(), stem.end(), std::back_inserter(lowered),
                        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-        if (lowered.rfind("level_", 0) != 0)
+        if (lowered.rfind(prefix, 0) != 0)
                 return false;
-        for (std::size_t i = 6; i < lowered.size(); ++i)
+        for (std::size_t i = prefix.size(); i < lowered.size(); ++i)
         {
                 if (!std::isdigit(static_cast<unsigned char>(lowered[i])))
                         return false;
@@ -605,16 +605,36 @@ bool stem_is_numbered_level(const std::string &stem)
         return true;
 }
 
-std::optional<int> level_suffix_from_stem(const std::string &stem)
+bool stem_is_numbered_level(const std::string &stem)
 {
-        if (!stem_is_numbered_level(stem))
+        return stem_matches_numbered_prefix(stem, "level_");
+}
+
+bool stem_is_tutorial_level(const std::string &stem)
+{
+        return stem_matches_numbered_prefix(stem, "tutorial_");
+}
+
+std::optional<int> suffix_from_stem(const std::string &stem, const std::string &prefix)
+{
+        if (!stem_matches_numbered_prefix(stem, prefix))
                 return std::nullopt;
         int value = 0;
-        for (std::size_t i = 6; i < stem.size(); ++i)
+        for (std::size_t i = prefix.size(); i < stem.size(); ++i)
         {
                 value = value * 10 + (stem[i] - '0');
         }
         return value;
+}
+
+std::optional<int> level_suffix_from_stem(const std::string &stem)
+{
+        return suffix_from_stem(stem, "level_");
+}
+
+std::optional<int> tutorial_suffix_from_stem(const std::string &stem)
+{
+        return suffix_from_stem(stem, "tutorial_");
 }
 
 bool path_is_toml(const std::filesystem::path &path)
@@ -633,13 +653,36 @@ bool path_is_numbered_level(const std::filesystem::path &path)
         return stem_is_numbered_level(path.stem().string());
 }
 
+bool path_is_tutorial_level(const std::filesystem::path &path)
+{
+        if (!path_is_toml(path))
+                return false;
+        return stem_is_tutorial_level(path.stem().string());
+}
+
+bool path_is_level_for_mode(const std::filesystem::path &path, bool tutorial_mode)
+{
+        return tutorial_mode ? path_is_tutorial_level(path)
+                             : path_is_numbered_level(path);
+}
+
+std::optional<int> suffix_from_path_for_mode(const std::filesystem::path &path,
+                                            bool tutorial_mode)
+{
+        std::string stem = path.stem().string();
+        return tutorial_mode ? tutorial_suffix_from_stem(stem)
+                             : level_suffix_from_stem(stem);
+}
+
 int parse_level_number_from_path(const std::string &scene_path)
 {
         namespace fs = std::filesystem;
         fs::path path(scene_path);
-        if (!path_is_numbered_level(path))
-                return 0;
         auto suffix = level_suffix_from_stem(path.stem().string());
+        if (!suffix)
+        {
+                suffix = tutorial_suffix_from_stem(path.stem().string());
+        }
         if (!suffix)
                 return 0;
         return *suffix;
@@ -652,7 +695,8 @@ std::string level_label_from_path(const std::string &scene_path)
         return path.stem().string();
 }
 
-std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::path &scene_path)
+std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::path &scene_path,
+                                                      bool tutorial_mode)
 {
         namespace fs = std::filesystem;
         fs::path directory = scene_path;
@@ -668,17 +712,18 @@ std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::pa
                         break;
                 if (!entry.is_regular_file(ec))
                         continue;
-                if (!path_is_numbered_level(entry.path()))
+                if (!path_is_level_for_mode(entry.path(), tutorial_mode))
                         continue;
                 result.push_back(fs::absolute(entry.path()));
         }
         fs::path absolute_scene = fs::absolute(scene_path);
-        if (path_is_numbered_level(absolute_scene) &&
+        if (path_is_level_for_mode(absolute_scene, tutorial_mode) &&
             std::find(result.begin(), result.end(), absolute_scene) == result.end())
                 result.push_back(absolute_scene);
-        std::sort(result.begin(), result.end(), [](const fs::path &a, const fs::path &b) {
-                auto num_a = level_suffix_from_stem(a.stem().string());
-                auto num_b = level_suffix_from_stem(b.stem().string());
+        std::sort(result.begin(), result.end(), [tutorial_mode](const fs::path &a,
+                                                                const fs::path &b) {
+                auto num_a = suffix_from_path_for_mode(a, tutorial_mode);
+                auto num_b = suffix_from_path_for_mode(b, tutorial_mode);
                 if (static_cast<bool>(num_a) != static_cast<bool>(num_b))
                         return static_cast<bool>(num_a);
                 if (num_a && num_b && *num_a != *num_b)
@@ -786,6 +831,7 @@ struct Renderer::RenderState
         int hud_focus_object = -1;
         double hud_focus_score = 0.0;
         bool quota_met = false;
+        bool tutorial_mode = false;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1174,8 +1220,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         LevelFinishedStats stats;
                         int total_numbered_levels = static_cast<int>(std::count_if(
                                 st.level_paths.begin(), st.level_paths.end(),
-                                [](const std::filesystem::path &p) {
-                                        return path_is_numbered_level(p);
+                                [&](const std::filesystem::path &p) {
+                                        return path_is_level_for_mode(p, st.tutorial_mode);
                                 }));
                         stats.total_levels = total_numbered_levels;
                         int completed_levels = 0;
@@ -1184,7 +1230,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         {
                                 for (int i = 0; i <= st.current_level_index; ++i)
                                 {
-                                        if (path_is_numbered_level(st.level_paths[i]))
+                                        if (path_is_level_for_mode(st.level_paths[i],
+                                                                   st.tutorial_mode))
                                                 ++completed_levels;
                                 }
                         }
@@ -1200,7 +1247,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 for (int i = st.current_level_index + 1;
                                      i < static_cast<int>(st.level_paths.size()); ++i)
                                 {
-                                        if (path_is_numbered_level(st.level_paths[i]))
+                                        if (path_is_level_for_mode(st.level_paths[i],
+                                                                   st.tutorial_mode))
                                         {
                                                 has_next_level = true;
                                                 break;
@@ -1221,8 +1269,9 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         auto next_it = std::find_if(
                                                 st.level_paths.begin() + st.current_level_index + 1,
                                                 st.level_paths.end(),
-                                                [](const std::filesystem::path &p) {
-                                                        return path_is_numbered_level(p);
+                                                [&](const std::filesystem::path &p) {
+                                                        return path_is_level_for_mode(p,
+                                                                                       st.tutorial_mode);
                                                 });
                                         if (next_it != st.level_paths.end())
                                         {
@@ -2236,7 +2285,8 @@ void Renderer::render_ppm(const std::string &path,
 
 void Renderer::render_window(std::vector<Material> &mats,
                                                          const RenderSettings &rset,
-                                                         const std::string &scene_path)
+                                                         const std::string &scene_path,
+                                                         bool tutorial_mode)
 {
         int W = rset.width;
         int H = rset.height;
@@ -2265,7 +2315,8 @@ void Renderer::render_window(std::vector<Material> &mats,
         RenderState st;
         std::filesystem::path absolute_scene_path = std::filesystem::absolute(scene_path);
         st.scene_path = absolute_scene_path.string();
-        st.level_paths = collect_level_paths(absolute_scene_path);
+        st.tutorial_mode = tutorial_mode;
+        st.level_paths = collect_level_paths(absolute_scene_path, st.tutorial_mode);
         st.current_level_index = level_index_for(st.level_paths, absolute_scene_path);
         st.cumulative_score = 0.0;
         st.player_name.clear();

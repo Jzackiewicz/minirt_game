@@ -25,7 +25,7 @@ class Renderer
         void render_ppm(const std::string &path, const std::vector<Material> &mats,
                                         const RenderSettings &rset);
         void render_window(std::vector<Material> &mats, const RenderSettings &rset,
-                                           const std::string &scene_path);
+                                           const std::string &scene_path, bool tutorial_mode);
         private:
         struct RenderState;
         void mark_scene_dirty(RenderState &st);

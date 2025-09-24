@@ -13,5 +13,5 @@ protected:
 
 public:
     MainMenu();
-    static bool show(int width, int height);
+    static ButtonAction show(int width, int height);
 };
