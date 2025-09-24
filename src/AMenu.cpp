@@ -82,11 +82,8 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
             if (start_y < min_start)
                 start_y = min_start;
         }
-        for (std::size_t i = 0; i < buttons.size(); ++i) {
-            buttons[i].rect = {center_x,
-                               start_y + static_cast<int>(i) * (button_height + button_gap),
-                               button_width, button_height};
-        }
+        layout_buttons(width, height, scale, button_width, button_height, button_gap,
+                       start_y, center_x);
 
         for (std::size_t i = 0; i < corner_buttons.size(); ++i) {
             int offset = static_cast<int>(i) * (corner_button_height + corner_margin);
@@ -136,6 +133,8 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                     } else if (btn.action == ButtonAction::HowToPlay) {
                         present_background();
                         HowToPlayMenu::show(window, renderer, width, height, transparent);
+                    } else if (btn.action == ButtonAction::Tutorial) {
+                        // Tutorial menu not implemented yet.
                     } else {
                         result = btn.action;
                         running = false;
@@ -245,3 +244,12 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
 }
 
 void AMenu::draw_content(SDL_Renderer *, int, int, int, int, int, int, int, int, int) {}
+
+void AMenu::layout_buttons(int, int, int, int button_width, int button_height, int button_gap,
+                           int start_y, int center_x) {
+    for (std::size_t i = 0; i < buttons.size(); ++i) {
+        buttons[i].rect = {center_x,
+                           start_y + static_cast<int>(i) * (button_height + button_gap),
+                           button_width, button_height};
+    }
+}
