@@ -5,14 +5,14 @@
 MainMenu::MainMenu() : AMenu("MINIRT THE GAME") {
     buttons.push_back(Button{"PLAY", ButtonAction::Play, MenuColors::PastelGreen});
     buttons.push_back(
-        Button{"Tutorial", ButtonAction::Tutorial, MenuColors::PastelPurple});
+        Button{"TUTORIAL", ButtonAction::Tutorial, MenuColors::PastelPurple});
     buttons.push_back(
-        Button{"How to play", ButtonAction::HowToPlay, MenuColors::PastelGray});
+        Button{"HOW TO PLAY", ButtonAction::HowToPlay, MenuColors::PastelGray});
     buttons.push_back(
-        Button{"Leaderboard", ButtonAction::Leaderboard, MenuColors::PastelBlue});
+        Button{"LEADERBOARD", ButtonAction::Leaderboard, MenuColors::PastelBlue});
     buttons.push_back(
-        Button{"Settings", ButtonAction::Settings, MenuColors::PastelYellow});
-    buttons.push_back(Button{"Quit", ButtonAction::Quit, MenuColors::PastelRed});
+        Button{"SETTINGS", ButtonAction::Settings, MenuColors::PastelYellow});
+    buttons.push_back(Button{"QUIT", ButtonAction::Quit, MenuColors::PastelRed});
 }
 
 int MainMenu::button_rows() const {
@@ -43,10 +43,6 @@ void MainMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int 
     int left_x = width / 2 - total_width / 2;
     int right_x = left_x + left_column_width + column_gap;
     int vertical_gap = button_gap;
-    int tutorial_width = button_width * 3 / 4;
-    if (tutorial_width < 1)
-        tutorial_width = 1;
-
     auto set_button = [&](std::size_t index, int x, int y, int w) {
         if (index >= buttons_list.size())
             return;
@@ -59,13 +55,7 @@ void MainMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int 
         std::size_t right_index = left_index + 1;
         set_button(left_index, left_x, y, left_column_width);
         if (right_index < buttons_list.size()) {
-            int width_for_right = right_column_width;
-            int x_for_right = right_x;
-            if (right_index == 1) {
-                width_for_right = tutorial_width;
-                x_for_right += (right_column_width - width_for_right) / 2;
-            }
-            set_button(right_index, x_for_right, y, width_for_right);
+            set_button(right_index, right_x, y, right_column_width);
         }
     }
 }
