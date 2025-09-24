@@ -9,6 +9,23 @@ AMenu::AMenu(const std::string &t)
     : title(t), buttons_align_bottom(false), buttons_bottom_margin(-1),
       title_top_margin(-1) {}
 
+int AMenu::button_rows() const { return static_cast<int>(buttons.size()); }
+
+void AMenu::adjust_button_metrics(float, int &, int &, int &) const {}
+
+void AMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int height,
+                           float scale_factor, int button_width, int button_height,
+                           int button_gap, int start_y, int center_x) {
+    (void)width;
+    (void)height;
+    (void)scale_factor;
+    for (std::size_t i = 0; i < buttons_list.size(); ++i) {
+        buttons_list[i].rect = {center_x,
+                                start_y + static_cast<int>(i) * (button_height + button_gap),
+                                button_width, button_height};
+    }
+}
+
 ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
                        bool transparent) {
     bool running = true;
@@ -35,6 +52,13 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         int button_width = static_cast<int>(300 * scale_factor);
         int button_height = static_cast<int>(100 * scale_factor);
         int button_gap = static_cast<int>(10 * scale_factor);
+        adjust_button_metrics(scale_factor, button_width, button_height, button_gap);
+        if (button_width < 1)
+            button_width = 1;
+        if (button_height < 1)
+            button_height = 1;
+        if (button_gap < 0)
+            button_gap = 0;
         int scale = static_cast<int>(4 * scale_factor);
         if (scale < 1)
             scale = 1;
@@ -55,9 +79,9 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
             corner_margin = 10;
 
         int total_buttons_height = 0;
-        if (!buttons.empty()) {
-            total_buttons_height = static_cast<int>(buttons.size()) * button_height +
-                                   (static_cast<int>(buttons.size()) - 1) * button_gap;
+        int rows = button_rows();
+        if (rows > 0) {
+            total_buttons_height = rows * button_height + (rows - 1) * button_gap;
         }
         int title_height = 7 * title_scale;
         int top_margin = (height - title_height - title_gap - total_buttons_height) / 2;
@@ -82,11 +106,8 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
             if (start_y < min_start)
                 start_y = min_start;
         }
-        for (std::size_t i = 0; i < buttons.size(); ++i) {
-            buttons[i].rect = {center_x,
-                               start_y + static_cast<int>(i) * (button_height + button_gap),
-                               button_width, button_height};
-        }
+        layout_buttons(buttons, width, height, scale_factor, button_width, button_height,
+                       button_gap, start_y, center_x);
 
         for (std::size_t i = 0; i < corner_buttons.size(); ++i) {
             int offset = static_cast<int>(i) * (corner_button_height + corner_margin);
@@ -136,6 +157,8 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                     } else if (btn.action == ButtonAction::HowToPlay) {
                         present_background();
                         HowToPlayMenu::show(window, renderer, width, height, transparent);
+                    } else if (btn.action == ButtonAction::Tutorial) {
+                        // Tutorial button is a placeholder and does not trigger an action yet.
                     } else {
                         result = btn.action;
                         running = false;
@@ -242,6 +265,43 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
     if (background)
         SDL_DestroyTexture(background);
     return result;
+}
+
+void AMenu::layout_two_column_grid(std::vector<Button> &buttons_list, int width,
+                                   int button_height, int vertical_gap, int start_y,
+                                   int left_column_width, int right_column_width,
+                                   int column_gap,
+                                   const std::function<void(std::size_t, SDL_Rect &)> &adjust_rect) {
+    if (buttons_list.empty())
+        return;
+    if (vertical_gap < 0)
+        vertical_gap = 0;
+    if (column_gap < 0)
+        column_gap = 0;
+    int rows = static_cast<int>((buttons_list.size() + 1) / 2);
+    if (rows <= 0)
+        rows = 1;
+    int total_width = left_column_width + column_gap + right_column_width;
+    int left_x = width / 2 - total_width / 2;
+    int right_x = left_x + left_column_width + column_gap;
+
+    for (int row = 0; row < rows; ++row) {
+        int y = start_y + row * (button_height + vertical_gap);
+        std::size_t left_index = static_cast<std::size_t>(row * 2);
+        std::size_t right_index = left_index + 1;
+        if (left_index < buttons_list.size()) {
+            SDL_Rect rect{left_x, y, left_column_width, button_height};
+            if (adjust_rect)
+                adjust_rect(left_index, rect);
+            buttons_list[left_index].rect = rect;
+        }
+        if (right_index < buttons_list.size()) {
+            SDL_Rect rect{right_x, y, right_column_width, button_height};
+            if (adjust_rect)
+                adjust_rect(right_index, rect);
+            buttons_list[right_index].rect = rect;
+        }
+    }
 }
 
 void AMenu::draw_content(SDL_Renderer *, int, int, int, int, int, int, int, int, int) {}

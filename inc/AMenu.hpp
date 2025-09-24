@@ -1,5 +1,6 @@
 #pragma once
 #include <SDL.h>
+#include <functional>
 #include <string>
 #include <vector>
 #include "Button.hpp"
@@ -16,6 +17,17 @@ protected:
     int buttons_bottom_margin;
     int title_top_margin;
 
+    virtual int button_rows() const;
+    virtual void adjust_button_metrics(float scale_factor, int &button_width,
+                                       int &button_height, int &button_gap) const;
+    virtual void layout_buttons(std::vector<Button> &buttons, int width, int height,
+                                float scale_factor, int button_width, int button_height,
+                                int button_gap, int start_y, int center_x);
+    void layout_two_column_grid(std::vector<Button> &buttons, int width,
+                                int button_height, int vertical_gap, int start_y,
+                                int left_column_width, int right_column_width,
+                                int column_gap,
+                                const std::function<void(std::size_t, SDL_Rect &)> &adjust_rect = {});
     virtual void draw_content(SDL_Renderer *renderer, int width, int height, int scale,
                               int title_scale, int title_x, int title_y, int title_height,
                               int title_gap, int buttons_start_y);
