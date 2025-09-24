@@ -54,11 +54,7 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         if (corner_margin < 10)
             corner_margin = 10;
 
-        int total_buttons_height = 0;
-        if (!buttons.empty()) {
-            total_buttons_height = static_cast<int>(buttons.size()) * button_height +
-                                   (static_cast<int>(buttons.size()) - 1) * button_gap;
-        }
+        int total_buttons_height = compute_total_buttons_height(button_height, button_gap);
         int title_height = 7 * title_scale;
         int top_margin = (height - title_height - title_gap - total_buttons_height) / 2;
         if (title_top_margin >= 0) {
@@ -70,7 +66,6 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         int title_x = width / 2 - CustomCharacter::text_width(title, title_scale) / 2;
         int title_y = top_margin;
 
-        int center_x = width / 2 - button_width / 2;
         int bottom_margin = top_margin;
         if (buttons_bottom_margin >= 0) {
             bottom_margin = static_cast<int>(buttons_bottom_margin * scale_factor);
@@ -82,11 +77,7 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
             if (start_y < min_start)
                 start_y = min_start;
         }
-        for (std::size_t i = 0; i < buttons.size(); ++i) {
-            buttons[i].rect = {center_x,
-                               start_y + static_cast<int>(i) * (button_height + button_gap),
-                               button_width, button_height};
-        }
+        layout_buttons(width, height, start_y, button_width, button_height, button_gap);
 
         for (std::size_t i = 0; i < corner_buttons.size(); ++i) {
             int offset = static_cast<int>(i) * (corner_button_height + corner_margin);
@@ -136,7 +127,7 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                     } else if (btn.action == ButtonAction::HowToPlay) {
                         present_background();
                         HowToPlayMenu::show(window, renderer, width, height, transparent);
-                    } else {
+                    } else if (btn.action != ButtonAction::None) {
                         result = btn.action;
                         running = false;
                     }
@@ -242,6 +233,23 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
     if (background)
         SDL_DestroyTexture(background);
     return result;
+}
+
+int AMenu::compute_total_buttons_height(int button_height, int button_gap) const {
+    if (buttons.empty())
+        return 0;
+    int count = static_cast<int>(buttons.size());
+    return count * button_height + (count - 1) * button_gap;
+}
+
+void AMenu::layout_buttons(int width, int, int start_y, int button_width, int button_height,
+                           int button_gap) {
+    int center_x = width / 2 - button_width / 2;
+    for (std::size_t i = 0; i < buttons.size(); ++i) {
+        buttons[i].rect = {center_x,
+                           start_y + static_cast<int>(i) * (button_height + button_gap),
+                           button_width, button_height};
+    }
 }
 
 void AMenu::draw_content(SDL_Renderer *, int, int, int, int, int, int, int, int, int) {}

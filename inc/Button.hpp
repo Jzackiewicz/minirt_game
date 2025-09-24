@@ -21,6 +21,7 @@ constexpr SDL_Color PastelBlue{96, 128, 255, 255};
 constexpr SDL_Color PastelYellow{255, 224, 128, 255};
 constexpr SDL_Color PastelRed{255, 96, 96, 255};
 constexpr SDL_Color PastelGray{176, 176, 176, 255};
+constexpr SDL_Color PastelPurple{208, 160, 255, 255};
 } // namespace MenuColors
 
 // Represents an interactive button in a menu

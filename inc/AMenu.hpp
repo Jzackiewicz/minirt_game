@@ -19,6 +19,9 @@ protected:
     virtual void draw_content(SDL_Renderer *renderer, int width, int height, int scale,
                               int title_scale, int title_x, int title_y, int title_height,
                               int title_gap, int buttons_start_y);
+    virtual int compute_total_buttons_height(int button_height, int button_gap) const;
+    virtual void layout_buttons(int width, int height, int start_y, int button_width,
+                                int button_height, int button_gap);
 
 public:
     explicit AMenu(const std::string &t);
