@@ -158,7 +158,8 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
                         present_background();
                         HowToPlayMenu::show(window, renderer, width, height, transparent);
                     } else if (btn.action == ButtonAction::Tutorial) {
-                        // Tutorial button is a placeholder and does not trigger an action yet.
+                        result = btn.action;
+                        running = false;
                     } else {
                         result = btn.action;
                         running = false;
