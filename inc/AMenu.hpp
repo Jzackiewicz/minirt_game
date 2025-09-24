@@ -20,6 +20,8 @@ protected:
     virtual void layout_buttons(std::vector<Button> &buttons, int width, int height,
                                 float scale_factor, int button_width, int button_height,
                                 int button_gap, int start_y, int center_x);
+    virtual void adjust_layout_metrics(float scale_factor, int &button_width,
+                                       int &button_height, int &button_gap);
     virtual void draw_content(SDL_Renderer *renderer, int width, int height, int scale,
                               int title_scale, int title_x, int title_y, int title_height,
                               int title_gap, int buttons_start_y);

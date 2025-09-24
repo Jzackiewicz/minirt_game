@@ -7,11 +7,11 @@ MainMenu::MainMenu() : AMenu("MINIRT THE GAME") {
     buttons.push_back(
         Button{"TUTORIAL", ButtonAction::Tutorial, MenuColors::PastelPurple});
     buttons.push_back(
-        Button{"HOW TO PLAY", ButtonAction::HowToPlay, MenuColors::PastelGray});
+        Button{"HOW TO PLAY", ButtonAction::HowToPlay, MenuColors::PastelYellow});
     buttons.push_back(
         Button{"LEADERBOARD", ButtonAction::Leaderboard, MenuColors::PastelBlue});
     buttons.push_back(
-        Button{"SETTINGS", ButtonAction::Settings, MenuColors::PastelYellow});
+        Button{"SETTINGS", ButtonAction::Settings, MenuColors::PastelGray});
     buttons.push_back(Button{"QUIT", ButtonAction::Quit, MenuColors::PastelRed});
 }
 
@@ -19,6 +19,20 @@ int MainMenu::button_rows() const {
     if (buttons.empty())
         return 0;
     return static_cast<int>((buttons.size() + 1) / 2);
+}
+
+void MainMenu::adjust_layout_metrics(float scale_factor, int &button_width,
+                                     int &button_height, int &button_gap) {
+    (void)scale_factor;
+    button_width = static_cast<int>(button_width * 0.9f);
+    button_height = static_cast<int>(button_height * 0.85f);
+    button_gap = static_cast<int>(button_gap * 0.7f);
+    if (button_width < 200)
+        button_width = 200;
+    if (button_height < 70)
+        button_height = 70;
+    if (button_gap < 6)
+        button_gap = 6;
 }
 
 void MainMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int height,
@@ -36,10 +50,14 @@ void MainMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int 
     int rows = button_rows();
     int left_column_width = button_width;
     int right_column_width = button_width;
-    int column_gap = std::max(button_gap, button_width / 5);
+    int column_gap = std::max(button_gap, button_width / 10);
     if (column_gap < 1)
         column_gap = 1;
-    int total_width = left_column_width + column_gap + right_column_width;
+    int tutorial_width = static_cast<int>(left_column_width * 0.75f);
+    if (tutorial_width < 1)
+        tutorial_width = 1;
+    int max_right_width = std::max(right_column_width, tutorial_width);
+    int total_width = left_column_width + column_gap + max_right_width;
     int left_x = width / 2 - total_width / 2;
     int right_x = left_x + left_column_width + column_gap;
     int vertical_gap = button_gap;
@@ -55,7 +73,10 @@ void MainMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int 
         std::size_t right_index = left_index + 1;
         set_button(left_index, left_x, y, left_column_width);
         if (right_index < buttons_list.size()) {
-            set_button(right_index, right_x, y, right_column_width);
+            int width_override = right_column_width;
+            if (buttons_list[right_index].action == ButtonAction::Tutorial)
+                width_override = tutorial_width;
+            set_button(right_index, right_x, y, width_override);
         }
     }
 }

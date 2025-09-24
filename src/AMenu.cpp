@@ -24,6 +24,14 @@ void AMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int hei
     }
 }
 
+void AMenu::adjust_layout_metrics(float scale_factor, int &button_width, int &button_height,
+                                  int &button_gap) {
+    (void)scale_factor;
+    (void)button_width;
+    (void)button_height;
+    (void)button_gap;
+}
+
 ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, int height,
                        bool transparent) {
     bool running = true;
@@ -50,6 +58,7 @@ ButtonAction AMenu::run(SDL_Window *window, SDL_Renderer *renderer, int width, i
         int button_width = static_cast<int>(300 * scale_factor);
         int button_height = static_cast<int>(100 * scale_factor);
         int button_gap = static_cast<int>(10 * scale_factor);
+        adjust_layout_metrics(scale_factor, button_width, button_height, button_gap);
         int scale = static_cast<int>(4 * scale_factor);
         if (scale < 1)
             scale = 1;
