@@ -6,19 +6,18 @@ PauseMenu::PauseMenu() : AMenu("PAUSE") {
     buttons.push_back(Button{"RESUME", ButtonAction::Resume, MenuColors::PastelGreen});
     buttons.push_back(
         Button{"HOW TO PLAY", ButtonAction::HowToPlay, MenuColors::PastelYellow});
+    buttons.push_back(Button{"SETTINGS", ButtonAction::Settings, MenuColors::PastelGray});
     buttons.push_back(
         Button{"LEADERBOARD", ButtonAction::Leaderboard, MenuColors::PastelBlue});
-    buttons.push_back(Button{"SETTINGS", ButtonAction::Settings, MenuColors::PastelGray});
+    buttons.push_back(
+        Button{"BACK TO MENU", ButtonAction::BackToMenu, MenuColors::PastelPurple});
     buttons.push_back(Button{"QUIT", ButtonAction::Quit, MenuColors::PastelRed});
 }
 
 int PauseMenu::button_rows() const {
     if (buttons.empty())
         return 0;
-    if (buttons.size() == 1)
-        return 1;
-    int remaining = static_cast<int>(buttons.size()) - 1;
-    return 1 + (remaining + 1) / 2;
+    return static_cast<int>((buttons.size() + 1) / 2);
 }
 
 void PauseMenu::adjust_layout_metrics(float scale_factor, int &button_width,
@@ -47,6 +46,7 @@ void PauseMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int
         return;
     }
 
+    int rows = button_rows();
     int left_column_width = button_width;
     int right_column_width = button_width;
     int column_gap = std::max(button_gap, button_width / 10);
@@ -62,24 +62,27 @@ void PauseMenu::layout_buttons(std::vector<Button> &buttons_list, int width, int
         buttons_list[index].rect = {x, y, w, button_height};
     };
 
-    int current_y = start_y;
-    set_button(0, left_x, current_y, total_width);
-    current_y += button_height + vertical_gap;
-
-    std::size_t index = 1;
-    while (index < buttons_list.size()) {
-        set_button(index, left_x, current_y, left_column_width);
-        ++index;
-        if (index < buttons_list.size()) {
-            set_button(index, right_x, current_y, right_column_width);
-            ++index;
+    bool has_odd_count = buttons_list.size() % 2 != 0;
+    for (int row = 0; row < rows; ++row) {
+        int y = start_y + row * (button_height + vertical_gap);
+        std::size_t left_index = static_cast<std::size_t>(row * 2);
+        std::size_t right_index = left_index + 1;
+        bool last_row_single = has_odd_count && right_index >= buttons_list.size() &&
+                               row == rows - 1;
+        if (last_row_single) {
+            int centered_x = width / 2 - left_column_width / 2;
+            set_button(left_index, centered_x, y, left_column_width);
+        } else {
+            set_button(left_index, left_x, y, left_column_width);
+            if (right_index < buttons_list.size()) {
+                set_button(right_index, right_x, y, right_column_width);
+            }
         }
-        current_y += button_height + vertical_gap;
     }
 }
 
-bool PauseMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width, int height) {
+ButtonAction PauseMenu::show(SDL_Window *window, SDL_Renderer *renderer, int width,
+                             int height) {
     PauseMenu menu;
-    ButtonAction action = menu.run(window, renderer, width, height, true);
-    return action == ButtonAction::Resume;
+    return menu.run(window, renderer, width, height, true);
 }
