@@ -2385,6 +2385,26 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         int bar_top = H - bottom_bar_height + bar_vertical_margin;
         int bar_height = std::max(0, bottom_bar_height - 2 * bar_vertical_margin);
         SDL_Color separator_color{255, 255, 255, 96};
+        auto draw_quoted_text = [&](const std::string &text, int x, int y,
+                                    SDL_Color base_color, SDL_Color quote_color,
+                                    bool &quote_active) {
+                int pen_x = x;
+                for (char ch : text)
+                {
+                        if (ch == '\'')
+                        {
+                                CustomCharacter::draw_character(ren, ch, pen_x, y, base_color,
+                                                                hud_scale);
+                                pen_x += (5 + 1) * hud_scale;
+                                quote_active = !quote_active;
+                                continue;
+                        }
+                        SDL_Color color = quote_active ? quote_color : base_color;
+                        CustomCharacter::draw_character(ren, ch, pen_x, y, color, hud_scale);
+                        pen_x += (5 + 1) * hud_scale;
+                }
+        };
+
         for (size_t pos = 0; pos < active_sections.size(); ++pos)
         {
                 size_t i = active_sections[pos];
@@ -2417,6 +2437,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         if (st.tutorial_mode)
                         {
                                 int text_y = controls_top;
+                                bool quote_active = false;
                                 if (!lines.empty())
                                 {
                                         int available_height = std::max(0, bottom_bar_height -
@@ -2435,8 +2456,8 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                         }
                                         int line_width = CustomCharacter::text_width(line, hud_scale);
                                         int text_x = compute_text_x(line_width);
-                                        CustomCharacter::draw_text(ren, line, text_x, text_y,
-                                                                  entry.text_color, hud_scale);
+                                        draw_quoted_text(line, text_x, text_y, entry.text_color,
+                                                         danger, quote_active);
                                         text_y += hud_line_height;
                                 }
                         }
