@@ -12,6 +12,7 @@ enum class ButtonAction {
     Leaderboard,
     HowToPlay,
     Tutorial,
+    BackToMenu,
     Back,
     Quit
 };

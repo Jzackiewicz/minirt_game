@@ -16,5 +16,6 @@ protected:
 
 public:
     PauseMenu();
-    static bool show(SDL_Window *window, SDL_Renderer *renderer, int width, int height);
+    static ButtonAction show(SDL_Window *window, SDL_Renderer *renderer, int width,
+                             int height);
 };

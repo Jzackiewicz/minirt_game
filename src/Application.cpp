@@ -7,8 +7,8 @@
 #include <thread>
 
 // Launch the rendering pipeline and display the interactive window.
-void run_application(const std::string &scene_path, int width, int height,
-					 char quality)
+bool run_application(const std::string &scene_path, int width, int height,
+                                        char quality, bool tutorial_mode)
 {
 	unsigned int thread_count;
 	thread_count = std::thread::hardware_concurrency();
@@ -31,11 +31,11 @@ void run_application(const std::string &scene_path, int width, int height,
 				  static_cast<double>(width) / static_cast<double>(height));
 	bool parsed;
 	parsed = Parser::parse_rt_file(scene_path, scene, camera, width, height);
-	if (!parsed)
-	{
-		std::cerr << "Failed to parse scene: " << scene_path << "\n";
-		return;
-	}
+        if (!parsed)
+        {
+                std::cerr << "Failed to parse scene: " << scene_path << "\n";
+                return false;
+        }
 	std::vector<Material> materials;
 	materials = Parser::get_materials();
 
@@ -47,5 +47,6 @@ void run_application(const std::string &scene_path, int width, int height,
 	render_settings.threads = thread_count;
 	render_settings.downscale = downscale;
 	Renderer renderer(scene, camera);
-	renderer.render_window(materials, render_settings, scene_path);
+        return renderer.render_window(materials, render_settings, scene_path,
+                                                              tutorial_mode);
 }

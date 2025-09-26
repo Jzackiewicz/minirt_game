@@ -587,17 +587,17 @@ struct HudControlEntry
         SDL_Color bar_color;
 };
 
-bool stem_is_numbered_level(const std::string &stem)
+bool stem_matches_numbered_prefix(const std::string &stem, const std::string &prefix)
 {
-        if (stem.size() <= 6)
+        if (stem.size() <= prefix.size())
                 return false;
         std::string lowered;
         lowered.reserve(stem.size());
         std::transform(stem.begin(), stem.end(), std::back_inserter(lowered),
                        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-        if (lowered.rfind("level_", 0) != 0)
+        if (lowered.rfind(prefix, 0) != 0)
                 return false;
-        for (std::size_t i = 6; i < lowered.size(); ++i)
+        for (std::size_t i = prefix.size(); i < lowered.size(); ++i)
         {
                 if (!std::isdigit(static_cast<unsigned char>(lowered[i])))
                         return false;
@@ -605,16 +605,36 @@ bool stem_is_numbered_level(const std::string &stem)
         return true;
 }
 
-std::optional<int> level_suffix_from_stem(const std::string &stem)
+bool stem_is_numbered_level(const std::string &stem)
 {
-        if (!stem_is_numbered_level(stem))
+        return stem_matches_numbered_prefix(stem, "level_");
+}
+
+bool stem_is_tutorial_level(const std::string &stem)
+{
+        return stem_matches_numbered_prefix(stem, "tutorial_");
+}
+
+std::optional<int> suffix_from_stem(const std::string &stem, const std::string &prefix)
+{
+        if (!stem_matches_numbered_prefix(stem, prefix))
                 return std::nullopt;
         int value = 0;
-        for (std::size_t i = 6; i < stem.size(); ++i)
+        for (std::size_t i = prefix.size(); i < stem.size(); ++i)
         {
                 value = value * 10 + (stem[i] - '0');
         }
         return value;
+}
+
+std::optional<int> level_suffix_from_stem(const std::string &stem)
+{
+        return suffix_from_stem(stem, "level_");
+}
+
+std::optional<int> tutorial_suffix_from_stem(const std::string &stem)
+{
+        return suffix_from_stem(stem, "tutorial_");
 }
 
 bool path_is_toml(const std::filesystem::path &path)
@@ -633,13 +653,36 @@ bool path_is_numbered_level(const std::filesystem::path &path)
         return stem_is_numbered_level(path.stem().string());
 }
 
+bool path_is_tutorial_level(const std::filesystem::path &path)
+{
+        if (!path_is_toml(path))
+                return false;
+        return stem_is_tutorial_level(path.stem().string());
+}
+
+bool path_is_level_for_mode(const std::filesystem::path &path, bool tutorial_mode)
+{
+        return tutorial_mode ? path_is_tutorial_level(path)
+                             : path_is_numbered_level(path);
+}
+
+std::optional<int> suffix_from_path_for_mode(const std::filesystem::path &path,
+                                            bool tutorial_mode)
+{
+        std::string stem = path.stem().string();
+        return tutorial_mode ? tutorial_suffix_from_stem(stem)
+                             : level_suffix_from_stem(stem);
+}
+
 int parse_level_number_from_path(const std::string &scene_path)
 {
         namespace fs = std::filesystem;
         fs::path path(scene_path);
-        if (!path_is_numbered_level(path))
-                return 0;
         auto suffix = level_suffix_from_stem(path.stem().string());
+        if (!suffix)
+        {
+                suffix = tutorial_suffix_from_stem(path.stem().string());
+        }
         if (!suffix)
                 return 0;
         return *suffix;
@@ -652,7 +695,8 @@ std::string level_label_from_path(const std::string &scene_path)
         return path.stem().string();
 }
 
-std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::path &scene_path)
+std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::path &scene_path,
+                                                      bool tutorial_mode)
 {
         namespace fs = std::filesystem;
         fs::path directory = scene_path;
@@ -668,17 +712,18 @@ std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::pa
                         break;
                 if (!entry.is_regular_file(ec))
                         continue;
-                if (!path_is_numbered_level(entry.path()))
+                if (!path_is_level_for_mode(entry.path(), tutorial_mode))
                         continue;
                 result.push_back(fs::absolute(entry.path()));
         }
         fs::path absolute_scene = fs::absolute(scene_path);
-        if (path_is_numbered_level(absolute_scene) &&
+        if (path_is_level_for_mode(absolute_scene, tutorial_mode) &&
             std::find(result.begin(), result.end(), absolute_scene) == result.end())
                 result.push_back(absolute_scene);
-        std::sort(result.begin(), result.end(), [](const fs::path &a, const fs::path &b) {
-                auto num_a = level_suffix_from_stem(a.stem().string());
-                auto num_b = level_suffix_from_stem(b.stem().string());
+        std::sort(result.begin(), result.end(), [tutorial_mode](const fs::path &a,
+                                                                const fs::path &b) {
+                auto num_a = suffix_from_path_for_mode(a, tutorial_mode);
+                auto num_b = suffix_from_path_for_mode(b, tutorial_mode);
                 if (static_cast<bool>(num_a) != static_cast<bool>(num_b))
                         return static_cast<bool>(num_a);
                 if (num_a && num_b && *num_a != *num_b)
@@ -762,6 +807,7 @@ Renderer::Renderer(Scene &s, Camera &c) : scene(s), cam(c) {}
 struct Renderer::RenderState
 {
         bool running = true;
+        bool return_to_menu = false;
         bool focused = false;
         bool edit_mode = false;
         bool rotating = false;
@@ -786,6 +832,7 @@ struct Renderer::RenderState
         int hud_focus_object = -1;
         double hud_focus_score = 0.0;
         bool quota_met = false;
+        bool tutorial_mode = false;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1174,8 +1221,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         LevelFinishedStats stats;
                         int total_numbered_levels = static_cast<int>(std::count_if(
                                 st.level_paths.begin(), st.level_paths.end(),
-                                [](const std::filesystem::path &p) {
-                                        return path_is_numbered_level(p);
+                                [&](const std::filesystem::path &p) {
+                                        return path_is_level_for_mode(p, st.tutorial_mode);
                                 }));
                         stats.total_levels = total_numbered_levels;
                         int completed_levels = 0;
@@ -1184,7 +1231,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         {
                                 for (int i = 0; i <= st.current_level_index; ++i)
                                 {
-                                        if (path_is_numbered_level(st.level_paths[i]))
+                                        if (path_is_level_for_mode(st.level_paths[i],
+                                                                   st.tutorial_mode))
                                                 ++completed_levels;
                                 }
                         }
@@ -1200,7 +1248,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 for (int i = st.current_level_index + 1;
                                      i < static_cast<int>(st.level_paths.size()); ++i)
                                 {
-                                        if (path_is_numbered_level(st.level_paths[i]))
+                                        if (path_is_level_for_mode(st.level_paths[i],
+                                                                   st.tutorial_mode))
                                         {
                                                 has_next_level = true;
                                                 break;
@@ -1221,8 +1270,9 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         auto next_it = std::find_if(
                                                 st.level_paths.begin() + st.current_level_index + 1,
                                                 st.level_paths.end(),
-                                                [](const std::filesystem::path &p) {
-                                                        return path_is_numbered_level(p);
+                                                [&](const std::filesystem::path &p) {
+                                                        return path_is_level_for_mode(p,
+                                                                                       st.tutorial_mode);
                                                 });
                                         if (next_it != st.level_paths.end())
                                         {
@@ -1295,8 +1345,9 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         int current_w = W;
                         int current_h = H;
                         SDL_GetWindowSize(win, &current_w, &current_h);
-                        bool resume = PauseMenu::show(win, ren, current_w, current_h);
-                        if (resume)
+                        ButtonAction action =
+                                PauseMenu::show(win, ren, current_w, current_h);
+                        if (action == ButtonAction::Resume)
                         {
                                 st.focused = true;
                                 SDL_SetRelativeMouseMode(SDL_TRUE);
@@ -1304,7 +1355,12 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 SDL_SetWindowGrab(win, SDL_TRUE);
                                 SDL_WarpMouseInWindow(win, W / 2, H / 2);
                         }
-                        else
+                        else if (action == ButtonAction::BackToMenu)
+                        {
+                                st.running = false;
+                                st.return_to_menu = true;
+                        }
+                        else if (action == ButtonAction::Quit)
                         {
                                 st.running = false;
                         }
@@ -1657,6 +1713,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
 
         constexpr size_t kControlSections = 5;
+        constexpr size_t kTutorialMinControlLines = 3;
         std::array<std::optional<HudControlEntry>, kControlSections> control_sections;
         control_sections.fill(std::nullopt);
         const SDL_Color bar_neutral{72, 72, 72, 220};
@@ -1676,61 +1733,70 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         const size_t slot_secondary = 3;
         const size_t slot_pause = 4;
 
-        set_control(slot_pause, "PAUSE\nESC", neutral);
-
-        if (!st.focused)
+        if (st.tutorial_mode)
         {
-                set_control(slot_move, "FOCUS LOST\nCLICK WINDOW", warning);
-                set_control(slot_rotate, "RESUME CONTROL\nCLICK", neutral);
+                set_control(slot_move,
+                            "Lorem ipsum dolor sit amet.\nConsectetur adipiscing elit.",
+                            neutral);
         }
-        else if (st.edit_mode)
+        else
         {
-                std::shared_ptr<Hittable> selected_obj;
-                if (st.selected_obj >= 0 &&
-                    st.selected_obj < static_cast<int>(scene.objects.size()))
-                        selected_obj = scene.objects[st.selected_obj];
+                set_control(slot_pause, "PAUSE\nESC", neutral);
 
-                if (selected_obj)
+                if (!st.focused)
                 {
-                        bool can_move = !selected_obj->is_beam() &&
-                                        (g_developer_mode || selected_obj->movable);
-                        bool can_rotate = g_developer_mode || selected_obj->rotatable;
+                        set_control(slot_move, "FOCUS LOST\nCLICK WINDOW", warning);
+                        set_control(slot_rotate, "RESUME CONTROL\nCLICK", neutral);
+                }
+                else if (st.edit_mode)
+                {
+                        std::shared_ptr<Hittable> selected_obj;
+                        if (st.selected_obj >= 0 &&
+                            st.selected_obj < static_cast<int>(scene.objects.size()))
+                                selected_obj = scene.objects[st.selected_obj];
 
-                        if (can_move)
-                                set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
-                        if (can_rotate)
-                                set_control(slot_rotate, "ROTATE\nHOLD RBM\nQ/E", neutral);
-
-                        set_control(slot_primary, "PLACE\nLBM", accent);
-                        if (g_developer_mode)
+                        if (selected_obj)
                         {
-                                std::string dev_text =
-                                        "DEV TOOLS\nRESIZE - SCROLL\nDELETE - MMB";
-                                set_control(slot_secondary, dev_text, danger);
+                                bool can_move = !selected_obj->is_beam() &&
+                                                (g_developer_mode || selected_obj->movable);
+                                bool can_rotate = g_developer_mode || selected_obj->rotatable;
+
+                                if (can_move)
+                                        set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
+                                if (can_rotate)
+                                        set_control(slot_rotate, "ROTATE\nHOLD RBM\nQ/E", neutral);
+
+                                set_control(slot_primary, "PLACE\nLBM", accent);
+                                if (g_developer_mode)
+                                {
+                                        std::string dev_text =
+                                                "DEV TOOLS\nRESIZE - SCROLL\nDELETE - MMB";
+                                        set_control(slot_secondary, dev_text, danger);
+                                }
+                        }
+                        else
+                        {
+                                set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
+                                set_control(slot_primary, "PLACE\nLBM", accent);
                         }
                 }
                 else
                 {
                         set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
-                        set_control(slot_primary, "PLACE\nLBM", accent);
-                }
-        }
-        else
-        {
-                set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
 
-                bool show_grab = false;
-                if (focus_obj)
-                {
-                        bool grabbable = !focus_obj->is_beam() &&
-                                         (g_developer_mode || focus_obj->movable ||
-                                          focus_obj->rotatable);
-                        show_grab = grabbable;
-                }
+                        bool show_grab = false;
+                        if (focus_obj)
+                        {
+                                bool grabbable = !focus_obj->is_beam() &&
+                                                 (g_developer_mode || focus_obj->movable ||
+                                                  focus_obj->rotatable);
+                                show_grab = grabbable;
+                        }
 
-                if (show_grab)
-                {
-                        set_control(slot_secondary, "GRAB\nLBM", accent);
+                        if (show_grab)
+                        {
+                                set_control(slot_secondary, "GRAB\nLBM", accent);
+                        }
                 }
         }
 
@@ -1790,6 +1856,9 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
 
         const int hud_line_height = 7 * hud_scale + 4;
+
+        if (st.tutorial_mode)
+                max_control_lines = std::max(max_control_lines, kTutorialMinControlLines);
 
         size_t top_count = std::max(left_lines.size(), right_lines.size());
         top_count = std::max(top_count, center_lines.size());
@@ -1926,72 +1995,107 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         }
 
                         const auto &lines = section_lines[i];
-                        int header_y = controls_top;
-                        if (!lines.front().empty())
+                        if (st.tutorial_mode)
                         {
-                                int header_width =
-                                        CustomCharacter::text_width(lines.front(), hud_scale);
-                                int header_x = compute_text_x(header_width);
-                                CustomCharacter::draw_text(ren, lines.front(), header_x, header_y,
-                                                            entry.text_color, hud_scale);
-                        }
-
-                        if (lines.size() > 1)
-                        {
-                                int full_left = start_x + hud_padding;
-                                int full_right = end_x - hud_padding;
-                                if (full_right > full_left)
+                                int text_y = controls_top;
+                                if (!lines.empty())
                                 {
-                                        int divider_gap = 2;
-                                        int divider_height = 1;
-                                        int total_span = full_right - full_left;
-                                        int divider_width = std::max(1, total_span / 2);
-                                        int divider_left = full_left + (total_span - divider_width) / 2;
-                                        int divider_top = header_y + hud_line_height -
-                                                          divider_height - divider_gap;
-                                        divider_top = std::clamp(divider_top, bar_top,
-                                                                 bar_top + bar_height -
-                                                                         divider_height);
-                                        SDL_Rect divider_rect{divider_left, divider_top,
-                                                              divider_width, divider_height};
-                                        SDL_SetRenderDrawColor(ren, command_divider.r,
-                                                               command_divider.g,
-                                                               command_divider.b,
-                                                               command_divider.a);
-                                        SDL_RenderFillRect(ren, &divider_rect);
-
-                                        int divider_bottom = divider_top + divider_height;
-                                        int controls_area_top = divider_bottom + divider_gap;
-                                        int controls_area_bottom =
-                                                std::min(H - hud_padding, bar_top + bar_height);
-                                        if (controls_area_bottom < controls_area_top)
-                                                controls_area_bottom = controls_area_top;
-                                        size_t control_line_count = lines.size() - 1;
-                                        int control_block_height =
-                                                static_cast<int>(control_line_count) *
-                                                hud_line_height;
-                                        int available_height = controls_area_bottom -
-                                                              controls_area_top;
-                                        int control_text_y = controls_area_top;
-                                        if (available_height > control_block_height)
-                                                control_text_y +=
-                                                        (available_height - control_block_height) / 2;
-
-                                        for (size_t line_idx = 1; line_idx < lines.size();
-                                             ++line_idx)
+                                        int available_height = std::max(0, bottom_bar_height -
+                                                                                2 * hud_padding);
+                                        int content_height = static_cast<int>(lines.size()) *
+                                                            hud_line_height;
+                                        if (available_height > content_height)
+                                                text_y += (available_height - content_height) / 2;
+                                }
+                                for (const auto &line : lines)
+                                {
+                                        if (line.empty())
                                         {
-                                                const auto &line = lines[line_idx];
-                                                if (!line.empty())
+                                                text_y += hud_line_height;
+                                                continue;
+                                        }
+                                        int line_width = CustomCharacter::text_width(line, hud_scale);
+                                        int text_x = compute_text_x(line_width);
+                                        CustomCharacter::draw_text(ren, line, text_x, text_y,
+                                                                  entry.text_color, hud_scale);
+                                        text_y += hud_line_height;
+                                }
+                        }
+                        else
+                        {
+                                int header_y = controls_top;
+                                if (!lines.front().empty())
+                                {
+                                        int header_width =
+                                                CustomCharacter::text_width(lines.front(), hud_scale);
+                                        int header_x = compute_text_x(header_width);
+                                        CustomCharacter::draw_text(ren, lines.front(), header_x,
+                                                                  header_y, entry.text_color,
+                                                                  hud_scale);
+                                }
+
+                                if (lines.size() > 1)
+                                {
+                                        int full_left = start_x + hud_padding;
+                                        int full_right = end_x - hud_padding;
+                                        if (full_right > full_left)
+                                        {
+                                                int divider_gap = 2;
+                                                int divider_height = 1;
+                                                int total_span = full_right - full_left;
+                                                int divider_width = std::max(1, total_span / 2);
+                                                int divider_left =
+                                                        full_left + (total_span - divider_width) / 2;
+                                                int divider_top = header_y + hud_line_height -
+                                                                  divider_height - divider_gap;
+                                                divider_top = std::clamp(divider_top, bar_top,
+                                                                         bar_top + bar_height -
+                                                                                 divider_height);
+                                                SDL_Rect divider_rect{divider_left, divider_top,
+                                                                      divider_width,
+                                                                      divider_height};
+                                                SDL_SetRenderDrawColor(ren, command_divider.r,
+                                                                       command_divider.g,
+                                                                       command_divider.b,
+                                                                       command_divider.a);
+                                                SDL_RenderFillRect(ren, &divider_rect);
+
+                                                int divider_bottom = divider_top + divider_height;
+                                                int controls_area_top = divider_bottom + divider_gap;
+                                                int controls_area_bottom =
+                                                        std::min(H - hud_padding, bar_top + bar_height);
+                                                if (controls_area_bottom < controls_area_top)
+                                                        controls_area_bottom = controls_area_top;
+                                                size_t control_line_count = lines.size() - 1;
+                                                int control_block_height =
+                                                        static_cast<int>(control_line_count) *
+                                                        hud_line_height;
+                                                int available_height = controls_area_bottom -
+                                                                      controls_area_top;
+                                                int control_text_y = controls_area_top;
+                                                if (available_height > control_block_height)
+                                                        control_text_y +=
+                                                                (available_height - control_block_height) /
+                                                                2;
+
+                                                for (size_t line_idx = 1; line_idx < lines.size();
+                                                     ++line_idx)
                                                 {
-                                                        int line_width = CustomCharacter::text_width(
-                                                                line, hud_scale);
-                                                        int text_x = compute_text_x(line_width);
-                                                        CustomCharacter::draw_text(ren, line, text_x,
-                                                                                  control_text_y,
-                                                                                  entry.text_color,
-                                                                                  hud_scale);
+                                                        const auto &line = lines[line_idx];
+                                                        if (!line.empty())
+                                                        {
+                                                                int line_width =
+                                                                        CustomCharacter::text_width(
+                                                                                line, hud_scale);
+                                                                int text_x = compute_text_x(line_width);
+                                                                CustomCharacter::draw_text(ren, line,
+                                                                                          text_x,
+                                                                                          control_text_y,
+                                                                                          entry.text_color,
+                                                                                          hud_scale);
+                                                        }
+                                                        control_text_y += hud_line_height;
                                                 }
-                                                control_text_y += hud_line_height;
                                         }
                                 }
                         }
@@ -2234,9 +2338,10 @@ void Renderer::render_ppm(const std::string &path,
 	}
 }
 
-void Renderer::render_window(std::vector<Material> &mats,
-                                                         const RenderSettings &rset,
-                                                         const std::string &scene_path)
+bool Renderer::render_window(std::vector<Material> &mats,
+                                                        const RenderSettings &rset,
+                                                        const std::string &scene_path,
+                                                        bool tutorial_mode)
 {
         int W = rset.width;
         int H = rset.height;
@@ -2260,12 +2365,13 @@ void Renderer::render_window(std::vector<Material> &mats,
         SDL_Renderer *ren = nullptr;
         SDL_Texture *tex = nullptr;
         if (!init_sdl(win, ren, tex, W, H, RW, RH))
-                return;
+                return false;
 
         RenderState st;
         std::filesystem::path absolute_scene_path = std::filesystem::absolute(scene_path);
         st.scene_path = absolute_scene_path.string();
-        st.level_paths = collect_level_paths(absolute_scene_path);
+        st.tutorial_mode = tutorial_mode;
+        st.level_paths = collect_level_paths(absolute_scene_path, st.tutorial_mode);
         st.current_level_index = level_index_for(st.level_paths, absolute_scene_path);
         st.cumulative_score = 0.0;
         st.player_name.clear();
@@ -2324,8 +2430,8 @@ void Renderer::render_window(std::vector<Material> &mats,
                                         SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24,
                                                                           SDL_TEXTUREACCESS_STREAMING, new_RW,
                                                                           new_RH);
-                                if (!new_tex)
-                                        break;
+                                        if (!new_tex)
+                                                break;
                                 SDL_DestroyTexture(tex);
                                 tex = new_tex;
                                 RW = new_RW;
@@ -2366,4 +2472,5 @@ void Renderer::render_window(std::vector<Material> &mats,
         SDL_DestroyRenderer(ren);
         SDL_DestroyWindow(win);
         SDL_Quit();
+        return st.return_to_menu;
 }
