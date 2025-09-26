@@ -10,6 +10,7 @@
 #include "LevelFinishedMenu.hpp"
 #include "PauseMenu.hpp"
 #include "Laser.hpp"
+#include "LightMarker.hpp"
 #include "Plane.hpp"
 #include "Sphere.hpp"
 #include "Cube.hpp"
@@ -369,6 +370,62 @@ static Vec3 highlight_alternate_color(const Vec3 &base)
         double lum = luminance(base);
         bool use_brighter = lum < 0.5;
         return use_brighter ? brighten_color(base) : darken_color(base);
+}
+
+struct DeveloperObjectPreset
+{
+        Vec3 color;
+        bool mirror;
+        bool rotatable;
+        bool movable;
+        bool scorable;
+};
+
+static constexpr double kDevGreyComponent = 128.0 / 255.0;
+static constexpr std::array<DeveloperObjectPreset, 4> kDeveloperObjectPresets = {
+        DeveloperObjectPreset{Vec3(kDevGreyComponent, kDevGreyComponent, kDevGreyComponent),
+                              false,
+                              false,
+                              false,
+                              false},
+        DeveloperObjectPreset{Vec3(1.0, 0.0, 0.0), true, false, false, true},
+        DeveloperObjectPreset{Vec3(1.0, 1.0, 0.0), true, true, false, true},
+        DeveloperObjectPreset{Vec3(0.0, 1.0, 0.0), true, true, true, true}};
+
+static size_t current_developer_preset(const Hittable &obj, const Material &mat)
+{
+        if (!mat.mirror || !obj.scorable)
+                return 0;
+        if (obj.movable)
+                return 3;
+        if (obj.rotatable)
+                return 2;
+        return 1;
+}
+
+static void apply_developer_preset(Hittable &obj, Material &mat, size_t index)
+{
+        if (index >= kDeveloperObjectPresets.size())
+                index = 0;
+        const DeveloperObjectPreset &preset = kDeveloperObjectPresets[index];
+        obj.rotatable = preset.rotatable;
+        obj.movable = preset.movable;
+        obj.scorable = preset.scorable;
+        mat.mirror = preset.mirror;
+        mat.alpha = 1.0;
+        mat.random_alpha = false;
+        mat.base_color = preset.color;
+        mat.color = preset.color;
+        mat.texture.reset();
+        mat.texture_path.clear();
+}
+
+static bool developer_preset_eligible(const Hittable &obj)
+{
+        ShapeType shape = obj.shape_type();
+        return shape == ShapeType::Plane || shape == ShapeType::Sphere ||
+               shape == ShapeType::Cube || shape == ShapeType::Cylinder ||
+               shape == ShapeType::Cone;
 }
 
 double trace_spotlight_sample(const Scene &scene, const std::vector<Material> &mats,
@@ -1153,7 +1210,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                   e.key.keysym.scancode == SDL_SCANCODE_4 ||
                                   e.key.keysym.scancode == SDL_SCANCODE_5 ||
                                   e.key.keysym.scancode == SDL_SCANCODE_6 ||
-                                  e.key.keysym.scancode == SDL_SCANCODE_7))
+                                  e.key.keysym.scancode == SDL_SCANCODE_7 ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_8))
                 {
                         if (st.edit_mode)
                         {
@@ -1207,9 +1265,11 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                     scancode == SDL_SCANCODE_5)
                                 {
                                         Material m;
-                                        m.color = m.base_color = Vec3(0.5, 0.5, 0.5);
+                                        m.color = m.base_color =
+                                                Vec3(kDevGreyComponent, kDevGreyComponent,
+                                                     kDevGreyComponent);
                                         m.alpha = 1.0;
-                                        m.mirror = true;
+                                        m.mirror = false;
                                         mats.push_back(m);
                                         if (scancode == SDL_SCANCODE_1)
                                                 obj = std::make_shared<Plane>(pos, Vec3(0, 1, 0), oid, mid);
@@ -1224,8 +1284,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                 obj = std::make_shared<Cylinder>(pos, cam.up, 1.0, 2.0,
                                                                                   oid, mid);
                                         if (obj)
-                                                obj->rotatable = obj->shape_type() != ShapeType::Plane;
-                                        obj->movable = true;
+                                                apply_developer_preset(*obj, mats.back(), 0);
                                         scene.objects.push_back(obj);
                                         selected_mat = mid;
                                 }
@@ -1337,6 +1396,26 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         obj = target;
                                         selected_mat = big_mat;
                                 }
+                                else if (scancode == SDL_SCANCODE_8)
+                                {
+                                        Material light_mat;
+                                        light_mat.color = light_mat.base_color =
+                                                Vec3(kDevGreyComponent, kDevGreyComponent,
+                                                     kDevGreyComponent);
+                                        light_mat.alpha = 1.0;
+                                        light_mat.mirror = false;
+                                        mats.push_back(light_mat);
+                                        auto marker =
+                                                std::make_shared<LightMarker>(pos, 0.3, oid, mid);
+                                        apply_developer_preset(*marker, mats.back(), 0);
+                                        scene.objects.push_back(marker);
+                                        std::vector<int> ignore_ids;
+                                        ignore_ids.push_back(marker->object_id);
+                                        scene.lights.emplace_back(pos, Vec3(1.0, 1.0, 1.0), 1.0,
+                                                                  ignore_ids, marker->object_id);
+                                        obj = marker;
+                                        selected_mat = mid;
+                                }
 
                                 scene.update_beams(mats);
                                 scene.build_bvh();
@@ -1365,6 +1444,34 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         st.edit_pos = pos;
                                         st.edit_dist = (pos - cam.origin).length();
                                         st.spawn_key = scancode;
+                                }
+                        }
+                }
+                else if (g_developer_mode && st.focused && st.edit_mode &&
+                                 e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
+                                 e.key.keysym.scancode == SDL_SCANCODE_LALT)
+                {
+                        if (st.selected_obj >= 0 &&
+                            st.selected_obj < static_cast<int>(scene.objects.size()))
+                        {
+                                auto obj = scene.objects[st.selected_obj];
+                                if (obj && developer_preset_eligible(*obj))
+                                {
+                                        int mat_id = obj->material_id;
+                                        if (mat_id >= 0 &&
+                                            mat_id < static_cast<int>(mats.size()))
+                                        {
+                                                size_t preset =
+                                                        current_developer_preset(*obj,
+                                                                                mats[mat_id]);
+                                                preset = (preset + 1) %
+                                                         kDeveloperObjectPresets.size();
+                                                bool keep_checkered = mats[mat_id].checkered;
+                                                apply_developer_preset(*obj, mats[mat_id], preset);
+                                                mats[mat_id].checkered = keep_checkered;
+                                                st.selected_mat = mat_id;
+                                                mark_scene_dirty(st);
+                                        }
                                 }
                         }
                 }
@@ -1774,6 +1881,8 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         return std::string("TARGET");
                 case ShapeType::Beam:
                         return std::string("LASER");
+                case ShapeType::LightMarker:
+                        return std::string("LIGHT");
                 default:
                         return std::string("OBJECT");
                 }
@@ -2414,13 +2523,15 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         {
                 SDL_Color red{255, 0, 0, 255};
                 int scale = 2;
-                const char *legend[] = {"1-PLANE",  "2-SPHERE",   "3-CUBE",
-                                         "4-CONE",  "5-CYLINDER", "SCROLL-SIZE",
-                                         "MCLICK-DEL"};
-                for (int i = 0; i < 7; ++i)
+                const std::array<const char *, 11> legend = {
+                        "1-PLANE",   "2-SPHERE",   "3-CUBE",      "4-CONE",
+                        "5-CYLINDER", "6-BEAM SRC", "7-BEAM TGT", "8-LIGHT",
+                        "SCROLL-SIZE", "MCLICK-DEL", "ALT-TYPE"};
+                for (size_t i = 0; i < legend.size(); ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
-                                                    legend_base_y + i * (7 * scale + 2), red,
-                                                    scale);
+                                                    legend_base_y + static_cast<int>(i) *
+                                                                     (7 * scale + 2),
+                                                    red, scale);
                 std::string text = "DEVELOPER MODE";
                 int tw = CustomCharacter::text_width(text, scale);
                 CustomCharacter::draw_text(ren, text, W - tw - 5, 5, red, scale);

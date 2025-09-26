@@ -15,7 +15,8 @@ enum class ShapeType
         Plane,
         BVH,
         Beam,
-        BeamTarget
+        BeamTarget,
+        LightMarker
 };
 
 class Material;
