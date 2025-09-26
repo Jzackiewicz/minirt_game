@@ -58,9 +58,9 @@ Earn points by illuminating object surfaces; the total score must reach each lev
 -------------------------------------------------------------------
 Object rules:
 - <span style="color: #008000;">Green</span> objects can both move and rotate.
-- <span style="color: #FFD700;">Yellow</span> objects rotate but can’t move.
+- <span style="color: #FFD700;">Yellow</span> objects can be rotated but can’t be moved.
 - <span style="color: #FF0000;">Red</span> objects stay put – you can’t move or rotate them.
-- <span style="color: #808080;">Grey</span> objects just block the beam; they don’t score points.
+- <span style="color: #808080;">Grey</span> objects are obstacles – they don’t score points and can’t be moved or rotated.
 
 <div align="center">Aim at any object to display information about it.</div>
 
