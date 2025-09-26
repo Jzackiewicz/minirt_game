@@ -82,6 +82,44 @@ bool is_rotatable(const Hittable &obj)
         return obj.rotatable;
 }
 
+std::string escape_prompt_text(const std::string &value)
+{
+        std::string result;
+        result.reserve(value.size());
+        for (char ch : value)
+        {
+                switch (ch)
+                {
+                case '\\':
+                        result += "\\\\";
+                        break;
+                case '"':
+                        result += "\\\"";
+                        break;
+                case '\n':
+                case '\r':
+                        result += "\\n";
+                        break;
+                case '\t':
+                        result += "\\t";
+                        break;
+                default:
+                        result.push_back(ch);
+                        break;
+                }
+        }
+        return result;
+}
+
+std::string prompt_key_for_index(size_t index)
+{
+        if (index < 26)
+                return std::string(1, static_cast<char>('a' + index));
+        std::ostringstream oss;
+        oss << "prompt" << (index + 1);
+        return oss.str();
+}
+
 struct PlaneRecord
 {
         std::shared_ptr<Plane> plane;
@@ -121,9 +159,23 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
         if (!out)
                 return false;
 
-        out << "[quota]\n";
-        out << "target = " << bool_str(scene.target_required) << "\n";
-        out << "minimal_score = " << format_double(scene.minimal_score) << "\n\n";
+        if (!scene.prompts.empty())
+        {
+                out << "[prompts]\n";
+                for (size_t i = 0; i < scene.prompts.size(); ++i)
+                        out << prompt_key_for_index(i) << " = \""
+                            << escape_prompt_text(scene.prompts[i]) << "\"\n";
+                out << "\n";
+        }
+
+        bool write_quota = scene.prompts.empty() || scene.target_required ||
+                           scene.minimal_score > 0.0;
+        if (write_quota)
+        {
+                out << "[quota]\n";
+                out << "target = " << bool_str(scene.target_required) << "\n";
+                out << "minimal_score = " << format_double(scene.minimal_score) << "\n\n";
+        }
 
         out << "[camera]\n";
         out << "id = \"camera\"\n";

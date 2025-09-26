@@ -31,6 +31,7 @@
 #include <memory>
 #include <optional>
 #include <random>
+#include <sstream>
 #include <system_error>
 #include <string>
 #include <thread>
@@ -911,6 +912,8 @@ struct Renderer::RenderState
         double hud_focus_score = 0.0;
         bool quota_met = false;
         bool tutorial_mode = false;
+        std::vector<std::string> tutorial_prompts;
+        size_t tutorial_prompt_index = 0;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1182,6 +1185,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 mats = Parser::get_materials();
                                 scene.update_beams(mats);
                                 scene.build_bvh();
+                                st.tutorial_prompts = scene.prompts;
+                                st.tutorial_prompt_index = 0;
                                 st.edit_mode = false;
                                 st.align_on_grab = false;
                                 st.rotating = false;
@@ -1477,6 +1482,15 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 }
                         }
                 }
+                else if (st.focused && st.tutorial_mode && !st.quota_met &&
+                                 e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
+                                 (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
+                {
+                        if (!st.tutorial_prompts.empty() &&
+                            st.tutorial_prompt_index + 1 < st.tutorial_prompts.size())
+                                ++st.tutorial_prompt_index;
+                }
                 else if (st.focused && st.quota_met && e.type == SDL_KEYDOWN &&
                                  e.key.repeat == 0 &&
                                  (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
@@ -1557,6 +1571,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                         mats = Parser::get_materials();
                                                         scene.update_beams(mats);
                                                         scene.build_bvh();
+                                                        st.tutorial_prompts = scene.prompts;
+                                                        st.tutorial_prompt_index = 0;
                                                         st.cumulative_score += st.last_score;
                                                         st.current_level_index = static_cast<int>(
                                                                 std::distance(st.level_paths.begin(), next_it));
@@ -1987,7 +2003,6 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
 
         constexpr size_t kControlSections = 5;
-        constexpr size_t kTutorialMinControlLines = 3;
         std::array<std::optional<HudControlEntry>, kControlSections> control_sections;
         control_sections.fill(std::nullopt);
         const SDL_Color bar_neutral{72, 72, 72, 220};
@@ -2007,11 +2022,146 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         const size_t slot_secondary = 3;
         const size_t slot_pause = 4;
 
+        auto wrap_prompt_text = [&](const std::string &text) {
+                std::vector<std::string> lines;
+                int available_width = std::max(W - 2 * hud_padding, 1);
+                int space_width = std::max(CustomCharacter::text_width(" ", hud_scale), 1);
+
+                auto split_word = [&](const std::string &word) {
+                        std::vector<std::string> segments;
+                        if (word.empty())
+                        {
+                                segments.emplace_back();
+                                return segments;
+                        }
+                        size_t pos = 0;
+                        while (pos < word.size())
+                        {
+                                size_t remaining = word.size() - pos;
+                                size_t best_len = 1;
+                                for (size_t len = 1; len <= remaining; ++len)
+                                {
+                                        std::string candidate = word.substr(pos, len);
+                                        int width = CustomCharacter::text_width(candidate, hud_scale);
+                                        if (width > available_width)
+                                        {
+                                                if (len == 1)
+                                                        best_len = 1;
+                                                break;
+                                        }
+                                        best_len = len;
+                                }
+                                if (best_len == 0)
+                                        best_len = 1;
+                                if (best_len > remaining)
+                                        best_len = remaining;
+                                segments.emplace_back(word.substr(pos, best_len));
+                                pos += best_len;
+                        }
+                        if (segments.empty())
+                                segments.emplace_back();
+                        return segments;
+                };
+
+                auto append_paragraph = [&](const std::string &paragraph) {
+                        std::string current_line;
+                        int current_width = 0;
+                        bool has_line_content = false;
+                        bool saw_word = false;
+                        auto commit_line = [&]() {
+                                lines.push_back(current_line);
+                                current_line.clear();
+                                current_width = 0;
+                                has_line_content = false;
+                        };
+
+                        std::istringstream iss(paragraph);
+                        std::string word;
+                        while (iss >> word)
+                        {
+                                saw_word = true;
+                                auto segments = split_word(word);
+                                for (const auto &segment : segments)
+                                {
+                                        int seg_width = CustomCharacter::text_width(segment, hud_scale);
+                                        if (!has_line_content)
+                                        {
+                                                current_line = segment;
+                                                current_width = seg_width;
+                                                has_line_content = true;
+                                                continue;
+                                        }
+                                        int required_width = space_width + seg_width;
+                                        if (current_width + required_width > available_width)
+                                        {
+                                                commit_line();
+                                                current_line = segment;
+                                                current_width = seg_width;
+                                                has_line_content = true;
+                                        }
+                                        else
+                                        {
+                                                current_line.push_back(' ');
+                                                current_line += segment;
+                                                current_width += required_width;
+                                        }
+                                }
+                        }
+
+                        if (has_line_content)
+                                commit_line();
+                        else if (!saw_word)
+                                lines.emplace_back(std::string());
+                };
+
+                if (text.empty())
+                {
+                        append_paragraph(std::string());
+                }
+                else
+                {
+                        size_t start = 0;
+                        while (start < text.size())
+                        {
+                                size_t pos = text.find('\n', start);
+                                if (pos == std::string::npos)
+                                {
+                                        append_paragraph(text.substr(start));
+                                        break;
+                                }
+                                append_paragraph(text.substr(start, pos - start));
+                                start = pos + 1;
+                                if (start == text.size())
+                                {
+                                        append_paragraph(std::string());
+                                        break;
+                                }
+                        }
+                }
+
+                if (lines.empty())
+                        lines.emplace_back(std::string());
+                return lines;
+        };
+
         if (st.tutorial_mode)
         {
-                set_control(slot_move,
-                            "Lorem ipsum dolor sit amet.\nConsectetur adipiscing elit.",
-                            neutral);
+                if (!st.tutorial_prompts.empty())
+                {
+                        size_t idx = st.tutorial_prompt_index;
+                        if (idx >= st.tutorial_prompts.size())
+                                idx = st.tutorial_prompts.size() - 1;
+                        const std::string &prompt_text = st.tutorial_prompts[idx];
+                        std::vector<std::string> wrapped = wrap_prompt_text(prompt_text);
+                        std::string combined;
+                        for (size_t line_index = 0; line_index < wrapped.size(); ++line_index)
+                        {
+                                if (line_index > 0)
+                                        combined.push_back('\n');
+                                combined += wrapped[line_index];
+                        }
+                        set_control(slot_move, combined, neutral);
+                }
         }
         else
         {
@@ -2097,6 +2247,8 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 return lines;
         };
 
+        const int hud_line_height = 7 * hud_scale + 4;
+
         std::array<std::vector<std::string>, kControlSections> section_lines{};
         size_t max_control_lines = 1;
         for (size_t i = 0; i < control_sections.size(); ++i)
@@ -2121,18 +2273,13 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 {
                         if (control_sections[i])
                         {
-							active_sections.push_back(i);
-							break;
+                                active_sections.push_back(i);
+                                break;
                         }
                 }
                 if (active_sections.empty())
                         active_sections.push_back(0);
         }
-
-        const int hud_line_height = 7 * hud_scale + 4;
-
-        if (st.tutorial_mode)
-                max_control_lines = std::max(max_control_lines, kTutorialMinControlLines);
 
         size_t top_count = std::max(left_lines.size(), right_lines.size());
         top_count = std::max(top_count, center_lines.size());
@@ -2653,6 +2800,8 @@ bool Renderer::render_window(std::vector<Material> &mats,
         st.player_name.clear();
         st.level_number = parse_level_number_from_path(st.scene_path);
         st.level_label = level_label_from_path(st.scene_path);
+        st.tutorial_prompts = scene.prompts;
+        st.tutorial_prompt_index = 0;
         st.focused = true;
         SDL_SetRelativeMouseMode(SDL_TRUE);
         SDL_ShowCursor(SDL_DISABLE);
