@@ -8,8 +8,9 @@
 class Parser
 {
 	public:
-	static bool parse_rt_file(const std::string &path, Scene &outScene,
-							  Camera &outCamera, int width, int height);
+        static bool parse_rt_file(const std::string &path, Scene &outScene,
+                                                          Camera &outCamera, int width, int height,
+                                                          bool tutorial_mode = false);
 
 	static const std::vector<Material> &get_materials();
 	private:
