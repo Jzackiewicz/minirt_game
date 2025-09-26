@@ -87,11 +87,21 @@ std::optional<std::string> find_first_tutorial_scene()
 int main(int argc, char **argv)
 {
         std::string default_scene_path;
-        if (!parse_arguments(argc, argv, default_scene_path))
+        bool skip_main_menu = false;
+        if (!parse_arguments(argc, argv, default_scene_path, skip_main_menu))
         {
                 return 1;
         }
         load_settings();
+
+        if (skip_main_menu)
+        {
+                run_application(default_scene_path, g_settings.width, g_settings.height,
+                                g_settings.quality, false);
+                load_settings();
+                return 0;
+        }
+
         bool keep_running = true;
         while (keep_running)
         {
