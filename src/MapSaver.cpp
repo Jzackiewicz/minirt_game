@@ -150,6 +150,8 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
         {
                 if (light.reflected)
                         continue;
+                if (light.beam_spotlight)
+                        continue;
                 std::shared_ptr<Hittable> attached;
                 if (light.attached_id != -1)
                         attached = find_object_by_id(light.attached_id);
