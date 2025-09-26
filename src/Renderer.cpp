@@ -1230,7 +1230,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         scene.objects.push_back(obj);
                                         selected_mat = mid;
                                 }
-                                else if (scancode == SDL_SCANCODE_6 || scancode == SDL_SCANCODE_8)
+                                else if (scancode == SDL_SCANCODE_6)
                                 {
                                         double intensity = 1.0;
                                         double source_radius = 0.5;
@@ -1264,7 +1264,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         mats.push_back(core_mat);
                                         int small_mat = mid++;
 
-                                        bool with_laser = (scancode == SDL_SCANCODE_6);
+                                        bool with_laser = true;
                                         int base_oid = oid;
                                         auto beam = std::make_shared<Beam>(pos, dir_norm,
                                                                            source_radius * 0.5, length,
@@ -1305,6 +1305,33 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                                   spot_radius);
                                         obj = created_source;
                                         selected_mat = created_source->material_id;
+                                }
+                                else if (scancode == SDL_SCANCODE_8)
+                                {
+                                        double intensity = 1.0;
+                                        Vec3 color = Vec3(1.0, 1.0, 1.0);
+
+                                        Material light_mat;
+                                        light_mat.base_color = light_mat.color = Vec3(1.0, 0.95, 0.6);
+                                        light_mat.alpha = 1.0;
+                                        mats.push_back(light_mat);
+                                        int light_mat_id = mid++;
+
+                                        auto light_sphere =
+                                                std::make_shared<Sphere>(pos, 0.35, oid, light_mat_id);
+                                        light_sphere->movable = true;
+                                        light_sphere->rotatable = false;
+                                        light_sphere->scorable = false;
+                                        scene.objects.push_back(light_sphere);
+                                        ++oid;
+
+                                        std::vector<int> ignore_ids;
+                                        ignore_ids.push_back(light_sphere->object_id);
+                                        scene.lights.emplace_back(pos, color, intensity, ignore_ids,
+                                                                  light_sphere->object_id);
+
+                                        obj = light_sphere;
+                                        selected_mat = light_mat_id;
                                 }
                                 else if (scancode == SDL_SCANCODE_7)
                                 {
