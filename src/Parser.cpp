@@ -125,6 +125,7 @@ enum class TableType
         ObjectsCylinder,
         BeamSource,
         BeamTarget,
+        Prompts,
         Quota
 };
 
@@ -152,6 +153,8 @@ const char *table_name(TableType type)
                 return "beam.sources";
         case TableType::BeamTarget:
                 return "beam.targets";
+        case TableType::Prompts:
+                return "prompts";
         case TableType::Quota:
                 return "quota";
         default:
@@ -163,6 +166,7 @@ int table_stage(TableType type)
 {
         switch (type)
         {
+        case TableType::Prompts:
         case TableType::Quota:
                 return 1;
         case TableType::Camera:
@@ -208,6 +212,8 @@ std::string table_header(TableType type)
                 return "[[beam.sources]]";
         case TableType::BeamTarget:
                 return "[[beam.targets]]";
+        case TableType::Prompts:
+                return "[prompts]";
         case TableType::Quota:
                 return "[quota]";
         default:
@@ -1004,6 +1010,50 @@ bool process_quota(const TableData &table, Scene &scene)
         return true;
 }
 
+bool process_prompts(const TableData &table, Scene &scene)
+{
+        scene.tutorial_prompts.clear();
+        if (table.values.empty())
+                return report_error(table.header_line,
+                                    "[prompts] section must define at least one entry");
+        struct PromptEntry
+        {
+                std::string key;
+                std::string text;
+                size_t line;
+        };
+        std::vector<PromptEntry> prompts;
+        prompts.reserve(table.values.size());
+        for (const auto &kv : table.values)
+        {
+                const std::string &key = kv.first;
+                const std::string &raw = kv.second.first;
+                size_t line = kv.second.second;
+                if (key.empty())
+                        return report_error(line, "Prompt keys cannot be empty");
+                std::string trimmed = trim(raw);
+                if (trimmed.size() < 2 || trimmed.front() != '"' || trimmed.back() != '"')
+                        return report_error(line, "Prompt '" + key + "' must be a string");
+                std::string value = trimmed.substr(1, trimmed.size() - 2);
+                prompts.push_back(PromptEntry{key, value, line});
+        }
+        std::sort(prompts.begin(), prompts.end(),
+                  [](const PromptEntry &a, const PromptEntry &b) {
+                          if (a.key == b.key)
+                                  return a.line < b.line;
+                          return a.key < b.key;
+                  });
+        scene.tutorial_prompts.reserve(prompts.size());
+        for (size_t i = 0; i < prompts.size(); ++i)
+        {
+                if (i > 0 && prompts[i].key == prompts[i - 1].key)
+                        return report_error(prompts[i].line,
+                                            "Duplicate prompt key '" + prompts[i].key + "'");
+                scene.tutorial_prompts.push_back(prompts[i].text);
+        }
+        return true;
+}
+
 } // namespace
 
 std::vector<Material> Parser::materials;
@@ -1025,6 +1075,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         outScene.ambient = Ambient(Vec3(1, 1, 1), 0.0);
         outScene.target_required = false;
         outScene.minimal_score = 0.0;
+        outScene.tutorial_prompts.clear();
 
         std::filesystem::path scene_dir =
                 std::filesystem::absolute(std::filesystem::path(path)).parent_path();
@@ -1039,6 +1090,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         bool quota_declared = false;
         bool quota_seen = false;
         size_t quota_line = 0;
+        bool prompts_declared = false;
+        bool prompts_seen = false;
 
         int oid = 0;
         int mid = 0;
@@ -1095,6 +1148,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                         break;
                 case TableType::BeamTarget:
                         ok = process_beam_target(table, outScene, oid, mid, materials, beam_target_ids);
+                        break;
+                case TableType::Prompts:
+                        ok = process_prompts(table, outScene);
+                        prompts_seen = prompts_seen || ok;
                         break;
                 case TableType::Quota:
                         quota_line = table.header_line;
@@ -1154,6 +1211,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                         next_type = TableType::LightingAmbient;
                                 else if (name == "quota")
                                         next_type = TableType::Quota;
+                                else if (name == "prompts")
+                                        next_type = TableType::Prompts;
                                 else
                                         return report_error(line_no, "Unknown table '" + name + "'");
                         }
@@ -1207,6 +1266,12 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                         return report_error(line_no, "Multiple " + header + " sections are not allowed");
                                 quota_declared = true;
                                 break;
+                        case TableType::Prompts:
+                                if (prompts_declared)
+                                        return report_error(line_no,
+                                                            "Multiple " + header + " sections are not allowed");
+                                prompts_declared = true;
+                                break;
                         case TableType::LightingLightSource:
                                 if (!ambient_declared)
                                         return report_error(
@@ -1239,8 +1304,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                 return report_error(line_no ? line_no : 1, "Camera section is required");
         if (!ambient_seen)
                 return report_error(line_no ? line_no : 1, "Lighting ambient section is required");
-        if (!quota_seen)
-                return report_error(line_no ? line_no : 1, "Quota section is required");
+        if (!quota_seen && !prompts_seen)
+                return report_error(line_no ? line_no : 1,
+                                    "Scene must define either [quota] or [prompts] section");
         if (cam_dir.length_squared() == 0.0)
                 return report_error(line_no ? line_no : 1, "Camera look direction cannot be zero");
 

@@ -4,6 +4,7 @@
 #include "light.hpp"
 #include "material.hpp"
 #include <memory>
+#include <string>
 #include <vector>
 #include <unordered_map>
 
@@ -19,6 +20,7 @@ class Scene
         std::shared_ptr<Hittable> accel;
         bool target_required = false;
         double minimal_score = 0.0;
+        std::vector<std::string> tutorial_prompts;
 
         // Update beam objects and associated lights in the scene.
         void update_beams(const std::vector<Material> &materials);
