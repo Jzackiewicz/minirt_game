@@ -136,9 +136,28 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
         out << "color = " << format_color_array(scene.ambient.color) << "\n";
 
         int light_index = 1;
+        auto find_object_by_id = [&](int oid) -> std::shared_ptr<Hittable>
+        {
+                for (const auto &obj : scene.objects)
+                {
+                        if (obj && obj->object_id == oid)
+                                return obj;
+                }
+                return nullptr;
+        };
+
         for (const auto &light : scene.lights)
         {
+                if (light.reflected)
+                        continue;
+                if (light.beam_spotlight)
+                        continue;
+                std::shared_ptr<Hittable> attached;
                 if (light.attached_id != -1)
+                        attached = find_object_by_id(light.attached_id);
+                if (light.attached_id != -1 && !attached)
+                        continue;
+                if (attached && std::dynamic_pointer_cast<BeamSource>(attached))
                         continue;
                 out << "\n[[lighting.light_sources]]\n";
                 out << "id = \"light" << light_index++ << "\"\n";

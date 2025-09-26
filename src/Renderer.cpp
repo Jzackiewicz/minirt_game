@@ -1,5 +1,6 @@
 #include "Renderer.hpp"
 #include "AABB.hpp"
+#include "Beam.hpp"
 #include "BeamSource.hpp"
 #include "BeamTarget.hpp"
 #include "Config.hpp"
@@ -42,6 +43,8 @@ static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
 
 static constexpr double kAltColorAmount = 0.35;
 static constexpr double kQuotaScoreEpsilon = 1e-3;
+static constexpr double kBeamTransparentAlpha = 125.0 / 255.0;
+static constexpr double kSpotlightLaserRatio = 20.0;
 
 static Vec3 brighten_color(const Vec3 &color)
 {
@@ -64,6 +67,80 @@ static Vec3 normalize_or(const Vec3 &v, const Vec3 &fallback = Vec3(0, 0, 1))
         if (len2 <= 1e-12)
                 return fallback;
         return v / std::sqrt(len2);
+}
+
+static const Vec3 kDeveloperColorGrey(0.5, 0.5, 0.5);
+static const Vec3 kDeveloperColorRed(1.0, 0.0, 0.0);
+static const Vec3 kDeveloperColorYellow(1.0, 1.0, 0.0);
+static const Vec3 kDeveloperColorGreen(0.0, 1.0, 0.0);
+
+struct DeveloperObjectState
+{
+        Vec3 color;
+        bool mirror;
+        bool rotatable;
+        bool movable;
+        bool scorable;
+};
+
+static const DeveloperObjectState kDeveloperStates[] = {
+        {kDeveloperColorGrey, false, false, false, false},
+        {kDeveloperColorRed, true, false, false, true},
+        {kDeveloperColorYellow, true, true, false, true},
+        {kDeveloperColorGreen, true, true, true, true},
+};
+
+static bool approx_color(const Vec3 &a, const Vec3 &b)
+{
+        return std::fabs(a.x - b.x) < 1e-6 && std::fabs(a.y - b.y) < 1e-6 &&
+               std::fabs(a.z - b.z) < 1e-6;
+}
+
+static bool supports_developer_cycle(const std::shared_ptr<Hittable> &obj)
+{
+        if (!obj)
+                return false;
+        if (std::dynamic_pointer_cast<BeamSource>(obj))
+                return false;
+        if (std::dynamic_pointer_cast<BeamTarget>(obj))
+                return false;
+        ShapeType type = obj->shape_type();
+        return type == ShapeType::Plane || type == ShapeType::Sphere ||
+               type == ShapeType::Cube || type == ShapeType::Cylinder ||
+               type == ShapeType::Cone;
+}
+
+static int detect_developer_state(const Hittable &obj, const Material &mat)
+{
+        if (approx_color(mat.base_color, kDeveloperColorGreen) && obj.movable)
+                return 3;
+        if (approx_color(mat.base_color, kDeveloperColorYellow) && obj.rotatable)
+                return 2;
+        if (approx_color(mat.base_color, kDeveloperColorRed))
+                return 1;
+        return 0;
+}
+
+static void apply_developer_state(Hittable &obj, Material &mat, int index)
+{
+        if (index < 0)
+                index = 0;
+        index %= static_cast<int>(std::size(kDeveloperStates));
+        const auto &state = kDeveloperStates[index];
+        mat.base_color = state.color;
+        mat.color = state.color;
+        mat.alpha = 1.0;
+        mat.mirror = state.mirror;
+        obj.rotatable = state.rotatable;
+        obj.movable = state.movable;
+        obj.scorable = state.scorable;
+}
+
+static void cycle_developer_state(Hittable &obj, Material &mat)
+{
+        int current = detect_developer_state(obj, mat);
+        int next = (current + 1) % static_cast<int>(std::size(kDeveloperStates));
+        apply_developer_state(obj, mat, next);
 }
 
 static bool beam_parameters(const PointLight &L, const Vec3 &point, Vec3 &axis_dir,
@@ -1143,12 +1220,38 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                           << "\n";
                         }
                 }
+                else if (g_developer_mode && st.focused && st.edit_mode &&
+                                 e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
+                                 e.key.keysym.scancode == SDL_SCANCODE_LALT)
+                {
+                        if (st.selected_obj >= 0 &&
+                            st.selected_obj < static_cast<int>(scene.objects.size()))
+                        {
+                                auto obj = scene.objects[st.selected_obj];
+                                if (supports_developer_cycle(obj))
+                                {
+                                        int mat_id = obj->material_id;
+                                        if (mat_id >= 0 &&
+                                            mat_id < static_cast<int>(mats.size()))
+                                        {
+                                                st.selected_mat = mat_id;
+                                                cycle_developer_state(*obj,
+                                                                      mats[mat_id]);
+                                                mats[mat_id].checkered = true;
+                                                mark_scene_dirty(st);
+                                        }
+                                }
+                        }
+                }
                 else if (g_developer_mode && st.focused && e.type == SDL_KEYDOWN &&
                                  (e.key.keysym.scancode == SDL_SCANCODE_1 ||
                                   e.key.keysym.scancode == SDL_SCANCODE_2 ||
                                   e.key.keysym.scancode == SDL_SCANCODE_3 ||
                                   e.key.keysym.scancode == SDL_SCANCODE_4 ||
-                                  e.key.keysym.scancode == SDL_SCANCODE_5))
+                                  e.key.keysym.scancode == SDL_SCANCODE_5 ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_6 ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_7 ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_8))
                 {
                         if (st.edit_mode)
                         {
@@ -1157,7 +1260,29 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         int mid = st.selected_mat;
                                         mats[mid].checkered = false;
                                         mats[mid].color = mats[mid].base_color;
+                                        auto removed_obj = scene.objects[st.selected_obj];
+                                        int removed_oid = removed_obj->object_id;
                                         scene.objects.erase(scene.objects.begin() + st.selected_obj);
+                                        scene.lights.erase(std::remove_if(scene.lights.begin(),
+                                                                          scene.lights.end(),
+                                                                          [&](const PointLight &L) {
+                                                                                  return L.attached_id ==
+                                                                                                 removed_oid;
+                                                                          }),
+                                                           scene.lights.end());
+                                        scene.objects.erase(std::remove_if(scene.objects.begin(),
+                                                                          scene.objects.end(),
+                                                                          [&](const HittablePtr &obj) {
+                                                                                  if (!obj->is_beam())
+                                                                                          return false;
+                                                                                  auto laser =
+                                                                                          std::static_pointer_cast<Laser>(obj);
+                                                                                  auto src = laser->source.lock();
+                                                                                  return src &&
+                                                                                         src.get() ==
+                                                                                                 removed_obj.get();
+                                                                          }),
+                                                           scene.objects.end());
                                         scene.update_beams(mats);
                                         scene.build_bvh();
                                         mark_scene_dirty(st);
@@ -1171,38 +1296,196 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         {
                                 int oid = static_cast<int>(scene.objects.size());
                                 int mid = static_cast<int>(mats.size());
-                                Material m;
-                                m.color = m.base_color = Vec3(0.5, 0.5, 0.5);
-                                m.alpha = 1.0;
-                                m.mirror = true;
-                                mats.push_back(m);
                                 Vec3 pos = cam.origin + cam.forward * 3.0;
                                 HittablePtr obj;
-                                if (e.key.keysym.scancode == SDL_SCANCODE_1)
-                                        obj = std::make_shared<Plane>(pos, Vec3(0, 1, 0), oid, mid);
-                                else if (e.key.keysym.scancode == SDL_SCANCODE_2)
-                                        obj = std::make_shared<Sphere>(pos, 1.0, oid, mid);
-                                else if (e.key.keysym.scancode == SDL_SCANCODE_3)
-                                        obj = std::make_shared<Cube>(pos, cam.up, 1.0, 1.0, 1.0, oid, mid);
-                                else if (e.key.keysym.scancode == SDL_SCANCODE_4)
-                                        obj = std::make_shared<Cone>(pos, cam.up, 1.0, 2.0, oid, mid);
-                                else
-                                        obj = std::make_shared<Cylinder>(pos, cam.up, 1.0, 2.0, oid, mid);
-                                if (obj)
-                                        obj->rotatable = obj->shape_type() != ShapeType::Plane;
-                                obj->movable = true;
-                                scene.objects.push_back(obj);
+                                int selected_mat = -1;
+                                auto scancode = e.key.keysym.scancode;
+                                if (scancode == SDL_SCANCODE_1 || scancode == SDL_SCANCODE_2 ||
+                                    scancode == SDL_SCANCODE_3 || scancode == SDL_SCANCODE_4 ||
+                                    scancode == SDL_SCANCODE_5)
+                                {
+                                        Material m;
+                                        m.color = m.base_color = kDeveloperColorGrey;
+                                        m.alpha = 1.0;
+                                        m.mirror = false;
+                                        mats.push_back(m);
+                                        if (scancode == SDL_SCANCODE_1)
+                                                obj = std::make_shared<Plane>(pos, Vec3(0, 1, 0), oid, mid);
+                                        else if (scancode == SDL_SCANCODE_2)
+                                                obj = std::make_shared<Sphere>(pos, 1.0, oid, mid);
+                                        else if (scancode == SDL_SCANCODE_3)
+                                                obj = std::make_shared<Cube>(pos, cam.up, 1.0, 1.0, 1.0,
+                                                                             oid, mid);
+                                        else if (scancode == SDL_SCANCODE_4)
+                                                obj = std::make_shared<Cone>(pos, cam.up, 1.0, 2.0, oid, mid);
+                                        else
+                                                obj = std::make_shared<Cylinder>(pos, cam.up, 1.0, 2.0,
+                                                                                  oid, mid);
+                                        if (obj)
+                                        {
+                                                if (supports_developer_cycle(obj))
+                                                        apply_developer_state(*obj, mats[mid], 0);
+                                                scene.objects.push_back(obj);
+                                                selected_mat = mid;
+                                        }
+                                }
+                                else if (scancode == SDL_SCANCODE_6)
+                                {
+                                        double intensity = 1.0;
+                                        double source_radius = 0.5;
+                                        double length = 10.0;
+                                        Vec3 dir_norm = cam.forward.normalized();
+                                        Vec3 color = Vec3(1.0, 1.0, 1.0);
+
+                                        Material beam_mat;
+                                        beam_mat.color = beam_mat.base_color = color;
+                                        beam_mat.alpha = kBeamTransparentAlpha;
+                                        beam_mat.random_alpha = true;
+                                        mats.push_back(beam_mat);
+                                        int beam_mat_id = mid++;
+
+                                        Material outer_mat;
+                                        outer_mat.color = outer_mat.base_color = Vec3(1.0, 1.0, 1.0);
+                                        outer_mat.alpha = 0.67;
+                                        mats.push_back(outer_mat);
+                                        int big_mat = mid++;
+
+                                        Material mid_mat;
+                                        mid_mat.color = mid_mat.base_color =
+                                                (Vec3(1.0, 1.0, 1.0) + color) * 0.5;
+                                        mid_mat.alpha = 0.33;
+                                        mats.push_back(mid_mat);
+                                        int inner_mat = mid++;
+
+                                        Material core_mat;
+                                        core_mat.color = core_mat.base_color = color;
+                                        core_mat.alpha = 1.0;
+                                        mats.push_back(core_mat);
+                                        int small_mat = mid++;
+
+                                        bool with_laser = true;
+                                        int base_oid = oid;
+                                        auto beam = std::make_shared<Beam>(pos, dir_norm,
+                                                                           source_radius * 0.5, length,
+                                                                           intensity, base_oid, beam_mat_id,
+                                                                           big_mat, inner_mat, small_mat,
+                                                                           with_laser, color);
+                                        beam->source->movable = true;
+                                        beam->source->rotatable = true;
+                                        beam->source->scorable = false;
+                                        beam->source->mid.scorable = false;
+                                        beam->source->inner.scorable = false;
+                                        std::shared_ptr<Hittable> created_source = beam->source;
+                                        if (with_laser && beam->laser)
+                                        {
+                                                beam->laser->scorable = false;
+                                                beam->laser->rotatable = true;
+                                                scene.objects.push_back(beam->laser);
+                                                ++oid;
+                                        }
+                                        scene.objects.push_back(created_source);
+                                        ++oid;
+                                        double spot_radius = 0.0;
+                                        if (beam->laser)
+                                                spot_radius = beam->laser->radius * kSpotlightLaserRatio;
+                                        else if (beam->light)
+                                                spot_radius = beam->light->radius * kSpotlightLaserRatio;
+                                        else
+                                                spot_radius = source_radius * 0.5 * kSpotlightLaserRatio;
+                                        const double cone_cos = std::sqrt(1.0 - 0.25 * 0.25);
+                                        std::vector<int> ignore_ids;
+                                        ignore_ids.push_back(created_source->object_id);
+                                        ignore_ids.push_back(beam->source->mid.object_id);
+                                        if (beam->laser)
+                                                ignore_ids.push_back(beam->laser->object_id);
+                                        scene.lights.emplace_back(pos, color, intensity, ignore_ids,
+                                                                  created_source->object_id, dir_norm,
+                                                                  cone_cos, length, false, true,
+                                                                  spot_radius);
+                                        obj = created_source;
+                                        selected_mat = created_source->material_id;
+                                }
+                                else if (scancode == SDL_SCANCODE_7)
+                                {
+                                        Vec3 color = Vec3(1.0, 1.0, 0.0);
+                                        Material outer_mat;
+                                        outer_mat.color = outer_mat.base_color = Vec3(0.0, 0.0, 0.0);
+                                        outer_mat.alpha = 0.33;
+                                        mats.push_back(outer_mat);
+                                        int big_mat = mid++;
+
+                                        Material mid_mat;
+                                        mid_mat.color = mid_mat.base_color = color * 0.5;
+                                        mid_mat.alpha = 0.67;
+                                        mats.push_back(mid_mat);
+                                        int middle_mat = mid++;
+
+                                        Material inner_mat;
+                                        inner_mat.color = inner_mat.base_color = color;
+                                        inner_mat.alpha = 1.0;
+                                        mats.push_back(inner_mat);
+                                        int small_mat = mid++;
+
+                                        auto target = std::make_shared<BeamTarget>(pos, 1.0, oid, big_mat,
+                                                                                   middle_mat, small_mat);
+                                        target->movable = true;
+                                        target->scorable = true;
+                                        target->mid.scorable = true;
+                                        target->inner.scorable = true;
+                                        scene.objects.push_back(target);
+                                        ++oid;
+                                        obj = target;
+                                        selected_mat = big_mat;
+                                }
+                                else if (scancode == SDL_SCANCODE_8)
+                                {
+                                        Material marker_mat;
+                                        marker_mat.color = marker_mat.base_color = kDeveloperColorGrey;
+                                        marker_mat.alpha = 1.0;
+                                        marker_mat.mirror = false;
+                                        mats.push_back(marker_mat);
+                                        int marker_mat_id = mid++;
+                                        auto marker = std::make_shared<Sphere>(pos, 0.5, oid, marker_mat_id);
+                                        if (supports_developer_cycle(marker))
+                                                apply_developer_state(*marker, mats[marker_mat_id], 0);
+                                        scene.objects.push_back(marker);
+                                        ++oid;
+                                        std::vector<int> ignore_ids;
+                                        ignore_ids.push_back(marker->object_id);
+                                        scene.lights.emplace_back(pos, Vec3(1.0, 1.0, 1.0), 1.0,
+                                                                  ignore_ids, marker->object_id);
+                                        obj = marker;
+                                        selected_mat = marker_mat_id;
+                                }
+
                                 scene.update_beams(mats);
                                 scene.build_bvh();
                                 mark_scene_dirty(st);
-                                st.selected_obj = oid;
-                                st.selected_mat = mid;
-                                mats[mid].checkered = true;
-                                st.edit_mode = true;
-                                st.rotating = false;
-                                st.edit_pos = pos;
-                                st.edit_dist = (pos - cam.origin).length();
-                                st.spawn_key = e.key.keysym.scancode;
+
+                                st.selected_obj = -1;
+                                if (obj)
+                                {
+                                        for (size_t i = 0; i < scene.objects.size(); ++i)
+                                        {
+                                                if (scene.objects[i] == obj)
+                                                {
+                                                        st.selected_obj = static_cast<int>(i);
+                                                        break;
+                                                }
+                                        }
+                                }
+                                if (st.selected_obj >= 0)
+                                {
+                                        st.selected_mat = selected_mat;
+                                        if (st.selected_mat >= 0 &&
+                                            st.selected_mat < static_cast<int>(mats.size()))
+                                                mats[st.selected_mat].checkered = true;
+                                        st.edit_mode = true;
+                                        st.rotating = false;
+                                        st.edit_pos = pos;
+                                        st.edit_dist = (pos - cam.origin).length();
+                                        st.spawn_key = scancode;
+                                }
                         }
                 }
                 else if (st.focused && st.quota_met && e.type == SDL_KEYDOWN &&
@@ -2251,10 +2534,12 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         {
                 SDL_Color red{255, 0, 0, 255};
                 int scale = 2;
-                const char *legend[] = {"1-PLANE",  "2-SPHERE",   "3-CUBE",
-                                         "4-CONE",  "5-CYLINDER", "SCROLL-SIZE",
-                                         "MCLICK-DEL"};
-                for (int i = 0; i < 7; ++i)
+                const char *legend[] = {"1-PLANE",      "2-SPHERE",      "3-CUBE",
+                                         "4-CONE",       "5-CYLINDER",  "6-BEAM SRC",
+                                         "7-BEAM TARGET", "8-LIGHT",     "LALT-TYPE",
+                                         "SCROLL-SIZE",  "MCLICK-DEL"};
+                int legend_count = static_cast<int>(std::size(legend));
+                for (int i = 0; i < legend_count; ++i)
                         CustomCharacter::draw_text(ren, legend[i], 5,
                                                     legend_base_y + i * (7 * scale + 2), red,
                                                     scale);
