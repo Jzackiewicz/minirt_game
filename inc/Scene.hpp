@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <string>
 
 class Camera;
 class Laser;
@@ -19,6 +20,7 @@ class Scene
         std::shared_ptr<Hittable> accel;
         bool target_required = false;
         double minimal_score = 0.0;
+        std::vector<std::string> prompts;
 
         // Update beam objects and associated lights in the scene.
         void update_beams(const std::vector<Material> &materials);

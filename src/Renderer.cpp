@@ -911,6 +911,8 @@ struct Renderer::RenderState
         double hud_focus_score = 0.0;
         bool quota_met = false;
         bool tutorial_mode = false;
+        std::vector<std::string> tutorial_prompts;
+        size_t tutorial_prompt_index = 0;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1182,6 +1184,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 mats = Parser::get_materials();
                                 scene.update_beams(mats);
                                 scene.build_bvh();
+                                st.tutorial_prompts = scene.prompts;
+                                st.tutorial_prompt_index = 0;
                                 st.edit_mode = false;
                                 st.align_on_grab = false;
                                 st.rotating = false;
@@ -1477,6 +1481,15 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 }
                         }
                 }
+                else if (st.focused && st.tutorial_mode && !st.quota_met &&
+                                 e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
+                                 (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
+                {
+                        if (!st.tutorial_prompts.empty() &&
+                            st.tutorial_prompt_index + 1 < st.tutorial_prompts.size())
+                                ++st.tutorial_prompt_index;
+                }
                 else if (st.focused && st.quota_met && e.type == SDL_KEYDOWN &&
                                  e.key.repeat == 0 &&
                                  (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
@@ -1557,6 +1570,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                         mats = Parser::get_materials();
                                                         scene.update_beams(mats);
                                                         scene.build_bvh();
+                                                        st.tutorial_prompts = scene.prompts;
+                                                        st.tutorial_prompt_index = 0;
                                                         st.cumulative_score += st.last_score;
                                                         st.current_level_index = static_cast<int>(
                                                                 std::distance(st.level_paths.begin(), next_it));
@@ -2009,9 +2024,25 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 
         if (st.tutorial_mode)
         {
-                set_control(slot_move,
-                            "Lorem ipsum dolor sit amet.\nConsectetur adipiscing elit.",
-                            neutral);
+                set_control(slot_pause, "PAUSE\nESC", neutral);
+                if (!st.tutorial_prompts.empty())
+                {
+                        size_t idx = st.tutorial_prompt_index;
+                        if (idx >= st.tutorial_prompts.size())
+                                idx = st.tutorial_prompts.size() - 1;
+                        set_control(slot_move, st.tutorial_prompts[idx], neutral);
+                        if (st.focused && idx + 1 < st.tutorial_prompts.size())
+                                set_control(slot_primary, "NEXT PROMPT\nENTER", accent);
+                }
+                else
+                {
+                        set_control(slot_move, "NO TUTORIAL PROMPTS", warning);
+                }
+                if (!st.focused)
+                {
+                        set_control(slot_primary, "FOCUS LOST\nCLICK WINDOW", warning);
+                        set_control(slot_rotate, "RESUME CONTROL\nCLICK", neutral);
+                }
         }
         else
         {
@@ -2653,6 +2684,8 @@ bool Renderer::render_window(std::vector<Material> &mats,
         st.player_name.clear();
         st.level_number = parse_level_number_from_path(st.scene_path);
         st.level_label = level_label_from_path(st.scene_path);
+        st.tutorial_prompts = scene.prompts;
+        st.tutorial_prompt_index = 0;
         st.focused = true;
         SDL_SetRelativeMouseMode(SDL_TRUE);
         SDL_ShowCursor(SDL_DISABLE);
