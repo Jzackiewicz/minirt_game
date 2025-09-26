@@ -138,7 +138,7 @@ bool MapSaver::save(const std::string &path, const Scene &scene, const Camera &c
         int light_index = 1;
         for (const auto &light : scene.lights)
         {
-                if (light.attached_id != -1)
+                if (light.attached_id != -1 || light.reflected)
                         continue;
                 out << "\n[[lighting.light_sources]]\n";
                 out << "id = \"light" << light_index++ << "\"\n";
