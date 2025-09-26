@@ -888,6 +888,7 @@ struct Renderer::RenderState
         bool focused = false;
         bool edit_mode = false;
         bool rotating = false;
+        bool align_on_grab = false;
         int hover_obj = -1;
         int hover_mat = -1;
         int selected_obj = -1;
@@ -999,27 +1000,10 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         Vec3 center = (box.min + box.max) * 0.5;
                                         st.edit_dist =
                                                 (center - cam.origin).length();
-                                        Vec3 desired =
-                                                cam.origin + cam.forward * st.edit_dist;
-                                        Vec3 delta = desired - center;
-                                        if (delta.length_squared() > 0)
-                                        {
-                                                Vec3 applied = scene.move_with_collision(
-                                                        st.selected_obj, delta);
-                                                center += applied;
-                                                if (applied.length_squared() > 0)
-                                                {
-                                                        scene.update_beams(mats);
-                                                        scene.build_bvh();
-                                                        st.edit_dist =
-                                                                (center - cam.origin).length();
-                                                        if (g_developer_mode)
-                                                                mark_scene_dirty(st);
-                                                }
-                                        }
                                         st.edit_pos = center;
                                 }
                                 st.edit_mode = true;
+                                st.align_on_grab = true;
                                 st.spawn_key = -1;
                         }
                         else if (st.edit_mode)
@@ -1029,6 +1013,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         mats[st.selected_mat].base_color;
                                 st.selected_obj = st.selected_mat = -1;
                                 st.edit_mode = false;
+                                st.align_on_grab = false;
                                 st.rotating = false;
                                 st.spawn_key = -1;
                         }
@@ -1060,6 +1045,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         mark_scene_dirty(st);
                         st.selected_obj = st.selected_mat = -1;
                         st.edit_mode = false;
+                        st.align_on_grab = false;
                         st.rotating = false;
                         st.spawn_key = -1;
                 }
@@ -1197,6 +1183,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 scene.update_beams(mats);
                                 scene.build_bvh();
                                 st.edit_mode = false;
+                                st.align_on_grab = false;
                                 st.rotating = false;
                                 st.hover_obj = -1;
                                 st.hover_mat = -1;
@@ -1288,6 +1275,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                         mark_scene_dirty(st);
                                         st.selected_obj = st.selected_mat = -1;
                                         st.edit_mode = false;
+                                        st.align_on_grab = false;
                                         st.rotating = false;
                                         st.spawn_key = -1;
                                 }
@@ -1481,6 +1469,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                             st.selected_mat < static_cast<int>(mats.size()))
                                                 mats[st.selected_mat].checkered = true;
                                         st.edit_mode = true;
+                                        st.align_on_grab = true;
                                         st.rotating = false;
                                         st.edit_pos = pos;
                                         st.edit_dist = (pos - cam.origin).length();
@@ -1579,6 +1568,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                         st.scene_dirty = false;
                                                         st.last_auto_save = SDL_GetTicks();
                                                         st.edit_mode = false;
+                                                        st.align_on_grab = false;
                                                         st.rotating = false;
                                                         st.hover_obj = -1;
                                                         st.hover_mat = -1;
@@ -1792,7 +1782,7 @@ void Renderer::update_selection(RenderState &st,
 
                 Vec3 desired = cam.origin + cam.forward * st.edit_dist;
                 Vec3 delta = desired - st.edit_pos;
-                if (delta.length_squared() > 0)
+                if (!st.align_on_grab && delta.length_squared() > 0)
                 {
                         Vec3 applied = scene.move_with_collision(st.selected_obj, delta);
                         st.edit_pos += applied;
@@ -1810,6 +1800,7 @@ void Renderer::update_selection(RenderState &st,
                 if (cam_delta.length_squared() > 0)
                         scene.move_camera(cam, cam_delta, mats);
                 st.edit_dist = (st.edit_pos - cam.origin).length();
+                st.align_on_grab = false;
 
                 refresh_hud_focus(false);
         }
