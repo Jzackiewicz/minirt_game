@@ -911,6 +911,8 @@ struct Renderer::RenderState
         double hud_focus_score = 0.0;
         bool quota_met = false;
         bool tutorial_mode = false;
+        size_t tutorial_prompt_index = 0;
+        bool tutorial_prompts_finished = false;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1194,6 +1196,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 st.edit_pos = Vec3();
                                 st.scene_dirty = false;
                                 st.last_auto_save = SDL_GetTicks();
+                                st.tutorial_prompt_index = 0;
+                                st.tutorial_prompts_finished = scene.tutorial_prompts.empty();
                                 std::cout << "Reloaded scene from: " << st.scene_path << "\n";
                         }
                         else
@@ -1477,6 +1481,23 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 }
                         }
                 }
+                else if (st.focused && st.tutorial_mode && !st.tutorial_prompts_finished &&
+                                 e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
+                                 (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
+                {
+                        if (!scene.tutorial_prompts.empty())
+                        {
+                                if (st.tutorial_prompt_index + 1 < scene.tutorial_prompts.size())
+                                {
+                                        ++st.tutorial_prompt_index;
+                                }
+                                else
+                                {
+                                        st.tutorial_prompts_finished = true;
+                                }
+                        }
+                }
                 else if (st.focused && st.quota_met && e.type == SDL_KEYDOWN &&
                                  e.key.repeat == 0 &&
                                  (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
@@ -1579,6 +1600,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                         st.edit_pos = Vec3();
                                                         st.quota_met = false;
                                                         st.last_score = 0.0;
+                                                        st.tutorial_prompt_index = 0;
+                                                        st.tutorial_prompts_finished = scene.tutorial_prompts.empty();
                                                 }
                                                 else
                                                 {
@@ -2009,9 +2032,33 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 
         if (st.tutorial_mode)
         {
-                set_control(slot_move,
-                            "Lorem ipsum dolor sit amet.\nConsectetur adipiscing elit.",
-                            neutral);
+                set_control(slot_pause, "PAUSE\nESC", neutral);
+                if (!st.focused)
+                {
+                        set_control(slot_move, "FOCUS LOST\nCLICK WINDOW", warning);
+                        set_control(slot_rotate, "RESUME CONTROL\nCLICK", neutral);
+                }
+                else if (!scene.tutorial_prompts.empty())
+                {
+                        size_t prompt_index = std::min(st.tutorial_prompt_index,
+                                                        scene.tutorial_prompts.size() - 1);
+                        set_control(slot_move, scene.tutorial_prompts[prompt_index], neutral);
+                        if (!st.tutorial_prompts_finished)
+                        {
+                                if (st.tutorial_prompt_index + 1 < scene.tutorial_prompts.size())
+                                        set_control(slot_secondary, "NEXT PROMPT\nENTER", neutral);
+                                else
+                                        set_control(slot_secondary, "FINISH PROMPT\nENTER", neutral);
+                        }
+                        else
+                        {
+                                set_control(slot_secondary, "CONTINUE\nENTER", accent);
+                        }
+                }
+                else
+                {
+                        set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
+                }
         }
         else
         {
@@ -2427,7 +2474,12 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         bool score_met = (scene.minimal_score <= 0.0) ||
                          (st.last_score + kQuotaScoreEpsilon >= scene.minimal_score);
         bool target_met = !scene.target_required || target_blinking(scene);
-        st.quota_met = quota_defined && score_met && target_met;
+        bool base_quota_met = quota_defined && score_met && target_met;
+        bool prompts_defined = st.tutorial_mode && !scene.tutorial_prompts.empty();
+        if (prompts_defined)
+                st.quota_met = st.tutorial_prompts_finished;
+        else
+                st.quota_met = base_quota_met;
 
         for (int y = 0; y < RH; ++y)
         {
@@ -2658,6 +2710,8 @@ bool Renderer::render_window(std::vector<Material> &mats,
         SDL_ShowCursor(SDL_DISABLE);
         SDL_SetWindowGrab(win, SDL_TRUE);
         SDL_WarpMouseInWindow(win, W / 2, H / 2);
+        st.tutorial_prompt_index = 0;
+        st.tutorial_prompts_finished = scene.tutorial_prompts.empty();
 
         std::vector<Vec3> framebuffer(RW * RH);
         std::vector<unsigned char> pixels(RW * RH * 3);
