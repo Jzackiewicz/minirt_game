@@ -30,7 +30,8 @@ bool run_application(const std::string &scene_path, int width, int height,
 	Camera camera({0, 0, -10}, {0, 0, 0}, 60.0,
 				  static_cast<double>(width) / static_cast<double>(height));
 	bool parsed;
-	parsed = Parser::parse_rt_file(scene_path, scene, camera, width, height);
+        parsed = Parser::parse_rt_file(scene_path, scene, camera, width, height,
+                                                               tutorial_mode);
         if (!parsed)
         {
                 std::cerr << "Failed to parse scene: " << scene_path << "\n";

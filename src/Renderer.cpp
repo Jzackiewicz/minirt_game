@@ -31,6 +31,7 @@
 #include <memory>
 #include <optional>
 #include <random>
+#include <sstream>
 #include <system_error>
 #include <string>
 #include <thread>
@@ -911,6 +912,7 @@ struct Renderer::RenderState
         double hud_focus_score = 0.0;
         bool quota_met = false;
         bool tutorial_mode = false;
+        size_t tutorial_prompt_index = 0;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1177,7 +1179,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         Scene backup_scene = scene;
                         Camera backup_cam = cam;
                         auto backup_mats = mats;
-                        if (Parser::parse_rt_file(st.scene_path, scene, cam, W, H))
+                        if (Parser::parse_rt_file(st.scene_path, scene, cam, W, H,
+                                                                          st.tutorial_mode))
                         {
                                 mats = Parser::get_materials();
                                 scene.update_beams(mats);
@@ -1192,6 +1195,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 st.spawn_key = -1;
                                 st.edit_dist = 0.0;
                                 st.edit_pos = Vec3();
+                                st.tutorial_prompt_index = 0;
                                 st.scene_dirty = false;
                                 st.last_auto_save = SDL_GetTicks();
                                 std::cout << "Reloaded scene from: " << st.scene_path << "\n";
@@ -1477,6 +1481,16 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 }
                         }
                 }
+                else if (st.focused && st.tutorial_mode && !scene.tutorial_prompts.empty() &&
+                                 e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
+                                 (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
+                {
+                        size_t total = scene.tutorial_prompts.size();
+                        size_t current = std::min(st.tutorial_prompt_index, total ? total - 1 : 0);
+                        if (current + 1 < total)
+                                ++st.tutorial_prompt_index;
+                }
                 else if (st.focused && st.quota_met && e.type == SDL_KEYDOWN &&
                                  e.key.repeat == 0 &&
                                  (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
@@ -1552,7 +1566,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                 Scene backup_scene = scene;
                                                 Camera backup_cam = cam;
                                                 auto backup_mats = mats;
-                                                if (Parser::parse_rt_file(next_path.string(), scene, cam, W, H))
+                                                if (Parser::parse_rt_file(next_path.string(), scene, cam, W, H,
+                                                                                           st.tutorial_mode))
                                                 {
                                                         mats = Parser::get_materials();
                                                         scene.update_beams(mats);
@@ -1579,6 +1594,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                         st.edit_pos = Vec3();
                                                         st.quota_met = false;
                                                         st.last_score = 0.0;
+                                                        st.tutorial_prompt_index = 0;
                                                 }
                                                 else
                                                 {
@@ -1853,6 +1869,16 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
         left_lines.push_back({score_buf, score_color});
 
+        if (st.tutorial_mode && !scene.tutorial_prompts.empty())
+        {
+                size_t total = scene.tutorial_prompts.size();
+                size_t index = std::min(st.tutorial_prompt_index, total - 1);
+                char prompt_buf[64];
+                std::snprintf(prompt_buf, sizeof(prompt_buf), "PROMPT %zu/%zu", index + 1,
+                              total);
+                left_lines.push_back({prompt_buf, SDL_Color{255, 255, 255, 255}});
+        }
+
         std::vector<HudTextLine> center_lines;
         if (st.quota_met)
         {
@@ -1860,6 +1886,14 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         {"LEVEL FINISHED", SDL_Color{255, 255, 255, 255}});
                 center_lines.push_back(
                         {"ENTER TO CONTINUE", SDL_Color{255, 255, 255, 255}});
+        }
+        else if (st.tutorial_mode && !scene.tutorial_prompts.empty())
+        {
+                size_t total = scene.tutorial_prompts.size();
+                size_t index = std::min(st.tutorial_prompt_index, total - 1);
+                if (index + 1 < total)
+                        center_lines.push_back(
+                                {"ENTER FOR NEXT TIP", SDL_Color{255, 255, 255, 255}});
         }
 
         std::vector<HudTextLine> right_lines;
@@ -2009,9 +2043,15 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 
         if (st.tutorial_mode)
         {
-                set_control(slot_move,
-                            "Lorem ipsum dolor sit amet.\nConsectetur adipiscing elit.",
-                            neutral);
+                std::string prompt_text;
+                if (!scene.tutorial_prompts.empty())
+                {
+                        size_t total = scene.tutorial_prompts.size();
+                        size_t index = std::min(st.tutorial_prompt_index, total - 1);
+                        prompt_text = scene.tutorial_prompts[index];
+                }
+                set_control(slot_move, prompt_text, neutral);
+                set_control(slot_pause, "PAUSE\nESC", neutral);
         }
         else
         {
@@ -2097,8 +2137,58 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 return lines;
         };
 
+        auto wrap_text = [&](const std::string &text, int max_width) {
+                std::vector<std::string> lines;
+                if (max_width <= 0)
+                        max_width = 1;
+                std::string current;
+                auto flush_current = [&]() {
+                        if (!current.empty())
+                        {
+                                lines.push_back(current);
+                                current.clear();
+                        }
+                };
+                size_t pos = 0;
+                while (pos <= text.size())
+                {
+                        size_t newline = text.find('\n', pos);
+                        std::string segment =
+                                (newline == std::string::npos)
+                                        ? text.substr(pos)
+                                        : text.substr(pos, newline - pos);
+                        std::istringstream iss(segment);
+                        std::string word;
+                        while (iss >> word)
+                        {
+                                std::string candidate =
+                                        current.empty() ? word : current + " " + word;
+                                if (!current.empty() &&
+                                    CustomCharacter::text_width(candidate, hud_scale) > max_width)
+                                {
+                                        flush_current();
+                                        current = word;
+                                }
+                                else
+                                {
+                                        current = candidate;
+                                }
+                        }
+                        flush_current();
+                        if (newline == std::string::npos)
+                                break;
+                        lines.push_back(std::string());
+                        pos = newline + 1;
+                }
+                while (!lines.empty() && lines.back().empty())
+                        lines.pop_back();
+                if (lines.empty())
+                        lines.emplace_back();
+                return lines;
+        };
+
         std::array<std::vector<std::string>, kControlSections> section_lines{};
-        size_t max_control_lines = 1;
+        size_t max_control_lines = st.tutorial_mode ? kTutorialMinControlLines : 1;
         for (size_t i = 0; i < control_sections.size(); ++i)
         {
                 if (!control_sections[i])
@@ -2129,10 +2219,30 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         active_sections.push_back(0);
         }
 
-        const int hud_line_height = 7 * hud_scale + 4;
+        size_t section_count = active_sections.size();
+        double section_span = static_cast<double>(W) /
+                              static_cast<double>(std::max<size_t>(section_count, 1));
 
         if (st.tutorial_mode)
-                max_control_lines = std::max(max_control_lines, kTutorialMinControlLines);
+        {
+                size_t wrapped_max = kTutorialMinControlLines;
+                for (size_t pos = 0; pos < active_sections.size(); ++pos)
+                {
+                        size_t i = active_sections[pos];
+                        if (section_lines[i].empty())
+                                continue;
+                        int start_x = static_cast<int>(std::round(pos * section_span));
+                        int end_x = static_cast<int>(std::round((pos + 1) * section_span));
+                        int available = std::max(1, end_x - start_x);
+                        int text_limit = std::max(1, available - 2 * hud_padding);
+                        auto wrapped = wrap_text(control_sections[i]->text, text_limit);
+                        if (!wrapped.empty())
+                                wrapped_max = std::max(wrapped_max, wrapped.size());
+                }
+                max_control_lines = std::max(max_control_lines, wrapped_max);
+        }
+
+        const int hud_line_height = 7 * hud_scale + 4;
 
         size_t top_count = std::max(left_lines.size(), right_lines.size());
         top_count = std::max(top_count, center_lines.size());
@@ -2232,9 +2342,6 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
 
         int controls_top = H - bottom_bar_height + hud_padding;
-        size_t section_count = active_sections.size();
-        double section_span = static_cast<double>(W) /
-                              static_cast<double>(std::max<size_t>(section_count, 1));
         int bar_vertical_margin = std::max(2, hud_padding / 2);
         int bar_horizontal_margin = std::max(2, hud_padding / 2);
         int bar_top = H - bottom_bar_height + bar_vertical_margin;
@@ -2268,20 +2375,21 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                 SDL_RenderFillRect(ren, &bar_rect);
                         }
 
-                        const auto &lines = section_lines[i];
                         if (st.tutorial_mode)
                         {
+                                auto wrapped = wrap_text(entry.text,
+                                                         std::max(1, available - 2 * hud_padding));
                                 int text_y = controls_top;
-                                if (!lines.empty())
+                                if (!wrapped.empty())
                                 {
                                         int available_height = std::max(0, bottom_bar_height -
                                                                                 2 * hud_padding);
-                                        int content_height = static_cast<int>(lines.size()) *
+                                        int content_height = static_cast<int>(wrapped.size()) *
                                                             hud_line_height;
                                         if (available_height > content_height)
                                                 text_y += (available_height - content_height) / 2;
                                 }
-                                for (const auto &line : lines)
+                                for (const auto &line : wrapped)
                                 {
                                         if (line.empty())
                                         {
@@ -2297,6 +2405,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         }
                         else
                         {
+                                const auto &lines = section_lines[i];
                                 int header_y = controls_top;
                                 if (!lines.front().empty())
                                 {
@@ -2647,6 +2756,7 @@ bool Renderer::render_window(std::vector<Material> &mats,
         std::filesystem::path absolute_scene_path = std::filesystem::absolute(scene_path);
         st.scene_path = absolute_scene_path.string();
         st.tutorial_mode = tutorial_mode;
+        st.tutorial_prompt_index = 0;
         st.level_paths = collect_level_paths(absolute_scene_path, st.tutorial_mode);
         st.current_level_index = level_index_for(st.level_paths, absolute_scene_path);
         st.cumulative_score = 0.0;

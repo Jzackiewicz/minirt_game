@@ -125,6 +125,7 @@ enum class TableType
         ObjectsCylinder,
         BeamSource,
         BeamTarget,
+        Prompts,
         Quota
 };
 
@@ -152,6 +153,8 @@ const char *table_name(TableType type)
                 return "beam.sources";
         case TableType::BeamTarget:
                 return "beam.targets";
+        case TableType::Prompts:
+                return "prompts";
         case TableType::Quota:
                 return "quota";
         default:
@@ -163,6 +166,7 @@ int table_stage(TableType type)
 {
         switch (type)
         {
+        case TableType::Prompts:
         case TableType::Quota:
                 return 1;
         case TableType::Camera:
@@ -208,6 +212,8 @@ std::string table_header(TableType type)
                 return "[[beam.sources]]";
         case TableType::BeamTarget:
                 return "[[beam.targets]]";
+        case TableType::Prompts:
+                return "[prompts]";
         case TableType::Quota:
                 return "[quota]";
         default:
@@ -220,6 +226,7 @@ struct TableData
         TableType type = TableType::None;
         size_t header_line = 0;
         std::unordered_map<std::string, std::pair<std::string, size_t>> values;
+        std::vector<std::string> order;
 };
 
 bool key_allowed(const std::string &key, std::initializer_list<const char *> allowed)
@@ -989,6 +996,27 @@ bool process_beam_target(const TableData &table, Scene &scene, int &oid, int &mi
         return true;
 }
 
+bool process_prompts(const TableData &table, Scene &scene)
+{
+        scene.tutorial_prompts.clear();
+        if (table.order.empty())
+                return report_error(table.header_line,
+                                    "[prompts] section must contain at least one entry");
+        scene.tutorial_prompts.reserve(table.order.size());
+        for (const auto &key : table.order)
+        {
+                auto it = table.values.find(key);
+                if (it == table.values.end())
+                        continue;
+                std::string trimmed = trim(it->second.first);
+                if (trimmed.size() < 2 || trimmed.front() != '"' || trimmed.back() != '"')
+                        return report_error(it->second.second,
+                                            "Expected string for '" + key + "'");
+                scene.tutorial_prompts.push_back(trimmed.substr(1, trimmed.size() - 2));
+        }
+        return true;
+}
+
 bool process_quota(const TableData &table, Scene &scene)
 {
         if (!check_allowed_keys(table, {"target", "minimal_score"}))
@@ -1009,7 +1037,8 @@ bool process_quota(const TableData &table, Scene &scene)
 std::vector<Material> Parser::materials;
 
 bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
-                                                   Camera &outCamera, int width, int height)
+                                                   Camera &outCamera, int width, int height,
+                                                   bool tutorial_mode)
 {
         std::ifstream in(path);
         if (!in)
@@ -1025,6 +1054,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         outScene.ambient = Ambient(Vec3(1, 1, 1), 0.0);
         outScene.target_required = false;
         outScene.minimal_score = 0.0;
+        outScene.tutorial_prompts.clear();
 
         std::filesystem::path scene_dir =
                 std::filesystem::absolute(std::filesystem::path(path)).parent_path();
@@ -1039,6 +1069,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         bool quota_declared = false;
         bool quota_seen = false;
         size_t quota_line = 0;
+        bool prompts_declared = false;
+        bool prompts_seen = false;
+        size_t prompts_line = 0;
 
         int oid = 0;
         int mid = 0;
@@ -1096,6 +1129,14 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                 case TableType::BeamTarget:
                         ok = process_beam_target(table, outScene, oid, mid, materials, beam_target_ids);
                         break;
+                case TableType::Prompts:
+                        prompts_line = table.header_line;
+                        if (!tutorial_mode)
+                                return report_error(table.header_line,
+                                                    "[prompts] section is only allowed in tutorial levels");
+                        ok = process_prompts(table, outScene);
+                        prompts_seen = prompts_seen || ok;
+                        break;
                 case TableType::Quota:
                         quota_line = table.header_line;
                         ok = process_quota(table, outScene);
@@ -1152,6 +1193,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                         next_type = TableType::Camera;
                                 else if (name == "lighting.ambient")
                                         next_type = TableType::LightingAmbient;
+                                else if (name == "prompts")
+                                        next_type = TableType::Prompts;
                                 else if (name == "quota")
                                         next_type = TableType::Quota;
                                 else
@@ -1173,7 +1216,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                 switch (stage)
                                 {
                                 case 2:
-                                        message = "Camera section must come after quota section";
+                                        message = tutorial_mode
+                                                          ? "Camera section must come after prompts section"
+                                                          : "Camera section must come after quota section";
                                         break;
                                 case 3:
                                         message = "Lighting section must come after camera section";
@@ -1185,7 +1230,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                         message = "Beam section must come after objects section";
                                         break;
                                 default:
-                                        message = "Sections must follow quota -> camera -> lighting -> objects -> beam order";
+                                        message = "Sections must follow prompts/quota -> camera -> lighting -> objects -> beam order";
                                         break;
                                 }
                                 return report_error(line_no, message);
@@ -1201,6 +1246,11 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                                 if (ambient_declared)
                                         return report_error(line_no, "Multiple " + header + " sections are not allowed");
                                 ambient_declared = true;
+                                break;
+                        case TableType::Prompts:
+                                if (prompts_declared)
+                                        return report_error(line_no, "Multiple " + header + " sections are not allowed");
+                                prompts_declared = true;
                                 break;
                         case TableType::Quota:
                                 if (quota_declared)
@@ -1230,8 +1280,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                 std::string value = trim(line.substr(eq + 1));
                 if (key.empty() || value.empty())
                         return report_error(line_no, "Invalid key/value pair");
-                if (!current.values.emplace(key, std::make_pair(value, line_no)).second)
+                auto inserted = current.values.emplace(key, std::make_pair(value, line_no));
+                if (!inserted.second)
                         return report_error(line_no, "Duplicate key '" + key + "' in " + table_header(current.type));
+                current.order.push_back(key);
         }
         if (!finalize_table(current))
                 return false;
@@ -1239,8 +1291,13 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                 return report_error(line_no ? line_no : 1, "Camera section is required");
         if (!ambient_seen)
                 return report_error(line_no ? line_no : 1, "Lighting ambient section is required");
-        if (!quota_seen)
+        if (!tutorial_mode && !quota_seen)
                 return report_error(line_no ? line_no : 1, "Quota section is required");
+        if (tutorial_mode && !prompts_seen)
+        {
+                size_t err_line = prompts_line ? prompts_line : (line_no ? line_no : 1);
+                return report_error(err_line, "[prompts] section is required in tutorial levels");
+        }
         if (cam_dir.length_squared() == 0.0)
                 return report_error(line_no ? line_no : 1, "Camera look direction cannot be zero");
 
