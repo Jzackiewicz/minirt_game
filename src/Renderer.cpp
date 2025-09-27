@@ -45,7 +45,7 @@ static constexpr double kAltColorAmount = 0.35;
 static constexpr double kQuotaScoreEpsilon = 1e-3;
 static constexpr double kBeamTransparentAlpha = 125.0 / 255.0;
 static constexpr double kSpotlightLaserRatio = 20.0;
-static constexpr Uint32 kTutorialContinueDelayMs = 5000;
+static constexpr Uint32 kTutorialContinueDelayMs = 4000;
 
 static Vec3 brighten_color(const Vec3 &color)
 {
@@ -2422,11 +2422,8 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 int pen_x = x;
                 for (char ch : text)
                 {
-                        if (ch == '\'')
+                        if (ch == '`')
                         {
-                                CustomCharacter::draw_character(ren, ch, pen_x, y, base_color,
-                                                                hud_scale);
-                                pen_x += (5 + 1) * hud_scale;
                                 quote_active = !quote_active;
                                 continue;
                         }
