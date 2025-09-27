@@ -908,6 +908,7 @@ struct Renderer::RenderState
         std::string scene_path;
         std::vector<std::filesystem::path> level_paths;
         int current_level_index = 0;
+        int total_levels = 0;
         double cumulative_score = 0.0;
         std::string player_name;
         int hud_focus_object = -1;
@@ -1845,13 +1846,27 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         const int hud_padding = 12;
 
         std::vector<HudTextLine> left_lines;
-        std::string level_line;
-        if (st.level_number > 0)
-                level_line = "LEVEL " + std::to_string(st.level_number);
+        int level_id = st.level_number;
+        if (level_id <= 0 && st.current_level_index >= 0)
+                level_id = st.current_level_index + 1;
+
+        std::string level_display;
+        if (level_id > 0)
+                level_display = std::to_string(level_id);
         else if (!st.level_label.empty())
-                level_line = "LEVEL " + st.level_label;
+                level_display = st.level_label;
         else
-                level_line = "LEVEL ?";
+                level_display = "?";
+
+        std::string total_display;
+        if (st.total_levels > 0)
+                total_display = std::to_string(st.total_levels);
+        else if (!st.level_paths.empty())
+                total_display = std::to_string(st.level_paths.size());
+        else
+                total_display = "?";
+
+        std::string level_line = "Level " + level_display + "/" + total_display;
         left_lines.push_back({level_line, SDL_Color{255, 255, 255, 255}});
 
         if (scene.target_required)
@@ -1882,13 +1897,51 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
         left_lines.push_back({score_buf, score_color});
 
+        bool tutorial_has_next_prompt =
+                st.tutorial_mode && !st.tutorial_prompts.empty() &&
+                st.tutorial_prompt_index + 1 < st.tutorial_prompts.size();
+        bool tutorial_has_more_levels = false;
+        if (st.tutorial_mode && st.current_level_index >= 0 &&
+            st.current_level_index < static_cast<int>(st.level_paths.size()))
+        {
+                for (int i = st.current_level_index + 1;
+                     i < static_cast<int>(st.level_paths.size()); ++i)
+                {
+                        if (path_is_level_for_mode(st.level_paths[i], st.tutorial_mode))
+                        {
+                                tutorial_has_more_levels = true;
+                                break;
+                        }
+                }
+        }
+
         std::vector<HudTextLine> center_lines;
+        bool center_has_blink = false;
+        auto add_center_line = [&](const std::string &text, SDL_Color color,
+                                   bool blink = false) {
+                center_lines.push_back({text, color, blink});
+                center_has_blink = center_has_blink || blink;
+        };
         if (st.quota_met)
         {
-                center_lines.push_back(
-                        {"LEVEL FINISHED", SDL_Color{255, 255, 255, 255}});
-                center_lines.push_back(
-                        {"ENTER TO CONTINUE", SDL_Color{255, 255, 255, 255}});
+                SDL_Color center_color{255, 255, 255, 255};
+                if (st.tutorial_mode)
+                {
+                        if (!tutorial_has_next_prompt && !tutorial_has_more_levels)
+                        {
+                                add_center_line("TUTORIAL FINISHED.", center_color);
+                                add_center_line("ENTER to continue", center_color);
+                        }
+                        else
+                        {
+                                add_center_line("ENTER to continue", center_color);
+                        }
+                }
+                else
+                {
+                        add_center_line("LEVEL FINISHED", center_color);
+                        add_center_line("ENTER TO CONTINUE", center_color);
+                }
         }
 
         std::vector<HudTextLine> right_lines;
@@ -2255,16 +2308,13 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         size_t max_control_lines = 1;
         Uint32 hud_ticks = SDL_GetTicks();
         bool blink_on = ((hud_ticks / 350) % 2) == 0;
-        bool tutorial_has_next_prompt =
-                st.tutorial_mode && !st.tutorial_prompts.empty() &&
-                st.tutorial_prompt_index + 1 < st.tutorial_prompts.size();
         bool tutorial_continue_ready =
                 st.tutorial_mode &&
                 (hud_ticks - st.tutorial_prompt_shown_at >= kTutorialContinueDelayMs);
         bool show_tutorial_continue_hint = tutorial_has_next_prompt && tutorial_continue_ready;
-        if (!st.quota_met && show_tutorial_continue_hint)
+        if (!st.quota_met && st.tutorial_mode && show_tutorial_continue_hint)
         {
-                center_lines.push_back({"ENTER to continue", neutral, true});
+                add_center_line("ENTER to continue", neutral, true);
         }
         int wrap_margin = hud_padding + std::max(2, hud_padding / 2);
         int wrap_width = std::max(1, W - 2 * wrap_margin);
@@ -2342,7 +2392,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 
         if (!center_lines.empty() && center_rect_width > 0)
         {
-                bool highlight_on = blink_on;
+                bool highlight_on = center_has_blink ? blink_on : st.quota_met;
                 if (highlight_on)
                 {
                         SDL_SetRenderDrawColor(ren, 255, 240, 128, 180);
@@ -2381,7 +2431,10 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 
         if (!center_lines.empty())
         {
-                int center_y = hud_padding;
+                int center_block_height =
+                        static_cast<int>(center_lines.size()) * hud_line_height;
+                int center_y = (top_bar_height - center_block_height) / 2;
+                center_y = std::max(center_y, hud_padding);
                 for (const auto &line : center_lines)
                 {
                         if (line.blink && !blink_on)
@@ -2845,6 +2898,7 @@ bool Renderer::render_window(std::vector<Material> &mats,
         st.scene_path = absolute_scene_path.string();
         st.tutorial_mode = tutorial_mode;
         st.level_paths = collect_level_paths(absolute_scene_path, st.tutorial_mode);
+        st.total_levels = static_cast<int>(st.level_paths.size());
         st.current_level_index = level_index_for(st.level_paths, absolute_scene_path);
         st.cumulative_score = 0.0;
         st.player_name.clear();
