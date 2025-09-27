@@ -1845,13 +1845,24 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         const int hud_padding = 12;
 
         std::vector<HudTextLine> left_lines;
-        std::string level_line;
+        int total_levels = static_cast<int>(std::count_if(
+                st.level_paths.begin(), st.level_paths.end(),
+                [&](const std::filesystem::path &p) {
+                        return path_is_level_for_mode(p, st.tutorial_mode);
+                }));
+        std::string level_id;
         if (st.level_number > 0)
-                level_line = "LEVEL " + std::to_string(st.level_number);
+                level_id = std::to_string(st.level_number);
+        else if (st.current_level_index >= 0)
+                level_id = std::to_string(st.current_level_index + 1);
         else if (!st.level_label.empty())
-                level_line = "LEVEL " + st.level_label;
+                level_id = st.level_label;
         else
-                level_line = "LEVEL ?";
+                level_id = "?";
+
+        std::string level_line = "Level " + level_id;
+        if (total_levels > 0)
+                level_line += "/" + std::to_string(total_levels);
         left_lines.push_back({level_line, SDL_Color{255, 255, 255, 255}});
 
         if (scene.target_required)
