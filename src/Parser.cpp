@@ -125,6 +125,7 @@ enum class TableType
         ObjectsCylinder,
         BeamSource,
         BeamTarget,
+        Prompts,
         Quota
 };
 
@@ -152,6 +153,8 @@ const char *table_name(TableType type)
                 return "beam.sources";
         case TableType::BeamTarget:
                 return "beam.targets";
+        case TableType::Prompts:
+                return "prompts";
         case TableType::Quota:
                 return "quota";
         default:
@@ -163,6 +166,7 @@ int table_stage(TableType type)
 {
         switch (type)
         {
+        case TableType::Prompts:
         case TableType::Quota:
                 return 1;
         case TableType::Camera:
@@ -208,6 +212,8 @@ std::string table_header(TableType type)
                 return "[[beam.sources]]";
         case TableType::BeamTarget:
                 return "[[beam.targets]]";
+        case TableType::Prompts:
+                return "[prompts]";
         case TableType::Quota:
                 return "[quota]";
         default:
@@ -220,6 +226,7 @@ struct TableData
         TableType type = TableType::None;
         size_t header_line = 0;
         std::unordered_map<std::string, std::pair<std::string, size_t>> values;
+        std::vector<std::string> order;
 };
 
 bool key_allowed(const std::string &key, std::initializer_list<const char *> allowed)
@@ -989,6 +996,62 @@ bool process_beam_target(const TableData &table, Scene &scene, int &oid, int &mi
         return true;
 }
 
+bool process_prompts(const TableData &table, Scene &scene)
+{
+        scene.prompts.clear();
+        for (const auto &key : table.order)
+        {
+                auto it = table.values.find(key);
+                if (it == table.values.end())
+                        continue;
+                std::string trimmed = trim(it->second.first);
+                size_t line = it->second.second;
+                if (trimmed.size() < 2 || trimmed.front() != '"' || trimmed.back() != '"')
+                        return report_error(line, "Expected string for '" + key + "'");
+                std::string inner = trimmed.substr(1, trimmed.size() - 2);
+                std::string value;
+                value.reserve(inner.size());
+                for (size_t i = 0; i < inner.size(); ++i)
+                {
+                        char ch = inner[i];
+                        if (ch == '\\')
+                        {
+                                if (i + 1 >= inner.size())
+                                        return report_error(line, "Invalid escape sequence in prompt value");
+                                char next = inner[++i];
+                                switch (next)
+                                {
+                                case 'n':
+                                        value.push_back('\n');
+                                        break;
+                                case 'r':
+                                        value.push_back('\n');
+                                        break;
+                                case 't':
+                                        value.push_back('\t');
+                                        break;
+                                case '\\':
+                                        value.push_back('\\');
+                                        break;
+                                case '"':
+                                        value.push_back('"');
+                                        break;
+                                default:
+                                        return report_error(line, std::string("Unsupported escape sequence \\") + next + " in prompt value");
+                                }
+                        }
+                        else
+                        {
+                                value.push_back(ch);
+                        }
+                }
+                scene.prompts.push_back(std::move(value));
+        }
+        if (scene.prompts.empty())
+                return report_error(table.header_line, "[prompts] must define at least one entry");
+        return true;
+}
+
 bool process_quota(const TableData &table, Scene &scene)
 {
         if (!check_allowed_keys(table, {"target", "minimal_score"}))
@@ -1025,6 +1088,7 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         outScene.ambient = Ambient(Vec3(1, 1, 1), 0.0);
         outScene.target_required = false;
         outScene.minimal_score = 0.0;
+        outScene.prompts.clear();
 
         std::filesystem::path scene_dir =
                 std::filesystem::absolute(std::filesystem::path(path)).parent_path();
@@ -1038,6 +1102,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         bool ambient_declared = false;
         bool quota_declared = false;
         bool quota_seen = false;
+        bool prompts_declared = false;
+        bool prompts_seen = false;
         size_t quota_line = 0;
 
         int oid = 0;
@@ -1096,6 +1162,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                 case TableType::BeamTarget:
                         ok = process_beam_target(table, outScene, oid, mid, materials, beam_target_ids);
                         break;
+                case TableType::Prompts:
+                        ok = process_prompts(table, outScene);
+                        prompts_seen = prompts_seen || ok;
+                        break;
                 case TableType::Quota:
                         quota_line = table.header_line;
                         ok = process_quota(table, outScene);
@@ -1148,7 +1218,9 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                         else if (line.front() == '[' && line.back() == ']')
                         {
                                 std::string name = trim(line.substr(1, line.size() - 2));
-                                if (name == "camera")
+                                if (name == "prompts")
+                                        next_type = TableType::Prompts;
+                                else if (name == "camera")
                                         next_type = TableType::Camera;
                                 else if (name == "lighting.ambient")
                                         next_type = TableType::LightingAmbient;
@@ -1170,33 +1242,38 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                         if (stage > highest_stage + 1)
                         {
                                 std::string message;
-                                switch (stage)
-                                {
-                                case 2:
-                                        message = "Camera section must come after quota section";
-                                        break;
-                                case 3:
-                                        message = "Lighting section must come after camera section";
-                                        break;
-                                case 4:
+                        switch (stage)
+                        {
+                        case 2:
+                                message = "Camera section must come after prompts or quota section";
+                                break;
+                        case 3:
+                                message = "Lighting section must come after camera section";
+                                break;
+                        case 4:
                                         message = "Objects section must come after lighting section";
                                         break;
                                 case 5:
                                         message = "Beam section must come after objects section";
                                         break;
                                 default:
-                                        message = "Sections must follow quota -> camera -> lighting -> objects -> beam order";
+                                        message = "Sections must follow prompts/quota -> camera -> lighting -> objects -> beam order";
                                         break;
-                                }
-                                return report_error(line_no, message);
                         }
-                        switch (next_type)
-                        {
-                        case TableType::Camera:
-                                if (camera_declared)
-                                        return report_error(line_no, "Multiple " + header + " sections are not allowed");
-                                camera_declared = true;
-                                break;
+                        return report_error(line_no, message);
+                }
+                switch (next_type)
+                {
+                case TableType::Prompts:
+                        if (prompts_declared)
+                                return report_error(line_no, "Multiple " + header + " sections are not allowed");
+                        prompts_declared = true;
+                        break;
+                case TableType::Camera:
+                        if (camera_declared)
+                                return report_error(line_no, "Multiple " + header + " sections are not allowed");
+                        camera_declared = true;
+                        break;
                         case TableType::LightingAmbient:
                                 if (ambient_declared)
                                         return report_error(line_no, "Multiple " + header + " sections are not allowed");
@@ -1230,8 +1307,10 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                 std::string value = trim(line.substr(eq + 1));
                 if (key.empty() || value.empty())
                         return report_error(line_no, "Invalid key/value pair");
-                if (!current.values.emplace(key, std::make_pair(value, line_no)).second)
+                auto insert_result = current.values.emplace(key, std::make_pair(value, line_no));
+                if (!insert_result.second)
                         return report_error(line_no, "Duplicate key '" + key + "' in " + table_header(current.type));
+                current.order.push_back(key);
         }
         if (!finalize_table(current))
                 return false;
@@ -1239,8 +1318,8 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                 return report_error(line_no ? line_no : 1, "Camera section is required");
         if (!ambient_seen)
                 return report_error(line_no ? line_no : 1, "Lighting ambient section is required");
-        if (!quota_seen)
-                return report_error(line_no ? line_no : 1, "Quota section is required");
+        if (!quota_seen && !prompts_seen)
+                return report_error(line_no ? line_no : 1, "Quota or prompts section is required");
         if (cam_dir.length_squared() == 0.0)
                 return report_error(line_no ? line_no : 1, "Camera look direction cannot be zero");
 
