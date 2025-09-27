@@ -1493,7 +1493,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                             st.tutorial_prompt_index + 1 < st.tutorial_prompts.size())
                         {
                                 Uint32 now_ticks = SDL_GetTicks();
-                                if (now_ticks - st.tutorial_prompt_shown_at >= 2000)
+                                if (now_ticks - st.tutorial_prompt_shown_at >= 3000)
                                 {
                                         ++st.tutorial_prompt_index;
                                         st.tutorial_prompt_shown_at = now_ticks;
@@ -2418,11 +2418,8 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 int pen_x = x;
                 for (char ch : text)
                 {
-                        if (ch == '\'')
+                        if (ch == '`')
                         {
-                                CustomCharacter::draw_character(ren, ch, pen_x, y, base_color,
-                                                                hud_scale);
-                                pen_x += (5 + 1) * hud_scale;
                                 quote_active = !quote_active;
                                 continue;
                         }
