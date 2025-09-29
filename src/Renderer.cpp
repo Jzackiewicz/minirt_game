@@ -1074,11 +1074,17 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 stats.required_score = scene.minimal_score;
                 stats.total_score = st.cumulative_score + st.last_score;
                 stats.has_next_level = next_level_index(st).has_value();
+                stats.tutorial_mode = st.tutorial_mode;
                 ButtonAction action = LevelFinishedMenu::show(
                         win, ren, current_w, current_h, stats, st.player_name, true);
                 if (action == ButtonAction::Quit)
                 {
                         st.running = false;
+                }
+                else if (action == ButtonAction::BackToMenu)
+                {
+                        st.running = false;
+                        st.return_to_menu = true;
                 }
                 else if (action == ButtonAction::NextLevel)
                 {
