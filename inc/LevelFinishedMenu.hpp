@@ -10,6 +10,7 @@ struct LevelFinishedStats {
     double required_score = 0.0;
     double total_score = 0.0;
     bool has_next_level = false;
+    bool tutorial_mode = false;
 };
 
 class LevelFinishedMenu : public AMenu {
