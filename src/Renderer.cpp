@@ -919,6 +919,20 @@ struct Renderer::RenderState
         Uint32 tutorial_prompt_shown_at = 0;
 };
 
+static std::optional<int> next_level_index(const Renderer::RenderState &st)
+{
+        if (st.current_level_index < 0 ||
+            st.current_level_index >= static_cast<int>(st.level_paths.size()))
+                return std::nullopt;
+        for (int i = st.current_level_index + 1;
+             i < static_cast<int>(st.level_paths.size()); ++i)
+        {
+                if (path_is_level_for_mode(st.level_paths[i], st.tutorial_mode))
+                        return i;
+        }
+        return std::nullopt;
+}
+
 void Renderer::mark_scene_dirty(RenderState &st)
 {
         st.scene_dirty = true;
@@ -1491,15 +1505,26 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                  (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
                                   e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
                 {
-                        if (!st.tutorial_prompts.empty() &&
-                            st.tutorial_prompt_index + 1 < st.tutorial_prompts.size())
+                        Uint32 now_ticks = SDL_GetTicks();
+                        if (now_ticks - st.tutorial_prompt_shown_at >=
+                            kTutorialContinueDelayMs)
                         {
-                                Uint32 now_ticks = SDL_GetTicks();
-                                if (now_ticks - st.tutorial_prompt_shown_at >=
-                                    kTutorialContinueDelayMs)
+                                bool has_more_prompts =
+                                        st.tutorial_prompt_index + 1 <
+                                        st.tutorial_prompts.size();
+                                if (has_more_prompts)
                                 {
                                         ++st.tutorial_prompt_index;
                                         st.tutorial_prompt_shown_at = now_ticks;
+                                }
+                                else if (auto next_level = next_level_index(st))
+                                {
+                                        load_level_at_index(*next_level);
+                                        refocus_game();
+                                }
+                                else
+                                {
+                                        show_level_finished_menu();
                                 }
                         }
                 }
@@ -1508,133 +1533,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                  (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
                                   e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
                 {
-                        st.focused = false;
-                        SDL_SetRelativeMouseMode(SDL_FALSE);
-                        SDL_ShowCursor(SDL_ENABLE);
-                        SDL_SetWindowGrab(win, SDL_FALSE);
-                        SDL_WarpMouseInWindow(win, W / 2, H / 2);
-                        int current_w = W;
-                        int current_h = H;
-                        SDL_GetWindowSize(win, &current_w, &current_h);
-                        LevelFinishedStats stats;
-                        int total_numbered_levels = static_cast<int>(std::count_if(
-                                st.level_paths.begin(), st.level_paths.end(),
-                                [&](const std::filesystem::path &p) {
-                                        return path_is_level_for_mode(p, st.tutorial_mode);
-                                }));
-                        stats.total_levels = total_numbered_levels;
-                        int completed_levels = 0;
-                        if (st.current_level_index >= 0 &&
-                            st.current_level_index < static_cast<int>(st.level_paths.size()))
-                        {
-                                for (int i = 0; i <= st.current_level_index; ++i)
-                                {
-                                        if (path_is_level_for_mode(st.level_paths[i],
-                                                                   st.tutorial_mode))
-                                                ++completed_levels;
-                                }
-                        }
-                        stats.completed_levels =
-                                std::min(stats.total_levels, completed_levels);
-                        stats.current_score = st.last_score;
-                        stats.required_score = scene.minimal_score;
-                        stats.total_score = st.cumulative_score + st.last_score;
-                        bool has_next_level = false;
-                        if (st.current_level_index >= 0 &&
-                            st.current_level_index < static_cast<int>(st.level_paths.size()))
-                        {
-                                for (int i = st.current_level_index + 1;
-                                     i < static_cast<int>(st.level_paths.size()); ++i)
-                                {
-                                        if (path_is_level_for_mode(st.level_paths[i],
-                                                                   st.tutorial_mode))
-                                        {
-                                                has_next_level = true;
-                                                break;
-                                        }
-                                }
-                        }
-                        stats.has_next_level = has_next_level;
-                        ButtonAction action = LevelFinishedMenu::show(
-                                win, ren, current_w, current_h, stats, st.player_name, true);
-                        if (action == ButtonAction::Quit)
-                        {
-                                st.running = false;
-                        }
-                        else if (action == ButtonAction::NextLevel)
-                        {
-                                if (stats.has_next_level)
-                                {
-                                        auto next_it = std::find_if(
-                                                st.level_paths.begin() + st.current_level_index + 1,
-                                                st.level_paths.end(),
-                                                [&](const std::filesystem::path &p) {
-                                                        return path_is_level_for_mode(p,
-                                                                                       st.tutorial_mode);
-                                                });
-                                        if (next_it != st.level_paths.end())
-                                        {
-                                                const auto &next_path = *next_it;
-                                                Scene backup_scene = scene;
-                                                Camera backup_cam = cam;
-                                                auto backup_mats = mats;
-                                                if (Parser::parse_rt_file(next_path.string(), scene, cam, W, H))
-                                                {
-                                                        mats = Parser::get_materials();
-                                                        scene.update_beams(mats);
-                                                        scene.build_bvh();
-                                                        st.tutorial_prompts = scene.prompts;
-                                                        st.tutorial_prompt_index = 0;
-                                                        st.tutorial_prompt_shown_at = SDL_GetTicks();
-                                                        st.cumulative_score += st.last_score;
-                                                        st.current_level_index = static_cast<int>(
-                                                                std::distance(st.level_paths.begin(), next_it));
-                                                        st.scene_path = next_path.string();
-                                                        st.level_number =
-                                                                parse_level_number_from_path(st.scene_path);
-                                                        st.level_label =
-                                                                level_label_from_path(st.scene_path);
-                                                        st.scene_dirty = false;
-                                                        st.last_auto_save = SDL_GetTicks();
-                                                        st.edit_mode = false;
-                                                        st.align_on_grab = false;
-                                                        st.rotating = false;
-                                                        st.hover_obj = -1;
-                                                        st.hover_mat = -1;
-                                                        st.selected_obj = -1;
-                                                        st.selected_mat = -1;
-                                                        st.spawn_key = -1;
-                                                        st.edit_dist = 0.0;
-                                                        st.edit_pos = Vec3();
-                                                        st.quota_met = false;
-                                                        st.last_score = 0.0;
-                                                }
-                                                else
-                                                {
-                                                        scene = std::move(backup_scene);
-                                                        cam = backup_cam;
-                                                        mats = std::move(backup_mats);
-                                                        scene.update_beams(mats);
-                                                        scene.build_bvh();
-                                                        std::cerr << "Failed to load next level: "
-                                                                  << next_path << "\n";
-                                                }
-                                        }
-                                }
-                                st.focused = true;
-                                SDL_SetRelativeMouseMode(SDL_TRUE);
-                                SDL_ShowCursor(SDL_DISABLE);
-                                SDL_SetWindowGrab(win, SDL_TRUE);
-                                SDL_WarpMouseInWindow(win, W / 2, H / 2);
-                        }
-                        else
-                        {
-                                st.focused = true;
-                                SDL_SetRelativeMouseMode(SDL_TRUE);
-                                SDL_ShowCursor(SDL_DISABLE);
-                                SDL_SetWindowGrab(win, SDL_TRUE);
-                                SDL_WarpMouseInWindow(win, W / 2, H / 2);
-                        }
+                        show_level_finished_menu();
                 }
                 else if (st.focused && e.type == SDL_KEYDOWN &&
                                  e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
@@ -1885,10 +1784,8 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         std::vector<HudTextLine> center_lines;
         if (st.quota_met)
         {
-                center_lines.push_back(
-                        {"LEVEL FINISHED", SDL_Color{255, 255, 255, 255}});
-                center_lines.push_back(
-                        {"ENTER TO CONTINUE", SDL_Color{255, 255, 255, 255}});
+                center_lines.push_back({"Level finished. ENTER to continue",
+                                        SDL_Color{255, 255, 255, 255}});
         }
 
         std::vector<HudTextLine> right_lines;
@@ -2255,16 +2152,22 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         size_t max_control_lines = 1;
         Uint32 hud_ticks = SDL_GetTicks();
         bool blink_on = ((hud_ticks / 350) % 2) == 0;
-        bool tutorial_has_next_prompt =
-                st.tutorial_mode && !st.tutorial_prompts.empty() &&
-                st.tutorial_prompt_index + 1 < st.tutorial_prompts.size();
         bool tutorial_continue_ready =
                 st.tutorial_mode &&
                 (hud_ticks - st.tutorial_prompt_shown_at >= kTutorialContinueDelayMs);
-        bool show_tutorial_continue_hint = tutorial_has_next_prompt && tutorial_continue_ready;
-        if (!st.quota_met && show_tutorial_continue_hint)
+        bool show_tutorial_continue_hint =
+                st.tutorial_mode && tutorial_continue_ready && !st.quota_met;
+        if (show_tutorial_continue_hint)
         {
-                center_lines.push_back({"ENTER to continue", neutral, true});
+                bool at_last_prompt = st.tutorial_prompts.empty() ||
+                                      st.tutorial_prompt_index + 1 >=
+                                              st.tutorial_prompts.size();
+                bool has_next_tutorial_level = next_level_index(st).has_value();
+                if (at_last_prompt && !has_next_tutorial_level)
+                        center_lines.push_back(
+                                {"Tutorial finished. ENTER to continue", neutral, true});
+                else
+                        center_lines.push_back({"ENTER to continue", neutral, true});
         }
         int wrap_margin = hud_padding + std::max(2, hud_padding / 2);
         int wrap_width = std::max(1, W - 2 * wrap_margin);
@@ -2381,7 +2284,13 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 
         if (!center_lines.empty())
         {
-                int center_y = hud_padding;
+                int line_slots = static_cast<int>(center_lines.size());
+                if (line_slots <= 0)
+                        line_slots = 1;
+                int center_block_height = line_slots * hud_line_height;
+                int area_left = center_rect_width > 0 ? center_rect_left : 0;
+                int area_width = center_rect_width > 0 ? center_rect_width : W;
+                int center_y = (top_bar_height - center_block_height) / 2;
                 for (const auto &line : center_lines)
                 {
                         if (line.blink && !blink_on)
@@ -2390,7 +2299,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                 continue;
                         }
                         int width = CustomCharacter::text_width(line.text, hud_scale);
-                        int text_x = W / 2 - width / 2;
+                        int text_x = area_left + (area_width - width) / 2;
                         CustomCharacter::draw_text(ren, line.text, text_x, center_y, line.color,
                                                     hud_scale);
                         center_y += hud_line_height;
@@ -2858,6 +2767,111 @@ bool Renderer::render_window(std::vector<Material> &mats,
         SDL_ShowCursor(SDL_DISABLE);
         SDL_SetWindowGrab(win, SDL_TRUE);
         SDL_WarpMouseInWindow(win, W / 2, H / 2);
+
+        auto refocus_game = [&]() {
+                st.focused = true;
+                SDL_SetRelativeMouseMode(SDL_TRUE);
+                SDL_ShowCursor(SDL_DISABLE);
+                SDL_SetWindowGrab(win, SDL_TRUE);
+                SDL_WarpMouseInWindow(win, W / 2, H / 2);
+        };
+
+        auto load_level_at_index = [&](int next_index) -> bool {
+                if (next_index < 0 ||
+                    next_index >= static_cast<int>(st.level_paths.size()))
+                        return false;
+                const auto &next_path = st.level_paths[next_index];
+                Scene backup_scene = scene;
+                Camera backup_cam = cam;
+                auto backup_mats = mats;
+                if (Parser::parse_rt_file(next_path.string(), scene, cam, W, H))
+                {
+                        mats = Parser::get_materials();
+                        scene.update_beams(mats);
+                        scene.build_bvh();
+                        st.tutorial_prompts = scene.prompts;
+                        st.tutorial_prompt_index = 0;
+                        st.tutorial_prompt_shown_at = SDL_GetTicks();
+                        st.cumulative_score += st.last_score;
+                        st.current_level_index = next_index;
+                        st.scene_path = next_path.string();
+                        st.level_number = parse_level_number_from_path(st.scene_path);
+                        st.level_label = level_label_from_path(st.scene_path);
+                        st.scene_dirty = false;
+                        st.last_auto_save = SDL_GetTicks();
+                        st.edit_mode = false;
+                        st.align_on_grab = false;
+                        st.rotating = false;
+                        st.hover_obj = -1;
+                        st.hover_mat = -1;
+                        st.selected_obj = -1;
+                        st.selected_mat = -1;
+                        st.spawn_key = -1;
+                        st.edit_dist = 0.0;
+                        st.edit_pos = Vec3();
+                        st.quota_met = false;
+                        st.last_score = 0.0;
+                        return true;
+                }
+                scene = std::move(backup_scene);
+                cam = backup_cam;
+                mats = std::move(backup_mats);
+                scene.update_beams(mats);
+                scene.build_bvh();
+                std::cerr << "Failed to load next level: " << next_path << "\n";
+                return false;
+        };
+
+        auto show_level_finished_menu = [&]() {
+                st.focused = false;
+                SDL_SetRelativeMouseMode(SDL_FALSE);
+                SDL_ShowCursor(SDL_ENABLE);
+                SDL_SetWindowGrab(win, SDL_FALSE);
+                SDL_WarpMouseInWindow(win, W / 2, H / 2);
+                int current_w = W;
+                int current_h = H;
+                SDL_GetWindowSize(win, &current_w, &current_h);
+                LevelFinishedStats stats;
+                int total_numbered_levels = static_cast<int>(std::count_if(
+                        st.level_paths.begin(), st.level_paths.end(),
+                        [&](const std::filesystem::path &p) {
+                                return path_is_level_for_mode(p, st.tutorial_mode);
+                        }));
+                stats.total_levels = total_numbered_levels;
+                int completed_levels = 0;
+                if (st.current_level_index >= 0 &&
+                    st.current_level_index < static_cast<int>(st.level_paths.size()))
+                {
+                        for (int i = 0; i <= st.current_level_index; ++i)
+                        {
+                                if (path_is_level_for_mode(st.level_paths[i], st.tutorial_mode))
+                                        ++completed_levels;
+                        }
+                }
+                stats.completed_levels =
+                        std::min(stats.total_levels, completed_levels);
+                stats.current_score = st.last_score;
+                stats.required_score = scene.minimal_score;
+                stats.total_score = st.cumulative_score + st.last_score;
+                auto next_index_opt = next_level_index(st);
+                stats.has_next_level = next_index_opt.has_value();
+                ButtonAction action = LevelFinishedMenu::show(
+                        win, ren, current_w, current_h, stats, st.player_name, true);
+                if (action == ButtonAction::Quit)
+                {
+                        st.running = false;
+                }
+                else if (action == ButtonAction::NextLevel)
+                {
+                        if (auto next_level = next_level_index(st))
+                                load_level_at_index(*next_level);
+                        refocus_game();
+                }
+                else
+                {
+                        refocus_game();
+                }
+        };
 
         std::vector<Vec3> framebuffer(RW * RH);
         std::vector<unsigned char> pixels(RW * RH * 3);
