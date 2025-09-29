@@ -1,4 +1,5 @@
 #include "Application.hpp"
+#include "GameSession.hpp"
 #include "CommandLine.hpp"
 #include "MainMenu.hpp"
 #include "Settings.hpp"
@@ -94,10 +95,12 @@ int main(int argc, char **argv)
         }
         load_settings();
 
+        GameSession session_state;
+
         if (skip_main_menu)
         {
                 run_application(default_scene_path, g_settings.width, g_settings.height,
-                                g_settings.quality, false);
+                                g_settings.quality, false, nullptr);
                 load_settings();
                 return 0;
         }
@@ -132,7 +135,8 @@ int main(int argc, char **argv)
                 bool back_to_menu = run_application(scene_path, g_settings.width,
                                                                                 g_settings.height,
                                                                                 g_settings.quality,
-                                                                                tutorial_mode);
+                                                                                tutorial_mode,
+                                                                                &session_state);
                 load_settings();
                 if (!back_to_menu)
                 {
