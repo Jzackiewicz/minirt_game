@@ -45,6 +45,7 @@ static constexpr double kAltColorAmount = 0.35;
 static constexpr double kQuotaScoreEpsilon = 1e-3;
 static constexpr double kBeamTransparentAlpha = 125.0 / 255.0;
 static constexpr double kSpotlightLaserRatio = 20.0;
+static constexpr Uint32 kTutorialContinueDelayMs = 2000;
 
 static Vec3 brighten_color(const Vec3 &color)
 {
@@ -655,6 +656,7 @@ struct HudTextLine
 {
         std::string text;
         SDL_Color color;
+        bool blink = false;
 };
 
 struct HudControlEntry
@@ -662,6 +664,7 @@ struct HudControlEntry
         std::string text;
         SDL_Color text_color;
         SDL_Color bar_color;
+        bool wrap = false;
 };
 
 bool stem_matches_numbered_prefix(const std::string &stem, const std::string &prefix)
@@ -911,6 +914,9 @@ struct Renderer::RenderState
         double hud_focus_score = 0.0;
         bool quota_met = false;
         bool tutorial_mode = false;
+        std::vector<std::string> tutorial_prompts;
+        size_t tutorial_prompt_index = 0;
+        Uint32 tutorial_prompt_shown_at = 0;
 };
 
 void Renderer::mark_scene_dirty(RenderState &st)
@@ -1182,6 +1188,9 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 mats = Parser::get_materials();
                                 scene.update_beams(mats);
                                 scene.build_bvh();
+                                st.tutorial_prompts = scene.prompts;
+                                st.tutorial_prompt_index = 0;
+                                st.tutorial_prompt_shown_at = SDL_GetTicks();
                                 st.edit_mode = false;
                                 st.align_on_grab = false;
                                 st.rotating = false;
@@ -1477,6 +1486,23 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                 }
                         }
                 }
+                else if (st.focused && st.tutorial_mode && !st.quota_met &&
+                                 e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
+                                 (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
+                                  e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
+                {
+                        if (!st.tutorial_prompts.empty() &&
+                            st.tutorial_prompt_index + 1 < st.tutorial_prompts.size())
+                        {
+                                Uint32 now_ticks = SDL_GetTicks();
+                                if (now_ticks - st.tutorial_prompt_shown_at >=
+                                    kTutorialContinueDelayMs)
+                                {
+                                        ++st.tutorial_prompt_index;
+                                        st.tutorial_prompt_shown_at = now_ticks;
+                                }
+                        }
+                }
                 else if (st.focused && st.quota_met && e.type == SDL_KEYDOWN &&
                                  e.key.repeat == 0 &&
                                  (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
@@ -1557,6 +1583,9 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                                         mats = Parser::get_materials();
                                                         scene.update_beams(mats);
                                                         scene.build_bvh();
+                                                        st.tutorial_prompts = scene.prompts;
+                                                        st.tutorial_prompt_index = 0;
+                                                        st.tutorial_prompt_shown_at = SDL_GetTicks();
                                                         st.cumulative_score += st.last_score;
                                                         st.current_level_index = static_cast<int>(
                                                                 std::distance(st.level_paths.begin(), next_it));
@@ -1992,9 +2021,11 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         control_sections.fill(std::nullopt);
         const SDL_Color bar_neutral{72, 72, 72, 220};
         const SDL_Color command_divider{80, 80, 80, 220};
-        auto set_control = [&](size_t index, const std::string &label, SDL_Color text_color) {
+        auto set_control = [&](size_t index, const std::string &label, SDL_Color text_color,
+                               bool wrap = false) {
                 if (index < control_sections.size())
-                        control_sections[index] = HudControlEntry{label, text_color, bar_neutral};
+                        control_sections[index] =
+                                HudControlEntry{label, text_color, bar_neutral, wrap};
         };
         SDL_Color neutral{255, 255, 255, 255};
         SDL_Color accent{96, 255, 128, 255};
@@ -2007,11 +2038,16 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         const size_t slot_secondary = 3;
         const size_t slot_pause = 4;
 
+        std::optional<std::string> tutorial_prompt_text;
         if (st.tutorial_mode)
         {
-                set_control(slot_move,
-                            "Lorem ipsum dolor sit amet.\nConsectetur adipiscing elit.",
-                            neutral);
+                if (!st.tutorial_prompts.empty())
+                {
+                        size_t idx = st.tutorial_prompt_index;
+                        if (idx >= st.tutorial_prompts.size())
+                                idx = st.tutorial_prompts.size() - 1;
+                        tutorial_prompt_text = st.tutorial_prompts[idx];
+                }
         }
         else
         {
@@ -2097,13 +2133,168 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 return lines;
         };
 
+        auto wrap_text_lines = [&](const std::string &text, int max_width) {
+                std::vector<std::string> lines;
+                int effective_width = std::max(max_width, 1);
+                auto append_wrapped_line = [&](const std::string &line_text) {
+                        if (line_text.empty())
+                        {
+                                lines.emplace_back();
+                                return;
+                        }
+                        std::string current;
+                        bool produced = false;
+                        auto flush_current = [&]() {
+                                if (!current.empty())
+                                {
+                                        lines.push_back(current);
+                                        current.clear();
+                                        produced = true;
+                                }
+                        };
+                        auto append_word = [&](const std::string &word, auto &&append_word_ref) -> void {
+                                if (word.empty())
+                                        return;
+                                if (effective_width <= 0)
+                                {
+                                        flush_current();
+                                        lines.push_back(word);
+                                        produced = true;
+                                        return;
+                                }
+                                if (current.empty())
+                                {
+                                        int word_width =
+                                                CustomCharacter::text_width(word, hud_scale);
+                                        if (word_width <= effective_width)
+                                        {
+                                                current = word;
+                                                return;
+                                        }
+                                        std::size_t start = 0;
+                                        while (start < word.size())
+                                        {
+                                                std::string piece;
+                                                std::size_t end = start;
+                                                while (end < word.size())
+                                                {
+                                                        std::string candidate = piece + word[end];
+                                                        int candidate_width = CustomCharacter::text_width(
+                                                                candidate, hud_scale);
+                                                        if (!piece.empty() && candidate_width > effective_width)
+                                                                break;
+                                                        piece = candidate;
+                                                        ++end;
+                                                }
+                                                if (piece.empty())
+                                                {
+                                                        piece.push_back(word[start]);
+                                                        ++end;
+                                                }
+                                                lines.push_back(piece);
+                                                produced = true;
+                                                start += piece.size();
+                                        }
+                                        return;
+                                }
+                                std::string candidate = current + " " + word;
+                                int candidate_width =
+                                        CustomCharacter::text_width(candidate, hud_scale);
+                                if (candidate_width <= effective_width)
+                                {
+                                        current = std::move(candidate);
+                                }
+                                else
+                                {
+                                        flush_current();
+                                        append_word_ref(word, append_word_ref);
+                                }
+                        };
+
+                        std::size_t pos = 0;
+                        while (pos < line_text.size())
+                        {
+                                while (pos < line_text.size() &&
+                                       std::isspace(static_cast<unsigned char>(line_text[pos])))
+                                {
+                                        ++pos;
+                                }
+                                std::size_t word_end = pos;
+                                while (word_end < line_text.size() &&
+                                       !std::isspace(static_cast<unsigned char>(line_text[word_end])))
+                                {
+                                        ++word_end;
+                                }
+                                std::string word = line_text.substr(pos, word_end - pos);
+                                pos = word_end;
+                                if (!word.empty())
+                                        append_word(word, append_word);
+                        }
+                        flush_current();
+                        if (!produced)
+                                lines.emplace_back();
+                };
+
+                std::size_t start = 0;
+                while (start <= text.size())
+                {
+                        std::size_t pos = text.find('\n', start);
+                        if (pos == std::string::npos)
+                        {
+                                append_wrapped_line(text.substr(start));
+                                break;
+                        }
+                        append_wrapped_line(text.substr(start, pos - start));
+                        start = pos + 1;
+                }
+                if (lines.empty())
+                        lines.emplace_back();
+                return lines;
+        };
+
         std::array<std::vector<std::string>, kControlSections> section_lines{};
         size_t max_control_lines = 1;
+        Uint32 hud_ticks = SDL_GetTicks();
+        bool blink_on = ((hud_ticks / 350) % 2) == 0;
+        bool tutorial_has_next_prompt =
+                st.tutorial_mode && !st.tutorial_prompts.empty() &&
+                st.tutorial_prompt_index + 1 < st.tutorial_prompts.size();
+        bool tutorial_continue_ready =
+                st.tutorial_mode &&
+                (hud_ticks - st.tutorial_prompt_shown_at >= kTutorialContinueDelayMs);
+        bool show_tutorial_continue_hint = tutorial_has_next_prompt && tutorial_continue_ready;
+        int wrap_margin = hud_padding + std::max(2, hud_padding / 2);
+        int wrap_width = std::max(1, W - 2 * wrap_margin);
+        int tutorial_prompt_section_width = W;
+        int tutorial_continue_section_width = 0;
+        std::vector<std::string> tutorial_prompt_lines;
+        if (st.tutorial_mode && tutorial_prompt_text)
+        {
+                if (show_tutorial_continue_hint)
+                {
+                        tutorial_prompt_section_width =
+                                static_cast<int>(std::round(static_cast<double>(W) * 0.85));
+                        tutorial_prompt_section_width =
+                                std::clamp(tutorial_prompt_section_width, 0, W);
+                        tutorial_continue_section_width = W - tutorial_prompt_section_width;
+                }
+                int prompt_content_width =
+                        std::max(1, tutorial_prompt_section_width - 2 * wrap_margin);
+                tutorial_prompt_lines =
+                        wrap_text_lines(*tutorial_prompt_text, prompt_content_width);
+                if (tutorial_prompt_lines.empty())
+                        tutorial_prompt_lines.emplace_back();
+                max_control_lines =
+                        std::max(max_control_lines, tutorial_prompt_lines.size());
+        }
         for (size_t i = 0; i < control_sections.size(); ++i)
         {
                 if (!control_sections[i])
                         continue;
-                section_lines[i] = split_lines(control_sections[i]->text);
+                if (control_sections[i]->wrap)
+                        section_lines[i] = wrap_text_lines(control_sections[i]->text, wrap_width);
+                else
+                        section_lines[i] = split_lines(control_sections[i]->text);
                 if (!section_lines[i].empty())
                         max_control_lines =
                                 std::max(max_control_lines, section_lines[i].size());
@@ -2170,8 +2361,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 
         if (!center_lines.empty() && center_rect_width > 0)
         {
-                Uint32 ticks = SDL_GetTicks();
-                bool highlight_on = ((ticks / 350) % 2) == 0;
+                bool highlight_on = blink_on;
                 if (highlight_on)
                 {
                         SDL_SetRenderDrawColor(ren, 255, 240, 128, 180);
@@ -2213,6 +2403,11 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 int center_y = hud_padding;
                 for (const auto &line : center_lines)
                 {
+                        if (line.blink && !blink_on)
+                        {
+                                center_y += hud_line_height;
+                                continue;
+                        }
                         int width = CustomCharacter::text_width(line.text, hud_scale);
                         int text_x = W / 2 - width / 2;
                         CustomCharacter::draw_text(ren, line.text, text_x, center_y, line.color,
@@ -2231,72 +2426,143 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                 right_y += hud_line_height;
         }
 
-        int controls_top = H - bottom_bar_height + hud_padding;
-        size_t section_count = active_sections.size();
-        double section_span = static_cast<double>(W) /
-                              static_cast<double>(std::max<size_t>(section_count, 1));
-        int bar_vertical_margin = std::max(2, hud_padding / 2);
-        int bar_horizontal_margin = std::max(2, hud_padding / 2);
-        int bar_top = H - bottom_bar_height + bar_vertical_margin;
-        int bar_height = std::max(0, bottom_bar_height - 2 * bar_vertical_margin);
-        SDL_Color separator_color{255, 255, 255, 96};
-        for (size_t pos = 0; pos < active_sections.size(); ++pos)
+        auto draw_quoted_text = [&](const std::string &text, int x, int y,
+                                    SDL_Color base_color, SDL_Color quote_color,
+                                    bool &quote_active) {
+                int pen_x = x;
+                for (char ch : text)
+                {
+                        if (ch == '\'')
+                        {
+                                CustomCharacter::draw_character(ren, ch, pen_x, y, base_color,
+                                                                hud_scale);
+                                pen_x += (5 + 1) * hud_scale;
+                                quote_active = !quote_active;
+                                continue;
+                        }
+                        SDL_Color color = quote_active ? quote_color : base_color;
+                        CustomCharacter::draw_character(ren, ch, pen_x, y, color, hud_scale);
+                        pen_x += (5 + 1) * hud_scale;
+                }
+        };
+
+        if (st.tutorial_mode)
         {
-                size_t i = active_sections[pos];
-                int start_x = static_cast<int>(std::round(pos * section_span));
-                int end_x = static_cast<int>(std::round((pos + 1) * section_span));
-                int available = std::max(1, end_x - start_x);
-                int bar_left = start_x + bar_horizontal_margin;
-                int bar_width = std::max(0, available - 2 * bar_horizontal_margin);
-                SDL_Rect bar_rect{bar_left, bar_top, bar_width, bar_height};
-                auto compute_text_x = [&](int width) {
-                        int min_x = start_x + hud_padding;
-                        int max_x = end_x - hud_padding - width;
+                int prompt_left = 0;
+                int prompt_width = tutorial_prompt_section_width;
+                int continue_left = prompt_left + prompt_width;
+                int bar_vertical_margin = std::max(2, hud_padding / 2);
+                int bar_horizontal_margin = std::max(2, hud_padding / 2);
+                int bar_top = H - bottom_bar_height + bar_vertical_margin;
+                int bar_height = std::max(0, bottom_bar_height - 2 * bar_vertical_margin);
+                if (bar_height > 0)
+                {
+                        SDL_Rect prompt_rect{prompt_left + bar_horizontal_margin, bar_top,
+                                             std::max(0, prompt_width -
+                                                             2 * bar_horizontal_margin),
+                                             bar_height};
+                        if (prompt_rect.w > 0)
+                        {
+                                SDL_SetRenderDrawColor(ren, bar_neutral.r, bar_neutral.g,
+                                                       bar_neutral.b, bar_neutral.a);
+                                SDL_RenderFillRect(ren, &prompt_rect);
+                        }
+                        if (show_tutorial_continue_hint &&
+                            tutorial_continue_section_width > 0)
+                        {
+                                SDL_Rect continue_rect{
+                                        continue_left + bar_horizontal_margin, bar_top,
+                                        std::max(0, tutorial_continue_section_width -
+                                                         2 * bar_horizontal_margin),
+                                        bar_height};
+                                if (continue_rect.w > 0)
+                                {
+                                        SDL_SetRenderDrawColor(ren, bar_neutral.r, bar_neutral.g,
+                                                               bar_neutral.b, bar_neutral.a);
+                                        SDL_RenderFillRect(ren, &continue_rect);
+                                }
+                        }
+                }
+                int available_height = std::max(0, bottom_bar_height - 2 * hud_padding);
+                int prompt_top = H - bottom_bar_height + hud_padding;
+                int prompt_lines_height =
+                        static_cast<int>(tutorial_prompt_lines.size()) * hud_line_height;
+                if (available_height > prompt_lines_height)
+                        prompt_top += (available_height - prompt_lines_height) / 2;
+                bool quote_active = false;
+                for (const auto &line : tutorial_prompt_lines)
+                {
+                        int line_width = CustomCharacter::text_width(line, hud_scale);
+                        int min_x = prompt_left + hud_padding;
+                        int max_x = prompt_left + prompt_width - hud_padding - line_width;
                         if (max_x < min_x)
                                 max_x = min_x;
-                        int centered = start_x + (available - width) / 2;
-                        return std::clamp(centered, min_x, max_x);
-                };
-                if (control_sections[i] && !section_lines[i].empty())
+                        int text_x = prompt_left + (prompt_width - line_width) / 2;
+                        text_x = std::clamp(text_x, min_x, max_x);
+                        draw_quoted_text(line, text_x, prompt_top, neutral, danger, quote_active);
+                        prompt_top += hud_line_height;
+                }
+                if (show_tutorial_continue_hint && tutorial_continue_section_width > 0)
                 {
-                        const auto &entry = *control_sections[i];
-                        if (bar_rect.w > 0 && bar_rect.h > 0)
+                        const std::string hint_text = "Press `ENTER` to continue";
+                        int hint_width = CustomCharacter::text_width(hint_text, hud_scale);
+                        int min_x = continue_left + hud_padding;
+                        int max_x = continue_left + tutorial_continue_section_width - hud_padding -
+                                    hint_width;
+                        if (max_x < min_x)
+                                max_x = min_x;
+                        int hint_x = continue_left +
+                                      (tutorial_continue_section_width - hint_width) / 2;
+                        hint_x = std::clamp(hint_x, min_x, max_x);
+                        int hint_y = H - bottom_bar_height + hud_padding;
+                        if (available_height > hud_line_height)
+                                hint_y += (available_height - hud_line_height) / 2;
+                        CustomCharacter::draw_text(ren, hint_text, hint_x, hint_y, neutral,
+                                                    hud_scale);
+                }
+        }
+        else
+        {
+                int controls_top = H - bottom_bar_height + hud_padding;
+                size_t section_count = active_sections.size();
+                double section_span = static_cast<double>(W) /
+                                      static_cast<double>(std::max<size_t>(section_count, 1));
+                int bar_vertical_margin = std::max(2, hud_padding / 2);
+                int bar_horizontal_margin = std::max(2, hud_padding / 2);
+                int bar_top = H - bottom_bar_height + bar_vertical_margin;
+                int bar_height = std::max(0, bottom_bar_height - 2 * bar_vertical_margin);
+                SDL_Color separator_color{255, 255, 255, 96};
+                for (size_t pos = 0; pos < active_sections.size(); ++pos)
+                {
+                        size_t i = active_sections[pos];
+                        int start_x = static_cast<int>(std::round(pos * section_span));
+                        int end_x = static_cast<int>(std::round((pos + 1) * section_span));
+                        if (end_x < start_x)
+                                end_x = start_x;
+                        int available = std::max(1, end_x - start_x);
+                        int bar_left = start_x + bar_horizontal_margin;
+                        int bar_width = std::max(0, available - 2 * bar_horizontal_margin);
+                        SDL_Rect bar_rect{bar_left, bar_top, bar_width, bar_height};
+                        auto compute_text_x = [&](int width) {
+                                int min_x = start_x + hud_padding;
+                                int max_x = end_x - hud_padding - width;
+                                if (max_x < min_x)
+                                        max_x = min_x;
+                                int centered = start_x + (available - width) / 2;
+                                return std::clamp(centered, min_x, max_x);
+                        };
+                        if (control_sections[i] && !section_lines[i].empty())
                         {
-                                SDL_SetRenderDrawColor(ren, entry.bar_color.r,
-                                                       entry.bar_color.g, entry.bar_color.b,
-                                                       entry.bar_color.a);
-                                SDL_RenderFillRect(ren, &bar_rect);
-                        }
+                                const auto &entry = *control_sections[i];
+                                if (bar_rect.w > 0 && bar_rect.h > 0)
+                                {
+                                        SDL_SetRenderDrawColor(ren, entry.bar_color.r,
+                                                               entry.bar_color.g, entry.bar_color.b,
+                                                               entry.bar_color.a);
+                                        SDL_RenderFillRect(ren, &bar_rect);
+                                }
 
-                        const auto &lines = section_lines[i];
-                        if (st.tutorial_mode)
-                        {
-                                int text_y = controls_top;
-                                if (!lines.empty())
-                                {
-                                        int available_height = std::max(0, bottom_bar_height -
-                                                                                2 * hud_padding);
-                                        int content_height = static_cast<int>(lines.size()) *
-                                                            hud_line_height;
-                                        if (available_height > content_height)
-                                                text_y += (available_height - content_height) / 2;
-                                }
-                                for (const auto &line : lines)
-                                {
-                                        if (line.empty())
-                                        {
-                                                text_y += hud_line_height;
-                                                continue;
-                                        }
-                                        int line_width = CustomCharacter::text_width(line, hud_scale);
-                                        int text_x = compute_text_x(line_width);
-                                        CustomCharacter::draw_text(ren, line, text_x, text_y,
-                                                                  entry.text_color, hud_scale);
-                                        text_y += hud_line_height;
-                                }
-                        }
-                        else
-                        {
+                                const auto &lines = section_lines[i];
                                 int header_y = controls_top;
                                 if (!lines.front().empty())
                                 {
@@ -2373,12 +2639,13 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                         }
                                 }
                         }
-                }
-                if (pos + 1 < active_sections.size())
-                {
-                        SDL_SetRenderDrawColor(ren, separator_color.r, separator_color.g,
-                                               separator_color.b, separator_color.a);
-                        SDL_RenderDrawLine(ren, end_x, H - bottom_bar_height, end_x, H);
+
+                        if (pos + 1 < active_sections.size())
+                        {
+                                SDL_SetRenderDrawColor(ren, separator_color.r, separator_color.g,
+                                                       separator_color.b, separator_color.a);
+                                SDL_RenderDrawLine(ren, end_x, H - bottom_bar_height, end_x, H);
+                        }
                 }
         }
 
@@ -2653,6 +2920,9 @@ bool Renderer::render_window(std::vector<Material> &mats,
         st.player_name.clear();
         st.level_number = parse_level_number_from_path(st.scene_path);
         st.level_label = level_label_from_path(st.scene_path);
+        st.tutorial_prompts = scene.prompts;
+        st.tutorial_prompt_index = 0;
+        st.tutorial_prompt_shown_at = SDL_GetTicks();
         st.focused = true;
         SDL_SetRelativeMouseMode(SDL_TRUE);
         SDL_ShowCursor(SDL_DISABLE);
