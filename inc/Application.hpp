@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GameSession.hpp"
 #include <string>
 
 /**
@@ -11,4 +12,5 @@
  * @param quality Render quality (L/M/H).
  */
 bool run_application(const std::string &scene_path, int width, int height,
-                                        char quality, bool tutorial_mode);
+                                        char quality, bool tutorial_mode,
+                                        GameSession *session);

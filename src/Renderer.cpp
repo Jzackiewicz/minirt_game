@@ -1,5 +1,6 @@
 #include "Renderer.hpp"
 #include "AABB.hpp"
+#include "GameSession.hpp"
 #include "Beam.hpp"
 #include "BeamSource.hpp"
 #include "BeamTarget.hpp"
@@ -989,7 +990,8 @@ bool Renderer::init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
 /// Handle SDL events, updating render state and selection.
 void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *ren,
                                                         int W, int H,
-                                                        std::vector<Material> &mats)
+                                                        std::vector<Material> &mats,
+                                                        GameSession *session)
 {
         SDL_Event e;
         auto refocus_game = [&]() {
@@ -1045,6 +1047,29 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 std::cerr << "Failed to load next level: " << next_path << "\n";
                 return false;
         };
+        auto count_completed_levels = [&](bool include_current) -> int {
+                if (st.current_level_index < 0 ||
+                    st.current_level_index >= static_cast<int>(st.level_paths.size()))
+                        return 0;
+                int limit = include_current ? st.current_level_index
+                                             : st.current_level_index - 1;
+                if (limit < 0)
+                        return 0;
+                int count = 0;
+                for (int i = 0; i <= limit; ++i)
+                {
+                        if (path_is_level_for_mode(st.level_paths[i], st.tutorial_mode))
+                                ++count;
+                }
+                return count;
+        };
+        auto count_total_levels = [&]() -> int {
+                return static_cast<int>(std::count_if(
+                        st.level_paths.begin(), st.level_paths.end(),
+                        [&](const std::filesystem::path &p) {
+                                return path_is_level_for_mode(p, st.tutorial_mode);
+                        }));
+        };
         auto show_level_finished_menu = [&]() {
                 st.focused = false;
                 SDL_SetRelativeMouseMode(SDL_FALSE);
@@ -1055,22 +1080,9 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 int current_h = H;
                 SDL_GetWindowSize(win, &current_w, &current_h);
                 LevelFinishedStats stats;
-                int total_numbered_levels = static_cast<int>(std::count_if(
-                        st.level_paths.begin(), st.level_paths.end(),
-                        [&](const std::filesystem::path &p) {
-                                return path_is_level_for_mode(p, st.tutorial_mode);
-                        }));
+                int total_numbered_levels = count_total_levels();
                 stats.total_levels = total_numbered_levels;
-                int completed_levels = 0;
-                if (st.current_level_index >= 0 &&
-                    st.current_level_index < static_cast<int>(st.level_paths.size()))
-                {
-                        for (int i = 0; i <= st.current_level_index; ++i)
-                        {
-                                if (path_is_level_for_mode(st.level_paths[i], st.tutorial_mode))
-                                        ++completed_levels;
-                        }
-                }
+                int completed_levels = count_completed_levels(true);
                 stats.completed_levels = std::min(stats.total_levels, completed_levels);
                 stats.current_score = st.last_score;
                 stats.required_score = scene.minimal_score;
@@ -1085,6 +1097,29 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 }
                 else if (action == ButtonAction::BackToMenu)
                 {
+                        if (session)
+                        {
+                                session->tutorial_mode = st.tutorial_mode;
+                                session->player_name = st.player_name;
+                                session->completed_levels =
+                                        std::min(stats.total_levels, completed_levels);
+                                auto next_index = next_level_index(st);
+                                if (next_index)
+                                {
+                                        session->has_progress = true;
+                                        session->next_scene_path =
+                                                st.level_paths[*next_index].string();
+                                        session->cumulative_score =
+                                                st.cumulative_score + st.last_score;
+                                }
+                                else
+                                {
+                                        session->has_progress = false;
+                                        session->next_scene_path.clear();
+                                        session->cumulative_score =
+                                                st.cumulative_score + st.last_score;
+                                }
+                        }
                         st.running = false;
                         st.return_to_menu = true;
                 }
@@ -1679,6 +1714,18 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         }
                         else if (action == ButtonAction::BackToMenu)
                         {
+                                if (session)
+                                {
+                                        session->tutorial_mode = st.tutorial_mode;
+                                        session->player_name = st.player_name;
+                                        int total_levels = count_total_levels();
+                                        int completed = count_completed_levels(false);
+                                        session->completed_levels =
+                                                std::min(total_levels, completed);
+                                        session->has_progress = true;
+                                        session->next_scene_path = st.scene_path;
+                                        session->cumulative_score = st.cumulative_score;
+                                }
                                 st.running = false;
                                 st.return_to_menu = true;
                         }
@@ -2862,7 +2909,8 @@ void Renderer::render_ppm(const std::string &path,
 bool Renderer::render_window(std::vector<Material> &mats,
                                                         const RenderSettings &rset,
                                                         const std::string &scene_path,
-                                                        bool tutorial_mode)
+                                                        bool tutorial_mode,
+                                                        GameSession *session)
 {
         int W = rset.width;
         int H = rset.height;
@@ -2896,6 +2944,13 @@ bool Renderer::render_window(std::vector<Material> &mats,
         st.current_level_index = level_index_for(st.level_paths, absolute_scene_path);
         st.cumulative_score = 0.0;
         st.player_name.clear();
+        if (session && session->tutorial_mode == tutorial_mode)
+        {
+                if (session->has_progress)
+                        st.cumulative_score = session->cumulative_score;
+                if (!session->player_name.empty())
+                        st.player_name = session->player_name;
+        }
         st.level_number = parse_level_number_from_path(st.scene_path);
         st.level_label = level_label_from_path(st.scene_path);
         st.tutorial_prompts = scene.prompts;
@@ -2967,7 +3022,7 @@ bool Renderer::render_window(std::vector<Material> &mats,
                                 SDL_WarpMouseInWindow(win, W / 2, H / 2);
                 }
 
-                process_events(st, win, ren, W, H, mats);
+                process_events(st, win, ren, W, H, mats, session);
                 handle_keyboard(st, dt, mats);
                 scene.update_goal_targets(dt, mats);
                 update_selection(st, mats);
@@ -2992,6 +3047,10 @@ bool Renderer::render_window(std::vector<Material> &mats,
                                          mats);
         }
 
+        if (session && !st.return_to_menu)
+        {
+                session->has_progress = false;
+        }
         SDL_DestroyTexture(tex);
         SDL_DestroyRenderer(ren);
         SDL_DestroyWindow(win);

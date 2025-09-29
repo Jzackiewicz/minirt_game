@@ -8,6 +8,7 @@
 struct SDL_Window;
 struct SDL_Renderer;
 struct SDL_Texture;
+struct GameSession;
 
 class RenderSettings
 {
@@ -25,14 +26,16 @@ class Renderer
         void render_ppm(const std::string &path, const std::vector<Material> &mats,
                                         const RenderSettings &rset);
         bool render_window(std::vector<Material> &mats, const RenderSettings &rset,
-                                           const std::string &scene_path, bool tutorial_mode);
+                                           const std::string &scene_path, bool tutorial_mode,
+                                           GameSession *session);
 		struct RenderState;
         private:
         void mark_scene_dirty(RenderState &st);
         bool init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
                                        int W, int H, int RW, int RH);
         void process_events(RenderState &st, SDL_Window *win, SDL_Renderer *ren,
-                                               int W, int H, std::vector<Material> &mats);
+                                               int W, int H, std::vector<Material> &mats,
+                                               GameSession *session);
         void handle_keyboard(RenderState &st, double dt,
                                                std::vector<Material> &mats);
         void update_selection(RenderState &st, std::vector<Material> &mats);
