@@ -1,0 +1,96 @@
+[prompts]
+a = "Move around using `W`,`S`,`A`,`D`, descend with `CTRL`, ascend with `SPACE`."
+b = "Aim at the object with your crosshair. Click `LMB` when it's blinking to grab it. Checkered object is now in the edit mode."
+c = "While in edit mode, click and hold `RMB` and move your mouse to rotate the object in yaw and pitch axis. \nUse `Q`/`E` keys to rotate it in roll axis."
+
+[camera]
+id = "camera"
+position = [0.16275, 1.35508, -21.52722]
+lookdir = [0.20605, -0.33724, 0.91859]
+fov = 120
+
+[lighting.ambient]
+intensity = 0.70000
+color = [255, 255, 255]
+
+[[objects.planes]]
+id = "plane1"
+color = [170, 170, 170]
+position = [-5.78242, 2.55023, -1.69474]
+dir = [0, 1, 0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.planes]]
+id = "plane2"
+color = [80, 80, 80]
+texture = "textures/floor.jpg"
+position = [10.80068, -8.06926, 6.47394]
+dir = [0, 1, 0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.planes]]
+id = "plane3"
+color = [133, 116, 95]
+position = [-1.89363, 0.13519, 1.01673]
+dir = [0, 0, -1]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.planes]]
+id = "plane4"
+color = [133, 116, 95]
+position = [-9.15730, 0.20377, -7.25503]
+dir = [1, 0, 0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.planes]]
+id = "plane5"
+color = [133, 116, 95]
+position = [11.40453, -0.22433, 0.49850]
+dir = [1, 0, 0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.planes]]
+id = "plane6"
+color = [133, 116, 95]
+position = [11.07437, 3.13255, -24.87391]
+dir = [0, 0, -1]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.boxes]]
+id = "box1"
+color = [0, 255, 0]
+position = [-0.02803, -2.51000, -13.86534]
+dir = [-0.79495, -0.60292, 0.06731]
+width = 1.68474
+height = 1.68474
+length = 1.68474
+reflective = true
+rotatable = true
+movable = true
+scorable = true
+transparent = false
+
