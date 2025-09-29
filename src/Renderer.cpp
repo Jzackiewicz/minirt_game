@@ -912,6 +912,7 @@ struct Renderer::RenderState
         std::string player_name;
         int hud_focus_object = -1;
         double hud_focus_score = 0.0;
+        bool quota_defined = false;
         bool quota_met = false;
         bool tutorial_mode = false;
         std::vector<std::string> tutorial_prompts;
@@ -1031,6 +1032,7 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         st.spawn_key = -1;
                         st.edit_dist = 0.0;
                         st.edit_pos = Vec3();
+                        st.quota_defined = false;
                         st.quota_met = false;
                         st.last_score = 0.0;
                         return true;
@@ -1616,11 +1618,17 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                                   e.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
                 {
                         Uint32 now_ticks = SDL_GetTicks();
-                        if (now_ticks - st.tutorial_prompt_shown_at < kTutorialContinueDelayMs)
-                                continue;
                         bool has_next_prompt = !st.tutorial_prompts.empty() &&
                                                st.tutorial_prompt_index + 1 <
                                                        st.tutorial_prompts.size();
+                        bool is_last_prompt = st.tutorial_prompts.empty() ||
+                                               !has_next_prompt;
+                        bool skip_delay = st.quota_defined && st.quota_met &&
+                                          is_last_prompt;
+                        if (!skip_delay &&
+                            now_ticks - st.tutorial_prompt_shown_at <
+                                    kTutorialContinueDelayMs)
+                                continue;
                         if (has_next_prompt)
                         {
                                 ++st.tutorial_prompt_index;
@@ -1628,6 +1636,8 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         }
                         else
                         {
+                                if (st.quota_defined && !st.quota_met)
+                                        continue;
                                 if (next_level_index(st))
                                 {
                                         advance_to_next_level();
@@ -2258,12 +2268,20 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         size_t max_control_lines = 1;
         Uint32 hud_ticks = SDL_GetTicks();
         bool blink_on = ((hud_ticks / 350) % 2) == 0;
+        bool tutorial_has_prompts =
+                st.tutorial_mode && !st.tutorial_prompts.empty();
         bool tutorial_has_next_prompt =
-                st.tutorial_mode && !st.tutorial_prompts.empty() &&
+                tutorial_has_prompts &&
                 st.tutorial_prompt_index + 1 < st.tutorial_prompts.size();
+        bool tutorial_on_last_prompt =
+                st.tutorial_mode && (!tutorial_has_prompts || !tutorial_has_next_prompt);
+        bool tutorial_has_quota = st.tutorial_mode && st.quota_defined;
+        bool tutorial_skip_delay_ready =
+                tutorial_on_last_prompt && tutorial_has_quota && st.quota_met;
         bool tutorial_continue_ready =
                 st.tutorial_mode &&
-                (hud_ticks - st.tutorial_prompt_shown_at >= kTutorialContinueDelayMs);
+                ((hud_ticks - st.tutorial_prompt_shown_at >= kTutorialContinueDelayMs) ||
+                 tutorial_skip_delay_ready);
         bool tutorial_has_next_level =
                 st.tutorial_mode && next_level_index(st).has_value();
         if (st.quota_met)
@@ -2274,11 +2292,16 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
         }
         else if (st.tutorial_mode && tutorial_continue_ready)
         {
-                std::string tutorial_message =
-                        (!tutorial_has_next_prompt && !tutorial_has_next_level)
-                                ? "Tutorial finished. ENTER to continue"
-                                : "ENTER to continue";
-                center_lines.push_back({tutorial_message, neutral, true});
+                bool can_show_prompt =
+                        !(tutorial_has_quota && tutorial_on_last_prompt && !st.quota_met);
+                if (can_show_prompt)
+                {
+                        std::string tutorial_message =
+                                (!tutorial_has_next_prompt && !tutorial_has_next_level)
+                                        ? "Tutorial finished. ENTER to continue"
+                                        : "ENTER to continue";
+                        center_lines.push_back({tutorial_message, neutral, true});
+                }
         }
         int wrap_margin = hud_padding + std::max(2, hud_padding / 2);
         int wrap_width = std::max(1, W - 2 * wrap_margin);
@@ -2648,6 +2671,7 @@ void Renderer::render_frame(RenderState &st, SDL_Renderer *ren, SDL_Texture *tex
         bool score_met = (scene.minimal_score <= 0.0) ||
                          (st.last_score + kQuotaScoreEpsilon >= scene.minimal_score);
         bool target_met = !scene.target_required || target_blinking(scene);
+        st.quota_defined = quota_defined;
         st.quota_met = quota_defined && score_met && target_met;
 
         for (int y = 0; y < RH; ++y)
