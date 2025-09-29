@@ -2076,9 +2076,9 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                 if (can_move)
                                         set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
                                 if (can_rotate)
-                                        set_control(slot_rotate, "ROTATE\nHOLD RBM\nQ/E", neutral);
+                                        set_control(slot_rotate, "ROTATE\nHOLD RMB\nQ/E", neutral);
 
-                                set_control(slot_primary, "PLACE\nLBM", accent);
+                                set_control(slot_primary, "PLACE\nLMB", accent);
                                 if (g_developer_mode)
                                 {
                                         std::string dev_text =
@@ -2089,7 +2089,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                         else
                         {
                                 set_control(slot_move, "MOVE\nWSAD\nCTRL/SPACE", neutral);
-                                set_control(slot_primary, "PLACE\nLBM", accent);
+                                set_control(slot_primary, "PLACE\nLMB", accent);
                         }
                 }
                 else
@@ -2107,7 +2107,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
 
                         if (show_grab)
                         {
-                                set_control(slot_secondary, "GRAB\nLBM", accent);
+                                set_control(slot_secondary, "GRAB\nLMB", accent);
                         }
                 }
         }
