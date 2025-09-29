@@ -32,8 +32,13 @@ Puzzle game based on miniRT 42School project.
    sudo apt-get update
    sudo apt-get install build-essential cmake libsdl2-dev
    ```
-2. Configure and build the project with CMake:
+2. Clone this repository:
    ```bash
+   git clone https://github.com/Jzackiewicz/minirt_game.git
+   ```
+3. Configure and build the project with CMake:
+   ```bash
+   cd minirt_game
    cmake -S . -B build
    cmake --build build -j
    ```
