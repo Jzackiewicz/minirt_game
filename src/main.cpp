@@ -2,6 +2,7 @@
 #include "CommandLine.hpp"
 #include "MainMenu.hpp"
 #include "Settings.hpp"
+#include "SessionProgress.hpp"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -129,6 +130,12 @@ int main(int argc, char **argv)
                         }
                         scene_path = *tutorial_scene;
                 }
+                const SessionProgress &progress = get_session_progress();
+                if (progress.has_progress && progress.tutorial_mode == tutorial_mode &&
+                    !progress.next_scene_path.empty())
+                {
+                        scene_path = progress.next_scene_path;
+                }
                 bool back_to_menu = run_application(scene_path, g_settings.width,
                                                                                 g_settings.height,
                                                                                 g_settings.quality,
@@ -137,6 +144,7 @@ int main(int argc, char **argv)
                 if (!back_to_menu)
                 {
                         keep_running = false;
+                        clear_session_progress();
                 }
         }
         return 0;

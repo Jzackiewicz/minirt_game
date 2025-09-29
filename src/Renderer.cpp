@@ -9,6 +9,7 @@
 #include "Parser.hpp"
 #include "LevelFinishedMenu.hpp"
 #include "PauseMenu.hpp"
+#include "SessionProgress.hpp"
 #include "Laser.hpp"
 #include "Plane.hpp"
 #include "Sphere.hpp"
@@ -818,6 +819,21 @@ std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::pa
         return result;
 }
 
+std::filesystem::path canonical_level_directory(const std::string &scene_path)
+{
+        namespace fs = std::filesystem;
+        fs::path path = fs::absolute(scene_path);
+        std::error_code ec;
+        if (fs::is_regular_file(path, ec))
+                path = path.parent_path();
+        if (path.empty())
+                path = fs::current_path();
+        fs::path canonical = fs::weakly_canonical(path, ec);
+        if (!ec)
+                path = canonical;
+        return path;
+}
+
 int level_index_for(const std::vector<std::filesystem::path> &levels,
                     const std::filesystem::path &scene_path)
 {
@@ -1085,6 +1101,26 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                 }
                 else if (action == ButtonAction::BackToMenu)
                 {
+                        SessionProgress progress;
+                        progress.has_progress = true;
+                        progress.tutorial_mode = st.tutorial_mode;
+                        progress.base_directory =
+                                canonical_level_directory(st.scene_path).string();
+                        progress.total_score = stats.total_score;
+                        progress.completed_levels = stats.completed_levels;
+                        progress.total_levels = stats.total_levels;
+                        progress.player_name = st.player_name;
+                        auto next_index = next_level_index(st);
+                        if (next_index)
+                        {
+                                progress.next_scene_path =
+                                        std::filesystem::absolute(st.level_paths[*next_index]).string();
+                        }
+                        else
+                        {
+                                progress.next_scene_path.clear();
+                        }
+                        set_session_progress(progress);
                         st.running = false;
                         st.return_to_menu = true;
                 }
@@ -2896,6 +2932,41 @@ bool Renderer::render_window(std::vector<Material> &mats,
         st.current_level_index = level_index_for(st.level_paths, absolute_scene_path);
         st.cumulative_score = 0.0;
         st.player_name.clear();
+        const SessionProgress &progress = get_session_progress();
+        std::filesystem::path current_directory =
+                canonical_level_directory(st.scene_path);
+        if (progress.has_progress && progress.tutorial_mode == st.tutorial_mode)
+        {
+                std::filesystem::path stored_directory(progress.base_directory);
+                std::error_code ec;
+                bool same_directory = false;
+                if (!progress.base_directory.empty())
+                {
+                        if (current_directory == stored_directory)
+                        {
+                                same_directory = true;
+                        }
+                        else if (std::filesystem::equivalent(current_directory,
+                                                              stored_directory, ec) && !ec)
+                        {
+                                same_directory = true;
+                        }
+                }
+                if (same_directory)
+                {
+                        std::filesystem::path expected_next(progress.next_scene_path);
+                        if (!progress.next_scene_path.empty())
+                        {
+                                expected_next = std::filesystem::absolute(expected_next);
+                        }
+                        if (!progress.next_scene_path.empty() &&
+                            expected_next == absolute_scene_path)
+                        {
+                                st.cumulative_score = progress.total_score;
+                                st.player_name = progress.player_name;
+                        }
+                }
+        }
         st.level_number = parse_level_number_from_path(st.scene_path);
         st.level_label = level_label_from_path(st.scene_path);
         st.tutorial_prompts = scene.prompts;
