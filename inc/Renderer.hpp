@@ -26,8 +26,8 @@ class Renderer
                                         const RenderSettings &rset);
         bool render_window(std::vector<Material> &mats, const RenderSettings &rset,
                                            const std::string &scene_path, bool tutorial_mode);
+		struct RenderState;
         private:
-        struct RenderState;
         void mark_scene_dirty(RenderState &st);
         bool init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,
                                        int W, int H, int RW, int RH);
