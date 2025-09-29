@@ -253,7 +253,8 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
     Button next_button{"NEXT LEVEL", ButtonAction::NextLevel, SDL_Color{96, 255, 128, 255}};
     Button leaderboard_button{"LEADERBOARD", ButtonAction::Leaderboard,
                               SDL_Color{96, 128, 255, 255}};
-    Button quit_button{"QUIT", ButtonAction::Quit, SDL_Color{255, 96, 96, 255}};
+    Button back_button{"BACK TO MENU", ButtonAction::BackToMenu,
+                       SDL_Color{255, 96, 96, 255}};
     SDL_Color submit_idle_color{64, 160, 96, 220};
     Button submit_button{"SUBMIT", ButtonAction::None, SDL_Color{96, 255, 128, 255}};
 
@@ -299,7 +300,7 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
         int bottom_total_width = button_width * 2 + button_gap;
         int bottom_start_x = width / 2 - bottom_total_width / 2;
         leaderboard_button.rect = {bottom_start_x, bottom_y, button_width, button_height};
-        quit_button.rect = {bottom_start_x + button_width + button_gap, bottom_y, button_width,
+        back_button.rect = {bottom_start_x + button_width + button_gap, bottom_y, button_width,
                             button_height};
 
         SDL_Rect name_rect{0, 0, 0, 0};
@@ -396,9 +397,9 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
                     LeaderboardMenu::show(window, renderer, width, height, transparent);
                     if (was_active && allow_name_input)
                         SDL_StartTextInput();
-                } else if (point_in_rect(quit_button.rect, mx, my)) {
+                } else if (point_in_rect(back_button.rect, mx, my)) {
                     running = false;
-                    result = ButtonAction::Quit;
+                    result = ButtonAction::BackToMenu;
                 } else if (allow_name_input && point_in_rect(name_rect, mx, my)) {
                     name_field_active = true;
                     if (!SDL_IsTextInputActive())
@@ -522,7 +523,7 @@ ButtonAction LevelFinishedMenu::run(SDL_Window *window, SDL_Renderer *renderer, 
         if (stats_.has_next_level)
             draw_button(next_button, true, false, SDL_Color{}, false);
         draw_button(leaderboard_button, true, false, SDL_Color{}, false);
-        draw_button(quit_button, true, false, SDL_Color{}, false);
+        draw_button(back_button, true, false, SDL_Color{}, false);
 
         if (show_name_input) {
             SDL_Color bg_color{20, 20, 20, 220};

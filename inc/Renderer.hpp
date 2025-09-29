@@ -18,15 +18,26 @@ class RenderSettings
 	float downscale = 1.0f; // 1.0 => full res, 1.5 => medium, 2.0 => low
 };
 
+struct SessionProgress
+{
+        bool has_progress = false;
+        bool tutorial_mode = false;
+        std::string next_scene_path;
+        double cumulative_score = 0.0;
+        int completed_levels = 0;
+        std::string player_name;
+};
+
 class Renderer
 {
-	public:
-	Renderer(Scene &s, Camera &c);
+        public:
+        Renderer(Scene &s, Camera &c);
         void render_ppm(const std::string &path, const std::vector<Material> &mats,
                                         const RenderSettings &rset);
         bool render_window(std::vector<Material> &mats, const RenderSettings &rset,
-                                           const std::string &scene_path, bool tutorial_mode);
-		struct RenderState;
+                                           const std::string &scene_path, bool tutorial_mode,
+                                           SessionProgress *progress);
+                struct RenderState;
         private:
         void mark_scene_dirty(RenderState &st);
         bool init_sdl(SDL_Window *&win, SDL_Renderer *&ren, SDL_Texture *&tex,

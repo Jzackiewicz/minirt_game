@@ -1,6 +1,7 @@
 #include "Application.hpp"
 #include "CommandLine.hpp"
 #include "MainMenu.hpp"
+#include "Renderer.hpp"
 #include "Settings.hpp"
 #include <algorithm>
 #include <cctype>
@@ -79,6 +80,9 @@ std::optional<std::string> find_first_tutorial_scene()
         return tutorials.front().string();
 }
 
+SessionProgress g_story_progress;
+SessionProgress g_tutorial_progress;
+
 } // namespace
 
 /**
@@ -96,8 +100,16 @@ int main(int argc, char **argv)
 
         if (skip_main_menu)
         {
-                run_application(default_scene_path, g_settings.width, g_settings.height,
-                                g_settings.quality, false);
+                g_story_progress.has_progress = false;
+                g_story_progress.cumulative_score = 0.0;
+                g_story_progress.player_name.clear();
+                g_story_progress.completed_levels = 0;
+                g_story_progress.tutorial_mode = false;
+                g_story_progress.next_scene_path =
+                        std::filesystem::absolute(default_scene_path).string();
+                run_application(g_story_progress.next_scene_path, g_settings.width,
+                                g_settings.height, g_settings.quality, false,
+                                g_story_progress);
                 load_settings();
                 return 0;
         }
@@ -118,21 +130,43 @@ int main(int argc, char **argv)
                         continue;
                 }
                 bool tutorial_mode = (action == ButtonAction::Tutorial);
-                std::string scene_path = default_scene_path;
-                if (tutorial_mode)
+                SessionProgress &progress = tutorial_mode ? g_tutorial_progress
+                                                          : g_story_progress;
+                std::string scene_path;
+                if (progress.has_progress && progress.tutorial_mode == tutorial_mode &&
+                    !progress.next_scene_path.empty())
                 {
-                        auto tutorial_scene = find_first_tutorial_scene();
-                        if (!tutorial_scene)
+                        scene_path = progress.next_scene_path;
+                }
+                else
+                {
+                        if (tutorial_mode)
                         {
-                                std::cerr << "No tutorial maps available.\n";
-                                return 1;
+                                auto tutorial_scene = find_first_tutorial_scene();
+                                if (!tutorial_scene)
+                                {
+                                        std::cerr << "No tutorial maps available.\n";
+                                        return 1;
+                                }
+                                scene_path = *tutorial_scene;
                         }
-                        scene_path = *tutorial_scene;
+                        else
+                        {
+                                scene_path = default_scene_path;
+                        }
+                        scene_path = std::filesystem::absolute(scene_path).string();
+                        progress.has_progress = false;
+                        progress.cumulative_score = 0.0;
+                        progress.player_name.clear();
+                        progress.completed_levels = 0;
+                        progress.tutorial_mode = tutorial_mode;
+                        progress.next_scene_path = scene_path;
                 }
                 bool back_to_menu = run_application(scene_path, g_settings.width,
                                                                                 g_settings.height,
                                                                                 g_settings.quality,
-                                                                                tutorial_mode);
+                                                                                tutorial_mode,
+                                                                                progress);
                 load_settings();
                 if (!back_to_menu)
                 {
