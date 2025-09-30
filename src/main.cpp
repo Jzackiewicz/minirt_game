@@ -97,7 +97,8 @@ int main(int argc, char **argv)
 
         GameSession session_state;
 
-        if (skip_main_menu)
+        bool forced_single_level = is_forced_single_level_mode();
+        if (skip_main_menu && !forced_single_level)
         {
                 run_application(default_scene_path, g_settings.width, g_settings.height,
                                 g_settings.quality, false, nullptr);
@@ -122,7 +123,11 @@ int main(int argc, char **argv)
                 }
                 bool tutorial_mode = (action == ButtonAction::Tutorial);
                 std::string scene_path = default_scene_path;
-                if (tutorial_mode)
+                if (tutorial_mode && forced_single_level)
+                {
+                        tutorial_mode = false;
+                }
+                else if (tutorial_mode)
                 {
                         auto tutorial_scene = find_first_tutorial_scene();
                         if (!tutorial_scene)

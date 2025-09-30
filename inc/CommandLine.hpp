@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
 
 /**
@@ -12,3 +13,13 @@
  * @return True on success.
  */
 bool parse_arguments(int argc, char **argv, std::string &scene_path, bool &skip_main_menu);
+
+/**
+ * Indicates whether a single level was forced via the command line.
+ */
+bool is_forced_single_level_mode();
+
+/**
+ * Returns the scene path that was provided via the command line.
+ */
+const std::filesystem::path &forced_scene_path();
