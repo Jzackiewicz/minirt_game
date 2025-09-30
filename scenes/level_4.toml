@@ -26,7 +26,6 @@ transparent = false
 [[objects.planes]]
 id = "plane2"
 color = [80, 80, 80]
-texture = "textures/floor.jpg"
 position = [-26.36382, 0.81532, -47.83988]
 dir = [0, 1, 0]
 reflective = false

@@ -6,7 +6,6 @@
 #include "Cylinder.hpp"
 #include "Plane.hpp"
 #include "Sphere.hpp"
-#include "Texture.hpp"
 
 #include <algorithm>
 #include <array>
@@ -14,7 +13,6 @@
 #include <cmath>
 #include <cctype>
 #include <cstring>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -28,29 +26,6 @@ namespace
 {
 
 constexpr double kTransparentAlpha = 125.0 / 255.0;
-
-using TextureCache = std::unordered_map<std::string, std::weak_ptr<Texture>>;
-
-TextureCache &texture_cache()
-{
-        static TextureCache cache;
-        return cache;
-}
-
-std::shared_ptr<Texture> load_texture_cached(const std::string &path)
-{
-        TextureCache &cache = texture_cache();
-        auto it = cache.find(path);
-        if (it != cache.end())
-        {
-                if (auto tex = it->second.lock())
-                        return tex;
-        }
-        auto tex = load_texture(path);
-        if (tex)
-                cache[path] = tex;
-        return tex;
-}
 
 std::string trim(const std::string &s)
 {
@@ -408,41 +383,6 @@ bool parse_string_field(const TableData &table, const std::string &key, std::str
         return true;
 }
 
-bool parse_optional_texture(const TableData &table,
-                           const std::filesystem::path &scene_dir, Material &mat)
-{
-        auto it = table.values.find("texture");
-        if (it == table.values.end())
-        {
-                mat.texture.reset();
-                mat.texture_path.clear();
-                return true;
-        }
-        std::string trimmed = trim(it->second.first);
-        if (trimmed.size() < 2 || trimmed.front() != '"' || trimmed.back() != '"')
-                return report_error(it->second.second,
-                                    "Expected string for 'texture'");
-        std::string value = trimmed.substr(1, trimmed.size() - 2);
-        if (value.empty())
-        {
-                mat.texture.reset();
-                mat.texture_path.clear();
-                return true;
-        }
-        std::filesystem::path tex_path(value);
-        if (tex_path.is_relative())
-                tex_path = scene_dir / tex_path;
-        std::filesystem::path resolved = std::filesystem::absolute(tex_path);
-        resolved = resolved.lexically_normal();
-        std::shared_ptr<Texture> tex = load_texture_cached(resolved.string());
-        if (!tex)
-                return report_error(it->second.second,
-                                    "Failed to load texture '" + value + "'");
-        mat.texture = tex;
-        mat.texture_path = value;
-        return true;
-}
-
 Material make_material(const std::array<int, 3> &rgb, bool reflective, bool transparent)
 {
         Material mat;
@@ -524,12 +464,11 @@ bool process_lighting_light_source(const TableData &table, Scene &scene,
 }
 
 bool process_plane(const TableData &table, Scene &scene, int &oid, int &mid,
-                   std::vector<Material> &materials, std::unordered_set<std::string> &object_ids,
-                   const std::filesystem::path &scene_dir)
+                   std::vector<Material> &materials, std::unordered_set<std::string> &object_ids)
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "reflective", "rotatable",
-                                 "movable", "scorable", "transparent", "texture"}))
+                                 "movable", "scorable", "transparent"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -570,8 +509,6 @@ bool process_plane(const TableData &table, Scene &scene, int &oid, int &mid,
         plane->movable = movable;
         plane->scorable = scorable;
         Material mat = make_material(rgb, reflective, transparent);
-        if (!parse_optional_texture(table, scene_dir, mat))
-                return false;
         materials.push_back(mat);
         scene.objects.push_back(plane);
         ++mid;
@@ -579,12 +516,11 @@ bool process_plane(const TableData &table, Scene &scene, int &oid, int &mid,
 }
 
 bool process_sphere(const TableData &table, Scene &scene, int &oid, int &mid,
-                    std::vector<Material> &materials, std::unordered_set<std::string> &object_ids,
-                    const std::filesystem::path &scene_dir)
+                    std::vector<Material> &materials, std::unordered_set<std::string> &object_ids)
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "radius", "reflective",
-                                 "rotatable", "movable", "scorable", "transparent", "texture"}))
+                                 "rotatable", "movable", "scorable", "transparent"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -623,8 +559,6 @@ bool process_sphere(const TableData &table, Scene &scene, int &oid, int &mid,
         sphere->movable = movable;
         sphere->scorable = scorable;
         Material mat = make_material(rgb, reflective, transparent);
-        if (!parse_optional_texture(table, scene_dir, mat))
-                return false;
         materials.push_back(mat);
         scene.objects.push_back(sphere);
         ++mid;
@@ -632,13 +566,11 @@ bool process_sphere(const TableData &table, Scene &scene, int &oid, int &mid,
 }
 
 bool process_cube(const TableData &table, Scene &scene, int &oid, int &mid,
-                  std::vector<Material> &materials, std::unordered_set<std::string> &object_ids,
-                  const std::filesystem::path &scene_dir)
+                  std::vector<Material> &materials, std::unordered_set<std::string> &object_ids)
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "width", "height", "length",
-                                 "reflective", "rotatable", "movable", "scorable", "transparent",
-                                 "texture"}))
+                                 "reflective", "rotatable", "movable", "scorable", "transparent"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -686,8 +618,6 @@ bool process_cube(const TableData &table, Scene &scene, int &oid, int &mid,
         cube->movable = movable;
         cube->scorable = scorable;
         Material mat = make_material(rgb, reflective, transparent);
-        if (!parse_optional_texture(table, scene_dir, mat))
-                return false;
         materials.push_back(mat);
         scene.objects.push_back(cube);
         ++mid;
@@ -695,13 +625,11 @@ bool process_cube(const TableData &table, Scene &scene, int &oid, int &mid,
 }
 
 bool process_cylinder(const TableData &table, Scene &scene, int &oid, int &mid,
-                      std::vector<Material> &materials, std::unordered_set<std::string> &object_ids,
-                      const std::filesystem::path &scene_dir)
+                      std::vector<Material> &materials, std::unordered_set<std::string> &object_ids)
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "radius", "height",
-                                 "reflective", "rotatable", "movable", "scorable", "transparent",
-                                 "texture"}))
+                                 "reflective", "rotatable", "movable", "scorable", "transparent"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -746,8 +674,6 @@ bool process_cylinder(const TableData &table, Scene &scene, int &oid, int &mid,
         cylinder->movable = movable;
         cylinder->scorable = scorable;
         Material mat = make_material(rgb, reflective, transparent);
-        if (!parse_optional_texture(table, scene_dir, mat))
-                return false;
         materials.push_back(mat);
         scene.objects.push_back(cylinder);
         ++mid;
@@ -755,13 +681,11 @@ bool process_cylinder(const TableData &table, Scene &scene, int &oid, int &mid,
 }
 
 bool process_cone(const TableData &table, Scene &scene, int &oid, int &mid,
-                  std::vector<Material> &materials, std::unordered_set<std::string> &object_ids,
-                  const std::filesystem::path &scene_dir)
+                  std::vector<Material> &materials, std::unordered_set<std::string> &object_ids)
 {
         if (!check_allowed_keys(table,
                                 {"id", "color", "position", "dir", "radius", "height",
-                                 "reflective", "rotatable", "movable", "scorable", "transparent",
-                                 "texture"}))
+                                 "reflective", "rotatable", "movable", "scorable", "transparent"}))
                 return false;
         std::string id;
         if (!parse_string_field(table, "id", id))
@@ -806,8 +730,6 @@ bool process_cone(const TableData &table, Scene &scene, int &oid, int &mid,
         cone->movable = movable;
         cone->scorable = scorable;
         Material mat = make_material(rgb, reflective, transparent);
-        if (!parse_optional_texture(table, scene_dir, mat))
-                return false;
         materials.push_back(mat);
         scene.objects.push_back(cone);
         ++mid;
@@ -1090,9 +1012,6 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
         outScene.minimal_score = 0.0;
         outScene.prompts.clear();
 
-        std::filesystem::path scene_dir =
-                std::filesystem::absolute(std::filesystem::path(path)).parent_path();
-
         Vec3 cam_pos(0, 0, -10);
         Vec3 cam_dir(0, 0, 1);
         double fov = 60.0;
@@ -1137,24 +1056,19 @@ bool Parser::parse_rt_file(const std::string &path, Scene &outScene,
                         ok = process_lighting_light_source(table, outScene, light_ids);
                         break;
                 case TableType::ObjectsPlane:
-                        ok = process_plane(table, outScene, oid, mid, materials, object_ids,
-                                           scene_dir);
+                        ok = process_plane(table, outScene, oid, mid, materials, object_ids);
                         break;
                 case TableType::ObjectsSphere:
-                        ok = process_sphere(table, outScene, oid, mid, materials, object_ids,
-                                            scene_dir);
+                        ok = process_sphere(table, outScene, oid, mid, materials, object_ids);
                         break;
                 case TableType::ObjectsCube:
-                        ok = process_cube(table, outScene, oid, mid, materials, object_ids,
-                                          scene_dir);
+                        ok = process_cube(table, outScene, oid, mid, materials, object_ids);
                         break;
                 case TableType::ObjectsCone:
-                        ok = process_cone(table, outScene, oid, mid, materials, object_ids,
-                                          scene_dir);
+                        ok = process_cone(table, outScene, oid, mid, materials, object_ids);
                         break;
                 case TableType::ObjectsCylinder:
-                        ok = process_cylinder(table, outScene, oid, mid, materials, object_ids,
-                                              scene_dir);
+                        ok = process_cylinder(table, outScene, oid, mid, materials, object_ids);
                         break;
                 case TableType::BeamSource:
                         ok = process_beam_source(table, outScene, oid, mid, materials, beam_source_ids);
