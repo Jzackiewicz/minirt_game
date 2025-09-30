@@ -19,8 +19,7 @@ inline Vec3 reflect(const Vec3 &v, const Vec3 &n)
 
 Vec3 material_surface_color(const Material &mat, const HitRecord &rec)
 {
-        if (mat.has_texture() && rec.has_uv)
-                return mat.texture->sample(rec.u, rec.v);
+        (void)rec;
         return mat.base_color;
 }
 

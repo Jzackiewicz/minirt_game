@@ -366,11 +366,6 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                         is_plane = true;
                 }
         }
-        if (mat.has_texture() && rec.has_uv)
-        {
-                Vec3 tex = mat.texture->sample(rec.u, rec.v);
-                col = tex;
-        }
         if (is_plane)
         {
                 Vec3 brighter = brighten_color_by(base, kPlaneAltColorAmount);

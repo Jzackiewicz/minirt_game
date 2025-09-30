@@ -1,9 +1,7 @@
 
 #pragma once
-#include "Texture.hpp"
 #include "Vec3.hpp"
 #include "light.hpp"
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -19,11 +17,7 @@ class Material
 	double specular_k = 0.5;
 	bool mirror = false;
 	bool random_alpha = false;
-	bool checkered = false; // render as checkered pattern when true
-	std::shared_ptr<Texture> texture;
-	std::string texture_path;
-
-	bool has_texture() const { return static_cast<bool>(texture); }
+        bool checkered = false; // render as checkered pattern when true
 };
 
 Vec3 phong(const Material &m, const Ambient &ambient,
