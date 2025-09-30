@@ -44,9 +44,9 @@ static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
 }
 
 static constexpr double kObjectAltColorAmount = 0.35;
-static constexpr double kPlaneAltColorAmount = 0.25;
+static constexpr double kPlaneAltColorAmount = 0.05;
 static constexpr double kObjectCheckerFrequency = 5.0;
-static constexpr double kPlaneCheckerFrequency = 0.5;
+static constexpr double kPlaneCheckerFrequency = 0.25;
 static constexpr double kQuotaScoreEpsilon = 1e-3;
 static constexpr double kBeamTransparentAlpha = 125.0 / 255.0;
 static constexpr double kSpotlightLaserRatio = 20.0;
