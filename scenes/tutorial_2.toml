@@ -1,12 +1,11 @@
 [prompts]
-a = "Move around using `W`,`S`,`A`,`D`, descend with `CTRL`, ascend with `SPACE`."
-b = "Aim at the object with your crosshair. Click `LMB` when it's blinking to grab it. Checkered object is now in the edit mode."
-c = "While in edit mode, click and hold `RMB` and move your mouse to rotate the object in yaw and pitch axis. \nUse `Q`/`E` keys to rotate it in roll axis.\n Use `mouse scroll` to move it closer or further."
+a = "Objects can have different shapes and colors.\nColor of the object determines the way you can interact with it."
+b = "Green objects can be both moved and rotated.\nYellow objects can be rotated but can't be moved.\nRed objects stay put - you can't move or rotate them.\nGrey objects don't score points and can't be moved or rotated."
 
 [camera]
 id = "camera"
-position = [0.16275, 1.35508, -21.52722]
-lookdir = [0.20605, -0.33724, 0.91859]
+position = [3.31039, -2.10638, -16.69617]
+lookdir = [-0.08381, -0.34288, 0.93563]
 fov = 120
 
 [lighting.ambient]
@@ -28,7 +27,7 @@ transparent = false
 id = "plane2"
 color = [80, 80, 80]
 
-position = [10.80068, -8.06926, 6.47394]
+position = [10.87668, -8.09944, 6.45878]
 dir = [0, 1, 0]
 reflective = false
 rotatable = false
@@ -82,12 +81,50 @@ transparent = false
 
 [[objects.boxes]]
 id = "box1"
+color = [128, 128, 128]
+position = [6.66480, -4.0, -10.0]
+dir = [0.0, 1.0, 0.0]
+width = 1.75385
+height = 1.75385
+length = 1.75385
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.spheres]]
+id = "sphere1"
+color = [255, 0, 0]
+position = [2.99261, -4.0, -10.0]
+dir = [0.0, 1.0, 0.0]
+radius = 1
+reflective = true
+rotatable = false
+movable = false
+scorable = true
+transparent = false
+
+[[objects.cones]]
+id = "cone1"
+color = [255, 255, 0]
+position = [-1.04205, -4.0, -10.0]
+dir = [0.0, 1.0, 0.0]
+radius = 1
+height = 2
+reflective = true
+rotatable = true
+movable = false
+scorable = true
+transparent = false
+
+[[objects.cylinders]]
+id = "cylinder1"
 color = [0, 255, 0]
-position = [-0.02803, -2.51000, -13.86534]
-dir = [-0.79495, -0.60292, 0.06731]
-width = 1.68474
-height = 1.68474
-length = 1.68474
+position = [-4.31025, -4.0, -10.0]
+dir = [0.0, 1.0, 0.0]
+radius = 0.5
+height = 2
 reflective = true
 rotatable = true
 movable = true

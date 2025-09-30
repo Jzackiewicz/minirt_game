@@ -1,22 +1,25 @@
 [prompts]
-a = "Move around using `W`,`S`,`A`,`D`, descend with `CTRL`, ascend with `SPACE`."
-b = "Aim at the object with your crosshair. Click `LMB` when it's blinking to grab it. Checkered object is now in the edit mode."
-c = "While in edit mode, click and hold `RMB` and move your mouse to rotate the object in yaw and pitch axis. \nUse `Q`/`E` keys to rotate it in roll axis.\n Use `mouse scroll` to move it closer or further."
+a = "The goal of the game is use objects on the map to lead the `laser` to the `Beam Target` and get the minimal `score` required to pass the level."
+b = "Reach the quota (`top left corner`) to clear the level or optimize your setup to climb the leaderboard!"
+
+[quota]
+target = true
+minimal_score = 3.0
 
 [camera]
 id = "camera"
-position = [0.16275, 1.35508, -21.52722]
-lookdir = [0.20605, -0.33724, 0.91859]
+position = [8.05309, 5.44287, -29.18574]
+lookdir = [-0.29190, -0.46886, 0.83365]
 fov = 120
 
 [lighting.ambient]
-intensity = 0.70000
+intensity = 0.50000
 color = [255, 255, 255]
 
 [[objects.planes]]
 id = "plane1"
 color = [200, 200, 200]
-position = [-5.78242, 2.55023, -1.69474]
+position = [0, 10, 0]
 dir = [0, 1, 0]
 reflective = false
 rotatable = false
@@ -28,7 +31,7 @@ transparent = false
 id = "plane2"
 color = [80, 80, 80]
 
-position = [10.80068, -8.06926, 6.47394]
+position = [0, -10, 0]
 dir = [0, 1, 0]
 reflective = false
 rotatable = false
@@ -39,7 +42,7 @@ transparent = false
 [[objects.planes]]
 id = "plane3"
 color = [136,150,165]
-position = [-1.89363, 0.13519, 1.01673]
+position = [0, 0, 10]
 dir = [0, 0, -1]
 reflective = false
 rotatable = false
@@ -50,7 +53,7 @@ transparent = false
 [[objects.planes]]
 id = "plane4"
 color = [136,150,165]
-position = [-9.15730, 0.20377, -7.25503]
+position = [-10, 0, 0]
 dir = [1, 0, 0]
 reflective = false
 rotatable = false
@@ -61,7 +64,7 @@ transparent = false
 [[objects.planes]]
 id = "plane5"
 color = [136,150,165]
-position = [11.40453, -0.22433, 0.49850]
+position = [10, 0, 0]
 dir = [1, 0, 0]
 reflective = false
 rotatable = false
@@ -72,7 +75,7 @@ transparent = false
 [[objects.planes]]
 id = "plane6"
 color = [136,150,165]
-position = [11.07437, 3.13255, -24.87391]
+position = [0, 0, -30]
 dir = [0, 0, -1]
 reflective = false
 rotatable = false
@@ -82,15 +85,36 @@ transparent = false
 
 [[objects.boxes]]
 id = "box1"
-color = [0, 255, 0]
-position = [-0.02803, -2.51000, -13.86534]
-dir = [-0.79495, -0.60292, 0.06731]
-width = 1.68474
-height = 1.68474
-length = 1.68474
+color = [255, 255, 0]
+position = [-4.46192, 3.46111, -4.29934]
+dir = [0.09627, 0.49138, 0.86561]
+width = 1
+height = 3
+length = 2
 reflective = true
 rotatable = true
-movable = true
+movable = false
 scorable = true
 transparent = false
+
+[[beam.sources]]
+id = "beam_source1"
+intensity = 1
+position = [1.06517, 2.62323, -22.16474]
+dir = [-0.28604, 0.04312, 0.95725]
+color = [255, 255, 255]
+radius = 1.30000
+length = 40
+movable = false
+rotatable = false
+scorable = false
+with_laser = true
+
+[[beam.targets]]
+id = "beam_target1"
+position = [3.84572, -1.44382, 2.38892]
+color = [255, 255, 255]
+radius = 1.30000
+movable = false
+scorable = false
 

@@ -1,0 +1,147 @@
+[prompts]
+a = "White sphere is the source of the light beam.\nLight beam consists of thin `laser` and wider `spotlight`. Both `laser` and `spotlight` have limited range."
+b = "Illuminating red, yellow and green objects' surfaces generates `score`. The more surface area is illuminated and the closer it is to the `Beam Source` the more `score` it gets."
+c = "Aim at any object to display information in the `top right corner` about it's type and score."
+
+[camera]
+id = "camera"
+position = [-4.82239, -0.91736, -18.52907]
+lookdir = [0.63838, -0.59668, 0.48625]
+fov = 120
+
+[lighting.ambient]
+intensity = 0.70000
+color = [255, 255, 255]
+
+[[objects.planes]]
+id = "plane1"
+color = [200, 200, 200]
+position = [-5.78242, 2.55023, -1.69474]
+dir = [0, 1, 0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.planes]]
+id = "plane2"
+color = [80, 80, 80]
+
+position = [10.87668, -8.09944, 6.45878]
+dir = [0, 1, 0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.planes]]
+id = "plane3"
+color = [136,150,165]
+position = [-1.89363, 0.13519, 1.01673]
+dir = [0, 0, -1]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.planes]]
+id = "plane4"
+color = [136,150,165]
+position = [-9.15730, 0.20377, -7.25503]
+dir = [1, 0, 0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.planes]]
+id = "plane5"
+color = [136,150,165]
+position = [11.40453, -0.22433, 0.49850]
+dir = [1, 0, 0]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.planes]]
+id = "plane6"
+color = [136,150,165]
+position = [11.07437, 3.13255, -24.87391]
+dir = [0, 0, -1]
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.boxes]]
+id = "box1"
+color = [128, 128, 128]
+position = [6.66480, -4, -10]
+dir = [0, 1, 0]
+width = 1.75385
+height = 1.75385
+length = 1.75385
+reflective = false
+rotatable = false
+movable = false
+scorable = false
+transparent = false
+
+[[objects.spheres]]
+id = "sphere1"
+color = [255, 0, 0]
+position = [2.99261, -4, -10]
+dir = [0.0, 1.0, 0.0]
+radius = 1
+reflective = true
+rotatable = false
+movable = false
+scorable = true
+transparent = false
+
+[[objects.cones]]
+id = "cone1"
+color = [255, 255, 0]
+position = [-1.49965, -3.28598, -11.26119]
+dir = [0, 1, 0]
+radius = 1
+height = 2
+reflective = true
+rotatable = true
+movable = false
+scorable = true
+transparent = false
+
+[[objects.cylinders]]
+id = "cylinder1"
+color = [0, 255, 0]
+position = [-4.65970, -3.68259, -11.91935]
+dir = [0.64432, 0.04271, 0.76356]
+radius = 0.50000
+height = 2
+reflective = true
+rotatable = true
+movable = true
+scorable = true
+transparent = false
+
+[[beam.sources]]
+id = "beam_source1"
+intensity = 1
+position = [-5.99526, -2.65695, -13.53322]
+dir = [0.96078, -0.13201, 0.24389]
+color = [255, 255, 255]
+radius = 0.50000
+length = 50
+movable = false
+rotatable = false
+scorable = false
+with_laser = true
+
