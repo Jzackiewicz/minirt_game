@@ -73,3 +73,7 @@ Object rules:
 
 Remember that the laser fades with distance and stops once it reaches its set length.
 Hit the target and reach the quota to clear the level, or optimize your setup to climb the leaderboard.
+
+-------------------------------------------------------------------
+
+![Game screenshot](https://i.imgur.com/VynxPuR.png)
