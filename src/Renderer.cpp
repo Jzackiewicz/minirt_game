@@ -43,7 +43,8 @@ static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
         return a * (1.0 - alpha) + b * alpha;
 }
 
-static constexpr double kAltColorAmount = 0.35;
+static constexpr double kObjectAltColorAmount = 0.35;
+static constexpr double kPlaneAltColorAmount = 0.25;
 static constexpr double kObjectCheckerFrequency = 5.0;
 static constexpr double kPlaneCheckerFrequency = 0.5;
 static constexpr double kQuotaScoreEpsilon = 1e-3;
@@ -51,19 +52,29 @@ static constexpr double kBeamTransparentAlpha = 125.0 / 255.0;
 static constexpr double kSpotlightLaserRatio = 20.0;
 static constexpr Uint32 kTutorialContinueDelayMs = 4000;
 
+static Vec3 brighten_color_by(const Vec3 &color, double amount)
+{
+        return Vec3(std::clamp(color.x + (1.0 - color.x) * amount, 0.0, 1.0),
+                                std::clamp(color.y + (1.0 - color.y) * amount, 0.0, 1.0),
+                                std::clamp(color.z + (1.0 - color.z) * amount, 0.0, 1.0));
+}
+
+static Vec3 darken_color_by(const Vec3 &color, double amount)
+{
+        double factor = 1.0 - amount;
+        return Vec3(std::clamp(color.x * factor, 0.0, 1.0),
+                                std::clamp(color.y * factor, 0.0, 1.0),
+                                std::clamp(color.z * factor, 0.0, 1.0));
+}
+
 static Vec3 brighten_color(const Vec3 &color)
 {
-        return Vec3(std::clamp(color.x + (1.0 - color.x) * kAltColorAmount, 0.0, 1.0),
-                                std::clamp(color.y + (1.0 - color.y) * kAltColorAmount, 0.0, 1.0),
-                                std::clamp(color.z + (1.0 - color.z) * kAltColorAmount, 0.0, 1.0));
+        return brighten_color_by(color, kObjectAltColorAmount);
 }
 
 static Vec3 darken_color(const Vec3 &color)
 {
-        double factor = 1.0 - kAltColorAmount;
-        return Vec3(std::clamp(color.x * factor, 0.0, 1.0),
-                                std::clamp(color.y * factor, 0.0, 1.0),
-                                std::clamp(color.z * factor, 0.0, 1.0));
+        return darken_color_by(color, kObjectAltColorAmount);
 }
 
 static int compute_checker_from_position(const Vec3 &p, double frequency)
@@ -362,8 +373,8 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
         }
         if (is_plane)
         {
-                Vec3 brighter = brighten_color(base);
-                Vec3 darker = darken_color(base);
+                Vec3 brighter = brighten_color_by(base, kPlaneAltColorAmount);
+                Vec3 darker = darken_color_by(base, kPlaneAltColorAmount);
                 double u = rec.has_uv ? rec.u : rec.p.x;
                 double v = rec.has_uv ? rec.v : rec.p.y;
                 int chk = compute_checker_from_uv(u, v, kPlaneCheckerFrequency);
