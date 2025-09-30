@@ -9,7 +9,7 @@ lookdir = [0.05783, -0.30506, 0.95058]
 fov = 120
 
 [lighting.ambient]
-intensity = 0.40000
+intensity = 0.60000
 color = [255, 255, 255]
 
 [[objects.planes]]
