@@ -1,11 +1,11 @@
 [quota]
 target = true
-minimal_score = 5
+minimal_score = 4.5
 
 [camera]
 id = "camera"
-position = [8.63275, 18.63720, 19.12090]
-lookdir = [0.70957, -0.61891, 0.33685]
+position = [-7.72499, 4.01787, -28.58361]
+lookdir = [0.05783, -0.30506, 0.95058]
 fov = 120
 
 [lighting.ambient]
@@ -14,8 +14,8 @@ color = [255, 255, 255]
 
 [[objects.planes]]
 id = "plane1"
-color = [170, 170, 170]
-position = [0, 21.55000, 0]
+color = [200, 200, 200]
+position = [0, 10, 0]
 dir = [0, 1, 0]
 reflective = false
 rotatable = false
@@ -26,7 +26,7 @@ transparent = false
 [[objects.planes]]
 id = "plane2"
 color = [80, 80, 80]
-position = [-27.44161, 2.08875, -47.03945]
+position = [0, -10, 0]
 dir = [0, 1, 0]
 reflective = false
 rotatable = false
@@ -36,8 +36,8 @@ transparent = false
 
 [[objects.planes]]
 id = "plane3"
-color = [133, 116, 95]
-position = [5.00610, 5.24599, 33.66659]
+color = [136,150,165]
+position = [0, 0, 10]
 dir = [0, 0, -1]
 reflective = false
 rotatable = false
@@ -47,8 +47,8 @@ transparent = false
 
 [[objects.planes]]
 id = "plane4"
-color = [133, 116, 95]
-position = [-2.98246, -0.19339, -0.22198]
+color = [136,150,165]
+position = [-10, 0, 0]
 dir = [1, 0, 0]
 reflective = false
 rotatable = false
@@ -58,8 +58,8 @@ transparent = false
 
 [[objects.planes]]
 id = "plane5"
-color = [133, 116, 95]
-position = [20.35066, 16.73787, -1.16790]
+color = [136,150,165]
+position = [10, 0, 0]
 dir = [1, 0, 0]
 reflective = false
 rotatable = false
@@ -69,8 +69,8 @@ transparent = false
 
 [[objects.planes]]
 id = "plane6"
-color = [133, 116, 95]
-position = [-4.57157, -0.09982, -9.42990]
+color = [136,150,165]
+position = [0, 0, -30]
 dir = [0, 0, -1]
 reflective = false
 rotatable = false
@@ -80,67 +80,51 @@ transparent = false
 
 [[objects.boxes]]
 id = "box1"
-color = [0, 250, 0]
-position = [20.01752, 17.05291, 1.50960]
-dir = [-0.61225, -0.54918, 0.56882]
+color = [250, 250, 0]
+position = [-6.05073, 6.58414, -3.65141]
+dir = [-0.34682, 0.85977, 0.37486]
 width = 1.46410
 height = 1.46410
 length = 1.46410
+reflective = true
+rotatable = true
+movable = false
+scorable = true
+transparent = false
+
+[[objects.boxes]]
+id = "box2"
+color = [250, 0, 0]
+position = [8.26140, 4.19122, 8.47964]
+dir = [-0.18585, 0.96473, -0.18641]
+width = 5
+height = 15
+length = 5
+reflective = true
+rotatable = false
+movable = false
+scorable = true
+transparent = false
+
+[[objects.spheres]]
+id = "sphere1"
+color = [0, 250, 0]
+position = [0.67762, -4.91021, -19.00373]
+dir = [0.0, 1.0, 0.0]
+radius = 0.73599
 reflective = true
 rotatable = true
 movable = true
 scorable = true
 transparent = false
 
-[[objects.boxes]]
-id = "box2"
-color = [255, 0, 0]
-position = [16.15176, 4.41681, 9.76764]
-dir = [-0.13924, 0.62554, 0.76766]
-width = 0.30000
-height = 3
-length = 3
-reflective = true
-rotatable = false
-movable = false
-scorable = true
-transparent = false
-
-[[objects.boxes]]
-id = "box3"
-color = [255, 0, 0]
-position = [16.08714, 4.29823, 1.45869]
-dir = [0.51346, 0.84967, -0.12008]
-width = 0.30000
-height = 3
-length = 3
-reflective = true
-rotatable = false
-movable = false
-scorable = true
-transparent = false
-
-[[objects.boxes]]
-id = "box4"
-color = [255, 0, 0]
-position = [17.12933, 12.13151, 11.96432]
-dir = [0.05678, -0.52707, -0.84792]
-width = 0.30000
-height = 3
-length = 3
-reflective = true
-rotatable = false
-movable = false
-scorable = true
-transparent = false
-
 [[objects.cones]]
 id = "cone1"
-color = [0, 255, 0]
-position = [3.23304, 11.39742, -2.31826]
-dir = [0.78904, -0.39103, 0.47382]
-radius = 0.61771
-height = 1.23541
+color = [0, 250, 0]
+position = [3.95363, -4.16363, -18.94533]
+dir = [-0.03625, 0.99891, -0.02956]
+radius = 0.92765
+height = 1.85531
 reflective = true
 rotatable = true
 movable = true
@@ -150,11 +134,11 @@ transparent = false
 [[beam.sources]]
 id = "beam_source1"
 intensity = 1
-position = [3.20076, 11.44178, -4.91785]
-dir = [-0.04022, -0.00727, 0.99916]
+position = [-4.58162, 0.60101, -25.58508]
+dir = [0.36122, 0.79132, 0.49329]
 color = [255, 255, 255]
-radius = 0.82217
-length = 100
+radius = 1.30000
+length = 80
 movable = false
 rotatable = false
 scorable = false
@@ -162,9 +146,9 @@ with_laser = true
 
 [[beam.targets]]
 id = "beam_target1"
-position = [2.22556, 11.03264, 29.76244]
-color = [255, 255, 0]
-radius = 1
-movable = true
-scorable = true
+position = [3.84572, -1.44382, 2.38892]
+color = [255, 255, 255]
+radius = 1.30000
+movable = false
+scorable = false
 

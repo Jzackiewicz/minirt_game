@@ -1,11 +1,11 @@
 [quota]
 target = true
-minimal_score = 4.5
+minimal_score = 5
 
 [camera]
 id = "camera"
-position = [-7.72499, 4.01787, -28.58361]
-lookdir = [0.05783, -0.30506, 0.95058]
+position = [14.89975, 11.64542, -1.47281]
+lookdir = [-0.11661, -0.33475, 0.93506]
 fov = 120
 
 [lighting.ambient]
@@ -14,8 +14,8 @@ color = [255, 255, 255]
 
 [[objects.planes]]
 id = "plane1"
-color = [170, 170, 170]
-position = [0, 10, 0]
+color = [200, 200, 200]
+position = [0, 21.55000, 0]
 dir = [0, 1, 0]
 reflective = false
 rotatable = false
@@ -26,7 +26,7 @@ transparent = false
 [[objects.planes]]
 id = "plane2"
 color = [80, 80, 80]
-position = [0, -10, 0]
+position = [-27.44161, 2.08875, -47.03945]
 dir = [0, 1, 0]
 reflective = false
 rotatable = false
@@ -36,8 +36,8 @@ transparent = false
 
 [[objects.planes]]
 id = "plane3"
-color = [133, 116, 95]
-position = [0, 0, 10]
+color = [136, 150, 165]
+position = [5.00610, 5.24599, 33.66659]
 dir = [0, 0, -1]
 reflective = false
 rotatable = false
@@ -47,8 +47,8 @@ transparent = false
 
 [[objects.planes]]
 id = "plane4"
-color = [133, 116, 95]
-position = [-10, 0, 0]
+color = [136, 150, 165]
+position = [2.46262, -0.31792, 1.87778]
 dir = [1, 0, 0]
 reflective = false
 rotatable = false
@@ -58,9 +58,9 @@ transparent = false
 
 [[objects.planes]]
 id = "plane5"
-color = [133, 116, 95]
-position = [10, 0, 0]
-dir = [1, 0, 0]
+color = [136, 150, 165]
+position = [26.59968, 17.24839, -2.53843]
+dir = [1, -0.00002, -0.00196]
 reflective = false
 rotatable = false
 movable = false
@@ -69,8 +69,8 @@ transparent = false
 
 [[objects.planes]]
 id = "plane6"
-color = [133, 116, 95]
-position = [0, 0, -30]
+color = [136, 150, 165]
+position = [-6.79261, -1.44498, -2.71785]
 dir = [0, 0, -1]
 reflective = false
 rotatable = false
@@ -80,25 +80,109 @@ transparent = false
 
 [[objects.boxes]]
 id = "box1"
-color = [250, 250, 0]
-position = [-6.05073, 6.58414, -3.65141]
-dir = [-0.34682, 0.85977, 0.37486]
-width = 1.46410
-height = 1.46410
-length = 1.46410
+color = [255, 0, 0]
+position = [10, 10, 15]
+dir = [0, -1, 0]
+width = 0.50000
+height = 5
+length = 5
 reflective = true
-rotatable = true
+rotatable = false
 movable = false
 scorable = true
 transparent = false
 
 [[objects.boxes]]
 id = "box2"
-color = [250, 0, 0]
-position = [8.26140, 4.19122, 8.47964]
-dir = [-0.18585, 0.96473, -0.18641]
-width = 5
-height = 15
+color = [255, 0, 0]
+position = [15, 10, 15]
+dir = [0, -1, 0]
+width = 0.50000
+height = 5
+length = 5
+reflective = true
+rotatable = false
+movable = false
+scorable = true
+transparent = false
+
+[[objects.boxes]]
+id = "box3"
+color = [255, 0, 0]
+position = [12.50000, 7.50000, 15]
+dir = [0, 0, 1]
+width = 0.50000
+height = 5
+length = 5
+reflective = true
+rotatable = false
+movable = false
+scorable = true
+transparent = false
+
+[[objects.boxes]]
+id = "box4"
+color = [255, 0, 0]
+position = [12.50000, 12.50000, 15]
+dir = [0, 0, 1]
+width = 0.50000
+height = 5
+length = 5
+reflective = true
+rotatable = false
+movable = false
+scorable = true
+transparent = false
+
+[[objects.boxes]]
+id = "box5"
+color = [255, 0, 0]
+position = [10, 10, 20]
+dir = [0, -1, 0]
+width = 0.50000
+height = 5
+length = 5
+reflective = true
+rotatable = false
+movable = false
+scorable = true
+transparent = false
+
+[[objects.boxes]]
+id = "box6"
+color = [255, 0, 0]
+position = [15, 10, 20]
+dir = [0, -1, 0]
+width = 0.50000
+height = 5
+length = 5
+reflective = true
+rotatable = false
+movable = false
+scorable = true
+transparent = false
+
+[[objects.boxes]]
+id = "box7"
+color = [255, 0, 0]
+position = [12.50000, 7.50000, 20]
+dir = [0, 0, 1]
+width = 0.50000
+height = 5
+length = 5
+reflective = true
+rotatable = false
+movable = false
+scorable = true
+transparent = false
+
+[[objects.boxes]]
+id = "box8"
+color = [255, 0, 0]
+position = [12.50000, 12.50000, 20]
+dir = [0, 0, 1]
+width = 0.50000
+height = 5
 length = 5
 reflective = true
 rotatable = false
@@ -108,23 +192,23 @@ transparent = false
 
 [[objects.spheres]]
 id = "sphere1"
-color = [0, 250, 0]
-position = [0.67762, -4.91021, -19.00373]
+color = [0, 255, 0]
+position = [9.60744, 10.42290, 21.64540]
 dir = [0.0, 1.0, 0.0]
-radius = 0.73599
+radius = 0.46409
 reflective = true
 rotatable = true
 movable = true
 scorable = true
 transparent = false
 
-[[objects.cones]]
-id = "cone1"
-color = [0, 250, 0]
-position = [3.95363, -4.16363, -18.94533]
-dir = [-0.03625, 0.99891, -0.02956]
-radius = 0.92765
-height = 1.85531
+[[objects.cylinders]]
+id = "cylinder1"
+color = [0, 255, 0]
+position = [12.28113, 3.34555, -0.06279]
+dir = [0, -1, 0]
+radius = 0.83886
+height = 1.67772
 reflective = true
 rotatable = true
 movable = true
@@ -134,11 +218,11 @@ transparent = false
 [[beam.sources]]
 id = "beam_source1"
 intensity = 1
-position = [-4.58162, 0.60101, -25.58508]
-dir = [0.36122, 0.79132, 0.49329]
+position = [11.87724, 11.00028, 0.28913]
+dir = [0.03492, -0.04465, 0.99839]
 color = [255, 255, 255]
-radius = 1.30000
-length = 80
+radius = 0.82217
+length = 100
 movable = false
 rotatable = false
 scorable = false
@@ -146,9 +230,9 @@ with_laser = true
 
 [[beam.targets]]
 id = "beam_target1"
-position = [3.84572, -1.44382, 2.38892]
-color = [255, 255, 255]
-radius = 1.30000
-movable = false
-scorable = false
+position = [12.83702, 9.35962, 30.40686]
+color = [255, 255, 0]
+radius = 1
+movable = true
+scorable = true
 
