@@ -44,6 +44,8 @@ static inline Vec3 mix_colors(const Vec3 &a, const Vec3 &b, double alpha)
 }
 
 static constexpr double kAltColorAmount = 0.35;
+static constexpr double kObjectCheckerFrequency = 5.0;
+static constexpr double kPlaneCheckerFrequency = 0.5;
 static constexpr double kQuotaScoreEpsilon = 1e-3;
 static constexpr double kBeamTransparentAlpha = 125.0 / 255.0;
 static constexpr double kSpotlightLaserRatio = 20.0;
@@ -62,6 +64,21 @@ static Vec3 darken_color(const Vec3 &color)
         return Vec3(std::clamp(color.x * factor, 0.0, 1.0),
                                 std::clamp(color.y * factor, 0.0, 1.0),
                                 std::clamp(color.z * factor, 0.0, 1.0));
+}
+
+static int compute_checker_from_position(const Vec3 &p, double frequency)
+{
+        return (static_cast<int>(std::floor(p.x * frequency)) +
+                        static_cast<int>(std::floor(p.y * frequency)) +
+                        static_cast<int>(std::floor(p.z * frequency))) &
+               1;
+}
+
+static int compute_checker_from_uv(double u, double v, double frequency)
+{
+        return (static_cast<int>(std::floor(u * frequency)) +
+                        static_cast<int>(std::floor(v * frequency))) &
+               1;
 }
 
 static Vec3 normalize_or(const Vec3 &v, const Vec3 &fallback = Vec3(0, 0, 1))
@@ -323,6 +340,7 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
 {
         Vec3 base = mat.base_color;
         Vec3 col = use_base_state ? mat.base_color : mat.color;
+        bool is_plane = false;
         if (rec.object_id >= 0 &&
                 rec.object_id < static_cast<int>(scene.objects.size()))
         {
@@ -332,20 +350,30 @@ Vec3 surface_color_at(const Scene &scene, const HitRecord &rec,
                         auto beam = std::static_pointer_cast<Laser>(obj);
                         base = col = beam->color;
                 }
+                else if (obj->is_plane())
+                {
+                        is_plane = true;
+                }
         }
         if (mat.has_texture() && rec.has_uv)
         {
                 Vec3 tex = mat.texture->sample(rec.u, rec.v);
                 col = tex;
         }
-        if (!use_base_state && mat.checkered)
+        if (is_plane)
         {
                 Vec3 brighter = brighten_color(base);
                 Vec3 darker = darken_color(base);
-                int chk = (static_cast<int>(std::floor(rec.p.x * 5)) +
-                                   static_cast<int>(std::floor(rec.p.y * 5)) +
-                                   static_cast<int>(std::floor(rec.p.z * 5))) &
-                                  1;
+                double u = rec.has_uv ? rec.u : rec.p.x;
+                double v = rec.has_uv ? rec.v : rec.p.y;
+                int chk = compute_checker_from_uv(u, v, kPlaneCheckerFrequency);
+                col = chk ? brighter : darker;
+        }
+        else if (!use_base_state && mat.checkered)
+        {
+                Vec3 brighter = brighten_color(base);
+                Vec3 darker = darken_color(base);
+                int chk = compute_checker_from_position(rec.p, kObjectCheckerFrequency);
                 col = chk ? brighter : darker;
         }
         return col;
