@@ -1,6 +1,7 @@
 #include "Renderer.hpp"
 #include "AABB.hpp"
 #include "GameSession.hpp"
+#include "CommandLine.hpp"
 #include "Beam.hpp"
 #include "BeamSource.hpp"
 #include "BeamTarget.hpp"
@@ -743,6 +744,27 @@ bool path_is_tutorial_level(const std::filesystem::path &path)
 
 bool path_is_level_for_mode(const std::filesystem::path &path, bool tutorial_mode)
 {
+        if (is_forced_single_level_mode())
+        {
+                std::filesystem::path forced = forced_scene_path();
+                if (!forced.empty())
+                {
+                        std::error_code ec;
+                        std::filesystem::path normalized =
+                                std::filesystem::absolute(path, ec);
+                        if (!ec)
+                        {
+                                normalized = normalized.lexically_normal();
+                        }
+                        else
+                        {
+                                ec.clear();
+                                normalized = path.lexically_normal();
+                        }
+                        return normalized == forced;
+                }
+                return false;
+        }
         return tutorial_mode ? path_is_tutorial_level(path)
                              : path_is_numbered_level(path);
 }
@@ -780,6 +802,14 @@ std::vector<std::filesystem::path> collect_level_paths(const std::filesystem::pa
                                                       bool tutorial_mode)
 {
         namespace fs = std::filesystem;
+        if (is_forced_single_level_mode())
+        {
+                fs::path forced = forced_scene_path();
+                if (!forced.empty())
+                {
+                        return {forced};
+                }
+        }
         fs::path directory = scene_path;
         if (fs::is_regular_file(directory))
                 directory = directory.parent_path();

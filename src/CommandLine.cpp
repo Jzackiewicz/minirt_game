@@ -4,6 +4,7 @@
 #include <cctype>
 #include <filesystem>
 #include <iostream>
+#include <system_error>
 
 namespace
 {
@@ -18,12 +19,34 @@ std::string to_lower(std::string value)
 
 } // namespace
 
+namespace
+{
+
+bool g_force_single_level_mode = false;
+std::filesystem::path g_forced_scene_path;
+
+std::filesystem::path normalize_path(const std::filesystem::path &path)
+{
+    std::error_code ec;
+    std::filesystem::path absolute_path = std::filesystem::absolute(path, ec);
+    if (ec)
+    {
+        ec.clear();
+        return path.lexically_normal();
+    }
+    return absolute_path.lexically_normal();
+}
+
+} // namespace
+
 bool parse_arguments(int argc, char **argv, std::string &scene_path, bool &skip_main_menu)
 {
     namespace fs = std::filesystem;
 
     scene_path = "scenes/level_1.toml";
     skip_main_menu = false;
+    g_force_single_level_mode = false;
+    g_forced_scene_path.clear();
 
     if (argc <= 1)
     {
@@ -58,7 +81,19 @@ bool parse_arguments(int argc, char **argv, std::string &scene_path, bool &skip_
         return false;
     }
 
-    scene_path = scene_file.string();
-    skip_main_menu = true;
+    g_forced_scene_path = normalize_path(scene_file);
+    g_force_single_level_mode = true;
+    scene_path = g_forced_scene_path.string();
+    skip_main_menu = false;
     return true;
+}
+
+bool is_forced_single_level_mode()
+{
+    return g_force_single_level_mode;
+}
+
+const std::filesystem::path &forced_scene_path()
+{
+    return g_forced_scene_path;
 }
