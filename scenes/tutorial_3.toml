@@ -11,7 +11,7 @@ fov = 120
 
 [lighting.ambient]
 intensity = 0.70000
-color = [255, 255, 255]
+color = [201, 255, 245]
 
 [[objects.planes]]
 id = "plane1"

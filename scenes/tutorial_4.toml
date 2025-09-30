@@ -4,17 +4,17 @@ b = "Reach the quota (`top left corner`) to clear the level or optimize your set
 
 [quota]
 target = true
-minimal_score = 3.0
+minimal_score = 3
 
 [camera]
 id = "camera"
-position = [8.05309, 5.44287, -29.18574]
-lookdir = [-0.29190, -0.46886, 0.83365]
+position = [7.88532, 5.58000, -27.31092]
+lookdir = [-0.46222, -0.27058, 0.84447]
 fov = 120
 
 [lighting.ambient]
-intensity = 0.50000
-color = [255, 255, 255]
+intensity = 0.70000
+color = [201, 255, 245]
 
 [[objects.planes]]
 id = "plane1"
@@ -30,8 +30,7 @@ transparent = false
 [[objects.planes]]
 id = "plane2"
 color = [80, 80, 80]
-
-position = [0, -10, 0]
+position = [0, -3.34000, 0]
 dir = [0, 1, 0]
 reflective = false
 rotatable = false
@@ -41,7 +40,7 @@ transparent = false
 
 [[objects.planes]]
 id = "plane3"
-color = [136,150,165]
+color = [136, 150, 165]
 position = [0, 0, 10]
 dir = [0, 0, -1]
 reflective = false
@@ -52,7 +51,7 @@ transparent = false
 
 [[objects.planes]]
 id = "plane4"
-color = [136,150,165]
+color = [136, 150, 165]
 position = [-10, 0, 0]
 dir = [1, 0, 0]
 reflective = false
@@ -63,7 +62,7 @@ transparent = false
 
 [[objects.planes]]
 id = "plane5"
-color = [136,150,165]
+color = [136, 150, 165]
 position = [10, 0, 0]
 dir = [1, 0, 0]
 reflective = false
@@ -74,7 +73,7 @@ transparent = false
 
 [[objects.planes]]
 id = "plane6"
-color = [136,150,165]
+color = [136, 150, 165]
 position = [0, 0, -30]
 dir = [0, 0, -1]
 reflective = false
