@@ -977,6 +977,7 @@ struct Renderer::RenderState
         std::string player_name;
         int hud_focus_object = -1;
         double hud_focus_score = 0.0;
+        bool hud_focus_in_range = false;
         bool quota_defined = false;
         bool quota_met = false;
         bool tutorial_mode = false;
@@ -1219,18 +1220,30 @@ void Renderer::process_events(RenderState &st, SDL_Window *win, SDL_Renderer *re
                         SDL_WarpMouseInWindow(win, W / 2, H / 2);
                         if (!st.edit_mode && st.hover_obj >= 0)
                         {
-                                st.selected_obj = st.hover_obj;
-                                st.selected_mat = st.hover_mat;
+                                int hovered_obj = st.hover_obj;
+                                int hovered_mat = st.hover_mat;
+                                AABB box;
+                                Vec3 center;
+                                double dist = 0.0;
+                                bool has_center =
+                                        scene.objects[hovered_obj]->bounding_box(box);
+                                if (has_center)
+                                {
+                                        center = (box.min + box.max) * 0.5;
+                                        dist = (center - cam.origin).length();
+                                        if (dist > OBJECT_MAX_DIST)
+                                                continue;
+                                }
+
+                                st.selected_obj = hovered_obj;
+                                st.selected_mat = hovered_mat;
                                 st.hover_obj = st.hover_mat = -1;
                                 mats[st.selected_mat].checkered = true;
                                 mats[st.selected_mat].color =
                                         mats[st.selected_mat].base_color;
-                                AABB box;
-                                if (scene.objects[st.selected_obj]->bounding_box(box))
+                                if (has_center)
                                 {
-                                        Vec3 center = (box.min + box.max) * 0.5;
-                                        st.edit_dist =
-                                                (center - cam.origin).length();
+                                        st.edit_dist = dist;
                                         st.edit_pos = center;
                                 }
                                 st.edit_mode = true;
@@ -1883,6 +1896,7 @@ void Renderer::update_selection(RenderState &st,
         auto refresh_hud_focus = [&](bool allow_hover) {
                 st.hud_focus_object = -1;
                 st.hud_focus_score = 0.0;
+                st.hud_focus_in_range = false;
                 Ray center_ray = cam.ray_through(0.5, 0.5);
                 HitRecord hrec;
                 if (!scene.hit(center_ray, 1e-4, 1e9, hrec))
@@ -1906,12 +1920,24 @@ void Renderer::update_selection(RenderState &st,
                                 compute_object_beam_score(scene, mats, hrec.object_id);
                 }
 
+                AABB focus_box;
+                bool focus_has_center = hit_obj->bounding_box(focus_box);
+                bool focus_within_range = true;
+                if (focus_has_center)
+                {
+                        Vec3 focus_center = (focus_box.min + focus_box.max) * 0.5;
+                        focus_within_range =
+                                (focus_center - cam.origin).length() <= OBJECT_MAX_DIST;
+                }
+                st.hud_focus_in_range = !focus_has_center || focus_within_range;
+
                 if (!allow_hover)
                         return;
                 bool selectable = !hit_obj->is_beam() &&
                                   (g_developer_mode || hit_obj->movable ||
                                    hit_obj->rotatable);
-                if (selectable)
+                bool highlightable = selectable && st.hud_focus_in_range;
+                if (highlightable)
                 {
                         if (st.hover_mat != hrec.material_id)
                         {
@@ -1926,9 +1952,11 @@ void Renderer::update_selection(RenderState &st,
                         Vec3 alt_color = highlight_alternate_color(base_color);
                         mats[st.hover_mat].color = blink ? alt_color : base_color;
                 }
-                else if (st.hover_mat >= 0)
+                else
                 {
-                        mats[st.hover_mat].color = mats[st.hover_mat].base_color;
+                        if (st.hover_mat >= 0)
+                                mats[st.hover_mat].color =
+                                        mats[st.hover_mat].base_color;
                         st.hover_obj = st.hover_mat = -1;
                 }
         };
@@ -2223,7 +2251,7 @@ int Renderer::render_hud(const RenderState &st, SDL_Renderer *ren, int W, int H)
                                 bool grabbable = !focus_obj->is_beam() &&
                                                  (g_developer_mode || focus_obj->movable ||
                                                   focus_obj->rotatable);
-                                show_grab = grabbable;
+                                show_grab = grabbable && st.hud_focus_in_range;
                         }
 
                         if (show_grab)

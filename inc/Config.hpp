@@ -9,5 +9,5 @@
 #define OBJECT_ROTATE_SPEED 2.0
 
 #define OBJECT_MIN_DIST 2.0
-#define OBJECT_MAX_DIST 5.0
+#define OBJECT_MAX_DIST 10.0
 
